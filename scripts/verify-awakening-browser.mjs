@@ -217,7 +217,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const generatedProgression = await page.evaluate(async () => {
     const { enrichEntityStats, recomputeEntityStats, levelDetails } = await import("/js/entities/runtime.js");
-    const { createLevelUpForm, setPlayerExperience } = await import("/js/entities/progression.js");
+    const { createLevelUpForm } = await import("/js/ui/codex/stats.js"), { setPlayerExperience } = await import("/js/entities/progression.js");
     const entity = { id: 930002, name: 'Generated level 30', side: 'A', type: 'sbire', level: 30,
       baseStats: { strength: 20, agility: 1, intelligence: 1, will: 25, HP: 100 },
       attacks: [{ functionName: 'autoAttack', attacknature: ['physicalDamage'], attackRange: ['melee'] }] };

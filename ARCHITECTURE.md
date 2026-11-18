@@ -389,6 +389,59 @@ historique targetZone reste actualisé par le HUD pour les consommateurs existan
 Le prochain tri concerne les formulaires de progression et les opérations de jeu
 encore placées dans le stockage ; les grands blocs d'événements restent à séparer.
 
+## Neuvième lot : montée de niveau, formulaires et animations
+
+Le projet conserve ses 117 modules. La montée de niveau réutilise quatre propriétaires
+existants ; aucun petit fichier supplémentaire ni module relais n'est ajouté.
+
+| Responsabilité | Propriétaire |
+| --- | --- |
+| Coûts en XP, prévisions, points, progression des archétypes et confirmation | entities/progression.js |
+| Formulaires, boutons, confirmations, purification et présentation du Codex | ui/codex/stats.js |
+| Projection des statistiques permanentes et prévues dans les vues et compteurs | ui/statistics/components.js |
+| Graphe des attributs, âme et effets d'éveil | rendering/animations.js |
+
+Soixante-dix-sept fonctions et sept déclarations d'état ou de configuration quittent
+entities/progression.js. Le contrôleur de formulaire délègue désormais les opérations
+de brouillon, de coût, d'annulation, de récompense et de confirmation aux fonctions
+regroupées dans la progression. Les autres consommateurs importent directement le
+propriétaire du rendu dont ils ont besoin.
+
+Les calculs du brouillon peuvent être appelés sans formulaire. La confirmation applique
+les points et le paiement, puis le formulaire orchestre la sauvegarde et son actualisation.
+L'éveil est toujours confirmé avant les délais de présentation : fermer le Codex ou
+recharger pendant l'animation ne perd pas le dernier point ni le paiement.
+Les effets d'éveil utilisent explicitement les minuteurs du navigateur dans le module
+d'animations ; la pause du combat ne suspend pas cette présentation.
+
+Validation dans outputs/refactor-levelup/ :
+
+- Les 76 fonctions simplement déplacées et leurs sept déclarations conservent leur
+  arbre syntaxique, après normalisation des chemins et des minuteurs. Les 80 autres
+  fonctions du cœur historique sont inchangées ; le contrôleur et le point de
+  rafraîchissement après sauvegarde sont les changements intentionnels.
+- Seize opérations de progression sont séparées du formulaire. Le test existant de
+  montée de niveau ajoute seize assertions avec les accès DOM bloqués : coûts,
+  refus, point ajouté, étape d'archétype, annulation et statistiques permanentes.
+- Les 51 tests Node, la syntaxe et les références de ressources passent.
+- Douze scénarios navigateur couvrent montée de niveau, annulation, confirmation,
+  éveil, purification, ressources, statistiques, infobulles et démarrage PC/mobile.
+  Le test de performance conserve au maximum deux calculs de prévision, aucune
+  génération d'infobulle fermée et une notification de sauvegarde par point.
+- La sonde de performance suit le propriétaire actuel de calculateStatsDisplay.
+  Le scénario de statistiques initialise le stockage avant les panneaux, comme
+  app/startup.js, au lieu de laisser leurs imports concurrents choisir l'entrée.
+  Aucune assertion métier n'est retirée ; ses 7 880 contrôles passent.
+- L'audit séparé des imports isolés retrouve exactement les neuf erreurs initiales.
+  Les 14 modules d'interface restent sans cycle entre eux. Le graphe global compte
+  916 dépendances et conserve sa composante cyclique de 67 modules.
+
+La progression conserve encore des dépendances historiques au stockage, aux
+notifications d'XP et à la purification, ainsi que l'ancien formulaire de surnom.
+Ce lot sépare les responsabilités de montée de niveau ; il ne rend pas encore tout
+le module importable indépendamment du navigateur. Les grands contrôleurs
+événementiels et les opérations de jeu placées dans le stockage restent à trier.
+
 ## Temps et présentation
 
 combat/clock.js reste l'horloge de combat ; combat/timeline.js ordonne les échéances et les
@@ -477,5 +530,5 @@ attaque hybride.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-combat/statistics.js, combat/control.js et le plateau DOM. Ces huit premiers lots ne constituent
+combat/statistics.js, combat/control.js et le plateau DOM. Ces neuf premiers lots ne constituent
 pas une séparation complète du moteur de jeu.

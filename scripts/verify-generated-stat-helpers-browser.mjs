@@ -27,7 +27,7 @@ try {
   const result = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), S = await import("/js/entities/statSystem.js");
     const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"), R = await import("/js/entities/rules.js");
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts)), _statViews = await import("/js/ui/statistics/components.js");
     const G = await import("/js/storage/gameStorage.js");
     const configs = Object.values(D.getGeneratedUmbraStatConfigs());
     let count = 0;
@@ -99,7 +99,7 @@ try {
         this.entity = mode === 'Stats' ? probe : UI.helperEntityByRoot.get(mount.querySelector('.level-up-section'));
         if (mode === 'Preview') {
           this.entity.modifierStats.preview = { statLeveled: Object.fromEntries(configs.map(cfg => [cfg.source, 3])) };
-          U.refreshActiveStatPreview(this.entity, mount);
+          _statViews.refreshActiveStatPreview(this.entity, mount);
         }
         return configs.map(cfg => ({ ...cfg, value: DDisplay.calculateStatsDisplay(cfg.source, this.entity).umbraHelperCalculations[`${cfg.target}Total`].value }));
       },

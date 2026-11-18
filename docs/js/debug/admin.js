@@ -795,7 +795,7 @@ function refreshAdminEditedLiveEntity(entite, oldStats) {
             console.warn('Éditeur admin : rafraîchissement attaque courante impossible.', error);
         });
 
-    import("../entities/progression.js")
+    import("../ui/statistics/components.js")
         .then(upgradeApi => {
             upgradeApi.syncDOMWithStats?.(
                 oldStats || {},

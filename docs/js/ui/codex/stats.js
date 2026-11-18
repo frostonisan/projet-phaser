@@ -1,30 +1,57 @@
-// Codex statistics, resources, soul and archetype progression panels.
 import { getLifeSlots } from "../../items/resourceStocks.js";
 import { buildLifeSlotHelper, buildMilestoneEssenceHelper } from "../../data/helpers.js";
 import { attackDetails } from "../../data/attackList.js";
-import { getSafe, getDisplayStatKey, normalizeStatKey } from "../../entities/rules.js";
+import {
+  getArchetypeConfig, getClassFromAttributs, CLASS_INDEX, DEFAULT_CYCLE, getSafe, getDisplayStatKey,
+  normalizeStatKey,
+} from "../../entities/rules.js";
 import { resolveAttackDefinitionForEntity } from "../../combat/attackResolution.js";
 import { calculateStatGraphValue } from "../../combat/statistics.js";
-import { getClassLabel, getCycleForKey, getCycleLenFor, getArchetypeMilestones } from "../../entities/progression.js";
+import {
+  prepareLevelUpInvestment, applyLevelUpInvestmentCost, resolveLevelUpReward,
+  refundLevelUpInvestmentCost, restoreLevelUpArchetypeStage, completeLevelUpArchetypeCycle,
+  snapshotLevelUpSaveState, refreshLevelUpStateAfterSave, getActiveLevelUpArchetypeKey,
+  getSkippedLevelUpArchetypeStage, advanceLevelUpArchetypeStage, addLevelUpPreviewStat,
+  removeLevelUpPreviewStat, applyLevelUpPreview, createLevelUpDraft, getEntityLevelCurrent,
+  getEntityLevelMax, playerExperience, ComputeStatPreview, buildCostMap, getLevelUpAttributes,
+  attributS, costAt, getPreviewStats, isObjStat, attribut_SHORT_TO_NAME, getConfirmedStatValue,
+  saveEntityLevelUP, getClassLabel, getCycleForKey, getCycleLenFor, getArchetypeMilestones,
+} from "../../entities/progression.js";
 import { isEntiteAlive } from "../../app/stages.js";
-import { stats } from "../../data/statsData.js";
-import { toRoman, toNonNegInt, goldTitle } from "../display.js";
+import {
+  stats as STATS_DATA, stats,
+} from "../../data/statsData.js";
+import {
+  showStatGainsFromDiff, toRoman, toNonNegInt, goldTitle,
+} from "../display.js";
 import { closeAttackEssenceSocketPopups, updateMilestoneEssenceElement } from "../../items/essences.js";
 import { getMilestoneEssenceColor } from "../../items/essenceInventory.js";
-import { clamp, bindHelperEntity } from "../statistics/helpers.js";
-import { getCodexSubmenuIndex, setCodexSubmenuIndex } from "../navigation.js";
-import { refreshDisplayedPowers } from "../statistics/components.js";
 import {
-  createUmbraBlock,
-  createUmbraBlockTagged,
-  createEntityStatsTitleNode,
-  createBlockTitle,
-  withBlockSubtitle,
-  createBlockMarker,
+  closeOpenHelpers, clamp, bindHelperEntity,
+} from "../statistics/helpers.js";
+import { getCodexSubmenuIndex, setCodexSubmenuIndex } from "../navigation.js";
+import {
+  refreshConfirmedLevelDom, renderStatPair, refreshActiveStatPreview, clearEntityStatDeltaClasses,
+  isLevelUpNewStatsArea, ZERO_VALUE_VISIBLE_STAT_KEYS, renderAllStats, refreshDisplayedPowers,
+  createUmbraBlock, createUmbraBlockTagged, createEntityStatsTitleNode, createBlockTitle,
+  withBlockSubtitle, createBlockMarker,
 } from "../statistics/components.js";
-import { removeDirectEntityView, createProfilSubmenu, initStatRadar } from "./profile.js";
-import { getCodexStableEquipmentCharge, createEquipmentSubmenu } from "./profile.js";
+import {
+  removeDirectEntityView, createProfilSubmenu, initStatRadar, getCodexStableEquipmentCharge,
+  createEquipmentSubmenu,
+} from "./profile.js";
 import { createAttackReadOnlyOverview } from "../attacks.js";
+import { levelDetails, getStatMalusSources } from "../../entities/runtime.js";
+import {
+  getAvailablePlayerExperience, saveToLocalStorage, loadFromLocalStorage, saveUpgradedEntity,
+} from "../../storage/gameStorage.js";
+import { soulScaling, updategraph, playAwakeningExtasis } from "../../rendering/animations.js";
+import { startArchup } from "../../biome/meteo.js";
+import {
+  updateHPCounters, updateHealthBar, updateArmorCounter, updateBonusLifeCounters,
+} from "../../rendering/vitalFeedback.js";
+
+// Codex statistics, resources, soul and archetype progression panels.
 
 function buildSoulSection(entite) {
   const hasHybridAttack = entite.attacks.some(attackName => {
@@ -1901,4 +1928,1780 @@ export function initializeCodexStats() {
   if (typeof window !== "undefined") {
     window.refreshCodexUmbraPanel = refreshCodexUmbraPanel;
   }
+}
+
+// Formulaires de progression : solde, choix des points et presentation des archetypes.
+export function LevelupSignal(
+  entite,
+  type = 'bouton',
+  { onOpen = null, section = 'Profil', parent = null } = {}
+) {
+  const currentLevel = getEntityLevelCurrent(entite);
+  const maxLevelForEntity = getEntityLevelMax(entite);
+
+  const nextLevelData = levelDetails.find(l => l.level === currentLevel + 1);
+  const playerXP = getAvailablePlayerExperience();
+
+  const canLevelUp = !!(
+    nextLevelData &&
+    currentLevel < maxLevelForEntity &&
+    playerXP >= nextLevelData.cost
+  );
+
+  const el = document.createElement(type === 'bouton' ? 'div' : 'span');
+  el.className = type === 'bouton' ? 'btn levelup-btn' : 'levelup-icon';
+
+  if (type === 'bouton') {
+    el.textContent = 'Monter le niveau 🡅';
+  } else {
+    el.innerHTML = '🡅';
+    el.title = 'Monter le niveau';
+  }
+
+  // ✅ resolve parent (Element ou selector)
+  const parentEl =
+    parent instanceof Element ? parent :
+    (typeof parent === 'string' ? document.querySelector(parent) : null);
+
+  // ✅ si pas de level up possible, on cache et (optionnel) on retire du parent
+  if (!canLevelUp) {
+    if (type !== 'bouton' && parentEl) {
+      parentEl.querySelectorAll('.levelup-icon').forEach(n => n.remove());
+    }
+    el.style.display = 'none';
+    el.setAttribute('aria-hidden', 'true');
+    return el;
+  }
+
+  const triggerOpen = (e) => {
+    e?.stopPropagation?.();
+
+    const statsMenuIndex = 2;
+    const levelUpSubmenuIndex = 2;
+
+    saveToLocalStorage('CodexMenuIndex', statsMenuIndex);
+    saveToLocalStorage('CodexSubmenuIndex', levelUpSubmenuIndex);
+
+    if (typeof showSection === 'function') showSection('Stats');
+    if (typeof createLevelUpForm === 'function') createLevelUpForm(entite);
+
+    if (typeof onOpen === 'function') onOpen(section);
+  };
+
+  el.style.cursor = 'pointer';
+  el.tabIndex = 0;
+  el.addEventListener('click', triggerOpen);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') triggerOpen(e);
+  });
+
+  // ✅ si on a un parent cible + type icon => on mount ici (sans doublon)
+if (type !== 'bouton' && parentEl) {
+  parentEl.querySelectorAll('.levelup-icon').forEach(n => n.remove());
+
+  const soulPicto = parentEl.querySelector('.codex-soul');
+
+  if (soulPicto) {
+    soulPicto.insertAdjacentElement('afterend', el);
+    soulPicto.insertAdjacentText('afterend', ' ');
+  } else {
+    parentEl.appendChild(el);
+  }
+}
+
+  return el;
+}
+
+export function updateExperienceDisplay() {
+    const scoringDiv = document.getElementById('score');
+    if (scoringDiv) {
+        scoringDiv.textContent = `Experience : ${playerExperience}`;
+    }
+}
+
+function createLevelElements(entite) {
+
+	const levelUpSection = document.createElement('div');
+	levelUpSection.className = 'level-up-section';
+
+	const SoulSection = document.createElement('div');
+	SoulSection.className = 'soul-section';
+	SoulSection.id = `soul-section-${entite.id}`;
+
+	// Icones Archetypes
+	const ArchSection = document.createElement('div');
+	ArchSection.className = 'archetype-icon-section';
+	ArchSection.id = `archetype-icons-${entite.id}`;
+
+	// On STOCKE les achieve. On NE crée PAS les icônes maintenant !
+	const achievedList = (entite.Archetype && Array.isArray(entite.Archetype.achieve))
+		? [...entite.Archetype.achieve]
+		: [];
+
+	// Graphique temps réel (camembert) — tout en haut
+	const graphcontainer = document.createElement('div');
+	graphcontainer.className = 'attribut-graph-container';
+	graphcontainer.id = `soul-${entite.id}`;
+	graphcontainer.classList.add("created");
+	setTimeout(() => { graphcontainer.classList.remove("created"); }, 500);
+
+	const graphCanvas = document.createElement('canvas');
+	graphCanvas.width = 122;
+	graphCanvas.height = 122;
+	graphCanvas.className = 'attribut-graph';
+
+	const eclipseCanvas = document.createElement('img');
+	eclipseCanvas.src = './media/assets/misc/soul-eclipsaura.webp';
+	eclipseCanvas.className = 'attribut-eclipse';
+	eclipseCanvas.id = 'eclipse';
+
+	const circleSoul = document.createElement('div');
+	circleSoul.className = 'attribut-circleSoul';
+
+	const soulEntity = document.createElement('div');
+	soulEntity.className = 'attribut-entitySoul';
+
+	const entitySoulImg1 = document.createElement('img');
+	entitySoulImg1.src = './media/assets/misc/soul-entity-01.png';
+	entitySoulImg1.className = 'attribut-entitySoul one';
+
+	const entitySoulImg2 = document.createElement('img');
+	entitySoulImg2.src = './media/assets/misc/soul-entity-02.png';
+	entitySoulImg2.className = 'attribut-entitySoul two';
+
+	const entitySoulBg = document.createElement('div');
+	entitySoulBg.className = 'entitySoul-bg';
+
+	const entitySoulblack = document.createElement('div');
+	entitySoulblack.className = 'black-circle';
+
+	soulEntity.appendChild(entitySoulImg1);
+	soulEntity.appendChild(entitySoulImg2);
+
+	const soulDepth = document.createElement('div');
+	soulDepth.className = 'soul-depth';
+
+	const soulAura = document.createElement('div');
+	soulAura.className = 'soul-aura';
+
+	graphcontainer.appendChild(soulEntity);
+	graphcontainer.appendChild(entitySoulBg);
+	graphcontainer.appendChild(entitySoulblack);
+	graphcontainer.appendChild(eclipseCanvas);
+	graphcontainer.appendChild(graphCanvas);
+	graphcontainer.appendChild(circleSoul);
+	graphcontainer.appendChild(soulDepth);
+	graphcontainer.appendChild(soulAura);
+
+	// Archétype actif — juste en dessous du graph
+	const archetypeLine = document.createElement('div');
+	archetypeLine.className = 'archetype-line';
+	archetypeLine.id = `archetype-line-${entite.id}`;
+
+	const archetypeLabel = document.createElement('span');
+	archetypeLabel.className = 'archetype-title';
+
+	const archetypeDesc = document.createElement('p');
+	archetypeDesc.className = 'archetype-description';
+	archetypeDesc.textContent = '';
+
+	// Jauge de progression
+	const gaugeWrap = document.createElement('div');
+	gaugeWrap.className = 'archetype-bar';
+
+	const canvasUp = document.createElement('canvas');
+	canvasUp.id = 'archup';
+	canvasUp.className = 'arch-up';
+
+	const gaugeBar = document.createElement('div');
+	gaugeBar.className = 'archetype-lvl-bar';
+
+	const gaugeFill = document.createElement('div');
+	gaugeFill.className = 'archetype-level-fill';
+
+	const gaugeLabel = document.createElement('div');
+	gaugeLabel.className = 'archetype-lvl-label';
+	gaugeLabel.style.opacity = '0';
+	gaugeLabel.style.transition = 'opacity 250ms ease';
+	gaugeLabel.style.pointerEvents = 'none';
+
+	const showGaugeHint = () => { gaugeLabel.style.opacity = '1'; };
+	const hideGaugeHint = () => { gaugeLabel.style.opacity = '0'; };
+
+	gaugeWrap.addEventListener('mouseenter', showGaugeHint);
+	gaugeWrap.addEventListener('mouseleave', hideGaugeHint);
+	gaugeWrap.addEventListener('focusin',   showGaugeHint);
+	gaugeWrap.addEventListener('focusout',  hideGaugeHint);
+
+	gaugeBar.appendChild(gaugeFill);
+
+	const gaugeMilestones = document.createElement('div');
+	gaugeMilestones.className = 'archetype-milestones';
+	gaugeWrap.appendChild(gaugeMilestones);
+
+	gaugeWrap.append(gaugeBar, gaugeLabel);
+	gaugeWrap.appendChild(canvasUp);
+
+	SoulSection.appendChild(ArchSection);
+	SoulSection.appendChild(graphcontainer);
+
+	levelUpSection.appendChild(SoulSection);
+
+	archetypeLine.appendChild(archetypeLabel);
+	archetypeLine.appendChild(gaugeWrap);
+	archetypeLine.appendChild(archetypeDesc);
+	SoulSection.appendChild(archetypeLine);
+
+	// Ligne Niveau
+	const currentLevel = getEntityLevelCurrent(entite);
+
+	const levelBloc = document.createElement('div');
+	levelBloc.className = 'level-bloc';
+	levelUpSection.appendChild(levelBloc);
+
+	// ✅ bloc 1 (infos lvl + XP)
+	const levelInfosBloc = document.createElement('div');
+	levelInfosBloc.className = 'level-infos-bloc';
+
+	// ✅ bloc 2 (boutons)
+	const levelButtonsBloc = document.createElement('div');
+	levelButtonsBloc.className = 'level-buttons-bloc';
+
+	const levelLine = document.createElement('div');
+	levelLine.className = 'level-line';
+
+	const levelName = document.createElement('span');
+	levelName.className = 'levelup-name';
+	levelName.textContent = 'Niveau : ';
+
+	const levelCurrent = document.createElement('span');
+	levelCurrent.className = 'level-current';
+	levelCurrent.textContent = currentLevel;
+	levelCurrent.setAttribute('data-stat', 'lvl');
+
+	const levelTransition = document.createElement('span');
+	levelTransition.className = 'level-transi is-hidden';
+	levelTransition.textContent = ' > ';
+
+	const levelFuture = document.createElement('span');
+	levelFuture.className = 'level-future is-hidden';
+	levelFuture.textContent = currentLevel;
+
+	levelLine.append(levelName, levelCurrent, levelTransition, levelFuture);
+
+	// XP
+	const XPTitle = document.createElement('p');
+	XPTitle.textContent = 'Expérience :';
+
+	const DivXpDisplay = document.createElement('div');
+	DivXpDisplay.className = 'div-xp-display';
+	DivXpDisplay.appendChild(XPTitle);
+	const initialXPDisplay = document.createElement('p');
+	initialXPDisplay.className = 'initial-xp-display';
+	DivXpDisplay.appendChild(initialXPDisplay);
+
+	const transitionXP = document.createElement('p');
+	transitionXP.className = 'xp-transi is-hidden';
+	transitionXP.textContent = ' > ';
+	DivXpDisplay.appendChild(transitionXP);
+
+	const playerXPDisplay = document.createElement('p');
+	playerXPDisplay.className = 'xp-display is-hidden';
+	DivXpDisplay.appendChild(playerXPDisplay);
+
+	const investedXPDisplay = document.createElement('p');
+	investedXPDisplay.className = 'invested-xp-display is-hidden';
+	investedXPDisplay.textContent = `- 0 XP`;
+
+	const xpCostDisplay = document.createElement('p');
+
+	// Bloc attributs
+	const attributibutUp = document.createElement('div');
+	attributibutUp.className = 'attribut-up';
+
+	// Boutons
+	const levelupbuttons = document.createElement('div');
+	levelupbuttons.className  = 'level-up-buttons';
+
+	const confirmButton = document.createElement('div');
+	confirmButton.textContent = 'Confirmer';
+	confirmButton.className = 'confirm-button yes level is-hidden';
+
+	const clearBtn = document.createElement('div');
+	clearBtn.id = 'clear-history-btn';
+	clearBtn.textContent = 'Réinitialiser';
+	clearBtn.className = 'confirm-button clear is-hidden';
+
+	levelupbuttons.append(confirmButton, clearBtn);
+
+	// ✅ Assemblage : infos dans un bloc, boutons dans un autre
+	levelInfosBloc.append(
+		levelLine,
+		DivXpDisplay,
+		investedXPDisplay,
+		xpCostDisplay
+	);
+
+	levelButtonsBloc.appendChild(levelupbuttons);
+
+	// ✅ levelBloc contient : infos, attributs, boutons
+	levelBloc.append(
+	attributibutUp,
+		levelInfosBloc,
+
+		levelButtonsBloc
+	);
+
+	// 🔥 CREATION DES ICONES APRÈS INSERTION DANS LE DOM
+	requestAnimationFrame(() => {
+	    achievedList.forEach(ach => {
+	       createArchetypeIcon(entite, ach.key, ach.level, ach.uid);
+	    });
+	});
+
+	return {
+		levelUpSection,
+		gauge: { wrap: gaugeWrap, bar: gaugeBar, fill: gaugeFill, label: gaugeLabel, milestones: gaugeMilestones },
+		levelCurrent, levelTransition, levelFuture,
+		initialXPDisplay, transitionXP, playerXPDisplay, investedXPDisplay, xpCostDisplay,
+		attributibutUp,
+		confirmButton, clearBtn,
+		archetypeLabel,
+		archetypeDesc,
+		graphCanvas,
+	};
+}
+
+function buildattributibutLine(attribut, baseValue, entite) {
+
+  const attributLine = document.createElement('div');
+  attributLine.className = 'level-up-attribut-line';
+
+  const axisLine = document.createElement('div');
+  axisLine.className = 'axis-line';
+  axisLine.dataset.short = attribut.short;  // "F" | "A" | "I"
+  axisLine.dataset.key   = attribut.key;
+
+  // ✅ PICto (F/A/I -> strength/agility/intelligence)
+  const map = { F: 'strength', A: 'agility', I: 'intelligence' };
+  const pictoName = map[attribut.short];
+
+  const pictoWrap = document.createElement('div');
+  pictoWrap.className = 'attribut-picto';
+  pictoWrap.dataset.short = attribut.short;
+  Object.assign(pictoWrap.dataset, { stat: attribut.key, entityId: String(entite.id), hover: 'true', attributeHelper: 'true' });
+  pictoWrap.tabIndex = 0;
+  pictoWrap.setAttribute('role', 'button');
+  pictoWrap.setAttribute('aria-label', attribut.label);
+  bindHelperEntity(pictoWrap, entite);
+
+  const picto = document.createElement('div');
+  picto.className = `picto-stat ${pictoName} attribut`;
+
+  pictoWrap.appendChild(picto);
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = attribut.label;
+
+  const leftArrow = document.createElement('span');
+  leftArrow.className = 'xp-arrow left-arrow is-hidden';
+  leftArrow.textContent = '<';
+
+  const valueDisplay = document.createElement('div');
+  valueDisplay.className = 'axis-value-display';
+  valueDisplay.textContent = baseValue;
+
+  const rightArrow = document.createElement('span');
+  rightArrow.className = 'xp-arrow right-arrow';
+  rightArrow.textContent = '>';
+
+  axisLine.append(label, leftArrow, valueDisplay, rightArrow);
+
+  // ✅ ordre DOM demandé : picto d'abord, axisLine en dessous
+  attributLine.append(pictoWrap, axisLine);
+
+  // ✅ compat si ton code lit dataset sur l'élément retourné
+  attributLine.dataset.short = axisLine.dataset.short;
+  attributLine.dataset.key   = axisLine.dataset.key;
+
+  return attributLine;
+}
+
+function findAvailableAnimaId() {
+  const player = loadFromLocalStorage('PlayerSave', {});
+  const items = loadFromLocalStorage('IngameItemsData', {}).items || [];
+  const inventory = Array.isArray(player.Playerinventory) ? player.Playerinventory : [];
+  for (const entry of inventory) {
+    const item = typeof entry === 'string' ? items.find(candidate => candidate.itemId === entry) : entry;
+    if (item?.functionName === 'AnimaOmbilicale' && item.itemType?.includes('consumable')) return item.itemId;
+  }
+  return null;
+}
+
+function refreshPurificationButtons() {
+  const available = Boolean(findAvailableAnimaId());
+  const army = loadFromLocalStorage('selectedArmyA', []);
+  document.querySelectorAll('.level-purify-button').forEach(button => {
+    const entity = Array.isArray(army)
+      ? army.find(entry => String(entry.id) === button.dataset.entityId)
+      : null;
+    const level = entity ? getEntityLevelCurrent(entity) : Number(button.dataset.entityLevel);
+    button.hidden = !available || !(level > 1);
+  });
+}
+
+let purificationInventoryListenerBound = false;
+
+function createPurificationButton(entity, form, purificationHost = null) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'level-purify-button';
+  button.dataset.entityId = String(entity.id);
+  button.dataset.entityLevel = String(getEntityLevelCurrent(entity));
+  button.textContent = `Purifier ${entity.nickname || entity.name}`;
+  button.hidden = !findAvailableAnimaId() || !(getEntityLevelCurrent(entity) > 1);
+  if (!purificationInventoryListenerBound) {
+    window.addEventListener('inventoryItemsUpdated', refreshPurificationButtons);
+    window.addEventListener('selectedArmyAUpdated', refreshPurificationButtons);
+    purificationInventoryListenerBound = true;
+  }
+  button.addEventListener('click', async () => {
+    if (button.disabled) return;
+    const itemId = findAvailableAnimaId();
+    if (!itemId) { refreshPurificationButtons(); return; }
+    button.disabled = true;
+    try {
+      const { useConsumableItem } = await import("../../items/itemManager.js");
+      const result = await useConsumableItem(itemId, entity);
+      // The codex may already have rebuilt its form during purification.
+      if (result?.ok && form.isConnected) {
+        form.replaceWith(createLevelUpForm(entity, { purificationHost }));
+      }
+    } finally {
+      button.disabled = false;
+      refreshPurificationButtons();
+    }
+  });
+  return button;
+}
+
+export function createLevelUpForm(entite, { purificationHost = null } = {}) {
+  const dom = createLevelElements(entite);
+  bindHelperEntity(dom.levelUpSection, entite);
+  bindLevelUpLogic(entite, dom, levelDetails);
+  const host = purificationHost || dom.levelUpSection;
+  host.querySelectorAll(':scope > .level-purify-button').forEach(button => button.remove());
+  host.prepend(createPurificationButton(entite, dom.levelUpSection, purificationHost));
+
+  const currentLevel = getEntityLevelCurrent(entite);
+  const lvl = Math.max(1, Math.min(99, currentLevel)); // si tu veux garder ce clamp
+
+  setTimeout(() => {
+    soulScaling(currentLevel);
+  }, 0);
+
+  return dom.levelUpSection;
+}
+
+function createArchetypeIcon(entite, archetypeKey, archetypeLevel, archetypeUid) {
+  if (!entite || !entite.id || !archetypeUid) return;
+
+  const keyNorm = String(archetypeKey || "").trim().toLowerCase();
+
+  // 🚫 RÈGLE ABSOLUE : aucun icon pour Égaré
+  if (!keyNorm || keyNorm === "egare") {
+    return;
+  }
+
+  const container = document.querySelector(`#archetype-icons-${entite.id}`);
+  if (!container) return;
+
+  // ⛔ ANTI-DOUBLON PAR UID
+  const exists = container.querySelector(`[data-archetype-uid="${archetypeUid}"]`);
+  if (exists) return;
+
+  const icon = document.createElement("div");
+  icon.classList.add("archetype-icon");
+
+  icon.dataset.entite = entite.id;
+  icon.dataset.archetypeLevel = archetypeLevel;
+  icon.dataset.archetypeUid = archetypeUid;
+  icon.dataset.archetypeKey = keyNorm;  // ✅ ici, jamais "egare"
+
+  container.appendChild(icon);
+}
+
+function bindLevelUpLogic(entite, dom, levelDetails) {
+const ATTRIBUTE_KEYS = new Set(["strength", "agility", "intelligence"]);
+const isAttributeKey = (k) => ATTRIBUTE_KEYS.has(String(k));
+function refreshPreviewHP(entite) {
+  ComputeStatPreview(entite);
+  renderStatPair(entite, "HP", nodes.statsRoot);
+}
+function refreshPreviewSpeed(entite) {
+  ComputeStatPreview(entite);
+  renderStatPair(entite, "velocity", nodes.statsRoot);
+  renderStatPair(entite, "speed", nodes.statsRoot);
+}
+ const costMap = buildCostMap(levelDetails);
+  const { stratArchetype } = getArchetypeConfig(entite);
+
+  const state = createLevelUpDraft(entite);
+  const setInvisible = (el, inv) => el.classList.toggle('is-hidden', !!inv);
+
+  // Cache des nœuds attributibuts (création unique)
+  const nodes = {
+    confirm: dom.confirmButton,
+    clear: dom.clearBtn,
+    cost: dom.xpCostDisplay,
+    xp: {
+      initial: dom.initialXPDisplay,
+      player: dom.playerXPDisplay,
+      invested: dom.investedXPDisplay,
+      transi: dom.transitionXP,
+    },
+    level: {
+      current: dom.levelCurrent,
+      future: dom.levelFuture,
+      transi: dom.levelTransition,
+    },
+    attributs: {},
+    archetypeLabel: dom.archetypeLabel,
+    archetypeDesc: dom.archetypeDesc,
+    graphCtx: dom.graphCanvas?.getContext('2d'),
+    gauge: dom.gauge,
+  };
+
+nodes.statsRoot =
+  document.querySelector(`#codex-entity_${entite.id} .entity-stats-section.left`)
+  || document.querySelector(`.entity-stats-section.left[data-entity-id="${entite.id}"]`)
+  || document.querySelector(".entity-stats-section.left")
+  || document.body;
+
+  dom.attributibutUp.innerHTML = '';
+  for (const attribut of attributS) {
+    const line = buildattributibutLine(attribut, state.stats[attribut.key], entite);
+    dom.attributibutUp.appendChild(line);
+    nodes.attributs[attribut.short] = {
+      line,
+      left:  line.querySelector('.left-arrow'),
+      right: line.querySelector('.right-arrow'),
+      value: line.querySelector('.axis-value-display')
+    };
+  }
+
+  function updateHeader() {
+    // 💰 XP
+    nodes.xp.initial.textContent  = `${state.xpBaseline}`;
+    nodes.xp.player.textContent   = `${state.tempXP}`;
+    nodes.xp.invested.textContent = `- ${state.xpBaseline - state.tempXP} XP`;
+
+    const entityMaxLevel = getEntityLevelMax(entite);
+    const nextCost = costAt(costMap, state.tempLevel + 1);
+
+    nodes.cost.textContent =
+      state.tempLevel >= entityMaxLevel
+        ? `Niveau maximum atteint (${entityMaxLevel})`
+        : (nextCost != null
+            ? `Coût prochain lvl. : ${nextCost} XP`
+            : `Niveau maximum atteint (${entityMaxLevel})`);
+
+    const hasHistory = state.history.length > 0;
+    setInvisible(nodes.xp.player,   !hasHistory);
+    setInvisible(nodes.xp.invested, !hasHistory);
+    setInvisible(nodes.xp.transi,   !hasHistory);
+
+    const baseLevel = getEntityLevelCurrent(entite);
+    nodes.level.current.textContent = baseLevel;
+    nodes.level.future.textContent  = state.tempLevel;
+
+    document
+      .querySelectorAll(`[data-stat="lvl"][data-entity-id="${entite.id}"]`)
+      .forEach(el => el.textContent = baseLevel);
+
+    const raised = state.tempLevel > baseLevel;
+    setInvisible(nodes.level.transi, !raised);
+    setInvisible(nodes.level.future, !raised);
+    nodes.level.future.classList.toggle('augmented', raised);
+  }
+  function updateArrows() {
+    const entityMaxLevel = getEntityLevelMax(entite);
+    const canUp =
+      state.tempLevel < entityMaxLevel &&
+      state.tempXP >= (costAt(costMap, state.tempLevel + 1) ?? Infinity);
+
+    for (const short in nodes.attributs) {
+      const a = nodes.attributs[short];
+      setInvisible(a.right, !canUp);
+      a.line.classList.toggle('can-invest', canUp);
+      a.line.querySelector('.axis-line')?.classList.toggle('can-invest', canUp);
+
+      const last = state.history[state.history.length - 1];
+      const isLast = !!last && last.short === short;
+      setInvisible(a.left, !isLast);
+      a.line.classList.toggle('can-uninvest', isLast);
+      a.line.querySelector('.axis-line')?.classList.toggle('can-uninvest', isLast);
+    }
+  }
+
+
+  function updateButtons() {
+    const hasHistory = state.history.length > 0;
+    setInvisible(nodes.confirm, !hasHistory);
+    setInvisible(nodes.clear,   state.history.length <= 1);
+  }
+
+
+  const GAUGE_ANIM_DELAY = 450;  // délai pour la grosse jauge seulement
+  let archetypeUpdateTimeout = null;
+  let awakeningPresentationPending = false;
+
+  function getActiveArchetypeKey(levelOverride = null, statsOverride = null) {
+  return getActiveLevelUpArchetypeKey(state, entite, levelOverride, statsOverride);
+}
+
+  function renderAll(mode = 'normal', prevKey = null, nextKey = null) {
+    // Annule un éventuel timeout en cours
+    if (archetypeUpdateTimeout) {
+      clearTimeout(archetypeUpdateTimeout);
+      archetypeUpdateTimeout = null;
+    }
+
+    const changed =
+      prevKey &&
+      nextKey &&
+      prevKey !== nextKey;
+
+    // Bloc commun, toujours synchro
+    updateHeader();
+    updateArrows();
+    updateButtons();
+    updategraph(state, nodes);
+    soulScaling(state.tempLevel);
+
+    // Progress is saved immediately; the first awakened archetype is revealed with the GIF.
+    if (awakeningPresentationPending) return;
+
+    // 🔹 NOM & DESCRIPTION D’ARCHETYPE → tout de suite
+    updateArchetypeBadge(state, nodes);
+
+    // 🔹 MILESTONES (petits jalons) → tout de suite aussi
+    updateArchetypeMilestones(state, nodes);
+
+    // Pas de changement d’archetype → on met à jour la jauge normalement
+    if (!changed || mode === 'normal') {
+      updateArchetypeGauge(state, nodes);
+      return;
+    }
+
+    // Changement d’archetype : seule la GROSSE jauge est décalée
+    archetypeUpdateTimeout = setTimeout(() => {
+      updateArchetypeGauge(state, nodes);
+      archetypeUpdateTimeout = null;
+    }, GAUGE_ANIM_DELAY);
+  }
+
+  dom.levelUpSection._refreshStats = current => {
+    if (String(current?.id) !== String(entite.id) || !current.baseStats || !current.stats) return;
+    if (current !== entite) {
+      // Rebase the open draft on committed gains while keeping its choices and investment history.
+      for (const key of ['baseStats', 'baseStatSources', 'stats', 'stuff', 'resourceStocks',
+        'armorLayers', 'extraLifeRegen', 'eternalLifeRegen']) {
+        if (current[key] === undefined) delete entite[key];
+        else entite[key] = structuredClone(current[key]);
+      }
+      entite.modifierStats ??= {};
+      entite.modifierStats.durable = structuredClone(current.modifierStats?.durable || {});
+      entite.battleBoosts = current.battleBoosts;
+      if (entite.level && typeof entite.level === 'object') entite.level.max = current.level?.max ?? entite.level.max;
+    }
+    const root = dom.levelUpSection.closest('.codex-entity-scan') || dom.levelUpSection;
+    refreshActiveStatPreview(entite, root);
+    state.stats = getLevelUpAttributes(entite, true);
+    for (const attribut of attributS) nodes.attributs[attribut.short].value.textContent = state.stats[attribut.key];
+    renderAll();
+  };
+
+// Prepare l'etat eveille avant la confirmation synchrone des niveaux.
+
+  // 🔒 / 🔓 Blocage global des flèches et boutons de niveau
+  function setArchetypeUIBlocked(block) {
+    const arrows = dom.levelUpSection.querySelectorAll(".xp-arrow");
+    const lvlButtons = dom.levelUpSection.querySelectorAll(".confirm-button");
+
+    arrows.forEach(el => {
+      el.style.pointerEvents = block ? "none" : "auto";
+      el.style.opacity = block ? "0" : "1";
+    });
+
+    lvlButtons.forEach(btn => {
+      btn.style.pointerEvents = block ? "none" : "auto";
+      btn.style.opacity = block ? "0.2" : "1";
+    });
+  }
+  // 🎯 Résolution complète d'un cycle terminé (normal vs éveil)
+async function resolveArchetypeCycleCompletion(
+  name,
+  entite,
+  cycleLen,
+  prevLevel,
+  prevStage,
+  config = {}
+) {
+  const isAwakeningScenario =
+    entite.archetypeFrozen !== true && (config.awakening ?? (name === "egare" && !state.awakened));
+  if (entite.archetypeFrozen === true && name === 'egare') {
+    completeLevelUpArchetypeCycle(state, entite, name, cycleLen, prevLevel, false);
+    return;
+  }
+
+  const createMilestone =
+    config.createMilestone ?? !isAwakeningScenario;
+
+  const baseAnimMs = 2000;
+  const extraBlockMs =
+    config.extraBlockMs ?? (isAwakeningScenario ? 8000 : 0);
+
+  if (!isAwakeningScenario) {
+    if (typeof startArchup === "function") startArchup();
+    await new Promise(res => setTimeout(res, baseAnimMs));
+    if (!dom.levelUpSection.isConnected) return;
+  }
+
+  if (isAwakeningScenario) awakeningPresentationPending = true;
+  completeLevelUpArchetypeCycle(state, entite, name, cycleLen, prevLevel, isAwakeningScenario);
+  if (isAwakeningScenario) {
+    const graphContainer = dom.levelUpSection.querySelector('.attribut-graph-container');
+    // Hide the frame before confirmation can remove the stray styling.
+    graphContainer?.classList.add('awakening-frame-pending');
+    // Commit before any timer: closing, navigating or reloading cannot interrupt awakening.
+    confirmLevelUp();
+    graphContainer?.classList.add('stray');
+    setArchetypeUIBlocked(true);
+    if (typeof startArchup === "function") startArchup();
+    await new Promise(res => setTimeout(res, baseAnimMs));
+    if (!dom.levelUpSection.isConnected) return;
+
+    playAwakeningExtasis(entite, { onReveal: () => {
+      if (dom.levelUpSection.isConnected) graphContainer?.classList.remove('stray');
+    } });
+
+    // Reveal the archetype two seconds before controls return, independently of the frame.
+    setTimeout(() => {
+      if (!dom.levelUpSection.isConnected) return;
+      awakeningPresentationPending = false;
+      renderAll();
+      setArchetypeUIBlocked(true);
+    }, Math.max(0, extraBlockMs - 2000));
+
+  }
+
+  // 🎯 icône de jalon (preview) sauf en cas d’éveil
+  if (createMilestone) {
+    const milestoneKey   = name;
+    const milestoneLevel = prevLevel;
+
+    if (milestoneKey !== "egare") {
+      const uid = `preview-${entite.id}-${milestoneKey}-${milestoneLevel}`;
+      createArchetypeIcon(entite, milestoneKey, milestoneLevel, uid);
+
+      const icon = document.querySelector(
+        `#archetype-icons-${entite.id} [data-archetype-uid="${uid}"]`
+      );
+      if (icon) icon.classList.add("preview");
+    }
+  }
+
+  setTimeout(() => {
+    state.lockArchetype = false;
+    if (!dom.levelUpSection.isConnected) return;
+    setArchetypeUIBlocked(false);
+    if (typeof renderAll === "function") renderAll();
+  }, extraBlockMs + 1);
+}
+
+function getSkippedArchetypeStageInfo(classKey, entite, reason = "skipped") {
+  return getSkippedLevelUpArchetypeStage(state, classKey, entite, reason);
+}
+
+function advanceArchetypeStage(classKey, entite) {
+  const result = advanceLevelUpArchetypeStage(state, classKey, entite);
+  if (result?.completed) setArchetypeUIBlocked(true);
+  return result;
+}
+
+
+function previewStats(entite) {
+  // 🧩 On récupère les stats fusionnées avec les fonctions existantes
+  const merged = getPreviewStats(entite);
+  const statsContainer = document.querySelector(".entity-stats-section.left");
+
+  // 🔄 Boucle sur les stats connues
+  for (const [key, val] of Object.entries(merged)) {
+	   if (isAttributeKey(key)) continue;
+    const def = STATS_DATA.find(s => s.key === key);
+    if (!def) {
+      console.warn(`⚠️ [previewStats] Stat "${key}" introuvable dans STATS_DATA`);
+      continue;
+    }
+
+    const isAttribut = ["strength", "agility", "intelligence"].includes(key);
+    const selector = isAttribut
+      ? `.stat-container[data-stat="${key}"][data-entity-id="${entite.id}"] .entite-stat`
+      : `.entite-stat[data-stat="${key}"][data-entity-id="${entite.id}"]`;
+
+    const existing = document.querySelector(selector);
+if (existing) {
+let displayVal = isObjStat(val) ? `${val.current} / ${val.max}` : val;
+
+if (key === "speed") {
+  const ms = parseFloat(String(val ?? 0));
+  displayVal = `${(ms / 1000).toFixed(2)} s`;
+}
+
+existing.textContent = displayVal;
+
+} else {
+  console.log(`⚠️ [previewStats] Bloc DOM manquant pour "${def.key}", non recréé.`);
+}
+  }
+
+
+  // 🔍 Debug
+  console.groupCollapsed(`🔍 [previewStats] Stats preview pour entité ${entite.id}`);
+  for (const [key, val] of Object.entries(merged)) console.log(`   • ${key} =`, val);
+  console.groupEnd();
+
+  return merged;
+}
+
+  // ===============================
+  // 📈 INVEST
+  // ===============================
+  function invest(short) {
+    const investment = prepareLevelUpInvestment(state, costMap);
+    if (!investment) return;
+    const { entite, prevKey, nextLevel, cost: c, willFinishEgareCycle } = investment;
+    const a = nodes.attributs[short];
+    if (!a) return;
+    const key = a.line.dataset.key;
+
+    let autoConfirmAfter = false;
+
+    if (willFinishEgareCycle) {
+      const ok = window.confirm(
+        "Votre entité va s'éveiller.\n" +
+        "C'est une opération irréversible.\n\n" +
+        "Voulez-vous continuer ?"
+      );
+
+      if (!ok) {
+        // on n’investit pas ce point
+        return;
+      }
+
+      // on investit ET on auto-confirmera ensuite
+      autoConfirmAfter = true;
+    }
+
+    clearEntityStatDeltaClasses(entite.id);
+
+    closeOpenHelpers();
+
+    // 💰 économie + stat principale
+    applyLevelUpInvestmentCost(state, c, nextLevel);
+    addPreviewStat(entite, key, 1);
+    state.stats = getLevelUpAttributes(entite, true);
+
+    // archetype APRÈS investissement (avec stats + niveau à jour)
+    const nextKey = getActiveArchetypeKey();
+
+    // progression de cycle pour l’archetype actif après l’investissement
+    const info =
+      advanceArchetypeStage(nextKey, entite) ||
+      getSkippedArchetypeStageInfo(nextKey, entite, "missing-info");
+    let {
+      level,
+      stage,
+      cycleName,
+      appliedStage,
+      cycleLen: cycleLenAfter,
+      skipped,
+      prevLevel,
+      prevStage
+    } = info;
+
+    const reward = resolveLevelUpReward(state, short, nextKey, info);
+    const { pickKey } = reward;
+    if (!skipped) {
+      const { attributName, stageName } = reward;
+if (pickKey) {
+  // 1) Preview de la sous-stat
+  addPreviewStat(entite, pickKey, 1);
+  (state.subHistory[attributName] ||= []).push(pickKey);
+
+  // parent commun
+let statParent =
+  document.querySelector(`#codex-entity_${entite.id} .umbra-submenu.new.entity-stats-section`)
+  || document.querySelector(`.umbra-submenu.new.entity-stats-section`)
+   || nodes.statsRoot
+  || document.body;
+  if (!statParent) statParent = nodes.statsRoot || document.body;
+
+  // addPreviewStat has already refreshed preview.total, including armor.
+
+  // -------------------------
+  // 2) Création du bloc pickKey si absent
+  // -------------------------
+  const existingStat = document.querySelector(
+    `.stat-container[data-stat="${pickKey}"][data-entity-id="${entite.id}"]`
+  );
+
+  if (!existingStat) {
+    const statDef   = STATS_DATA.find(s => s.key === pickKey);
+    const statLabel = statDef ? statDef.name : pickKey;
+
+    // ✅ init valeur base (number par défaut)
+    if (entite.stats[pickKey] == null) entite.stats[pickKey] = 0;
+
+    // ✅ IMPORTANT : on passe la valeur BRUTE (number ou objet), PAS fmt()
+   createUmbraBlock(
+  statParent,
+  statLabel,
+  () => entite.stats[pickKey],
+  entite,
+  pickKey,   // forcedStatKey
+  false,    // inlineStatName
+  null,     // attribut
+  true,     // umbra (ou un objet umbra)
+  { showMissingAsNew: true, newLineContext: "preview" }
+);
+    markStatUpgraded(entite, pickKey);
+  }
+
+  // -------------------------
+  // 3) ✅ Cas spécial : armor n’existe pas MAIS armor.max existe en preview
+  // -------------------------
+ const previewArmor = entite?.modifierStats?.preview?.generated?.armor;
+
+const hasArmorDelta =
+  previewArmor &&
+  typeof previewArmor === "object" &&
+  (
+    Number(previewArmor.current ?? 0) !== 0 ||
+    Number(previewArmor.max ?? 0) !== 0
+  );
+
+const armorBlockMissing = !document.querySelector(
+  `.stat-container[data-stat="armor"][data-entity-id="${entite.id}"]`
+);
+
+if (armorBlockMissing && hasArmorDelta) {
+  const armorDef = STATS_DATA.find(s => s.key === "armor");
+  const armorLabel = armorDef ? armorDef.name : "Armure";
+
+  const permanentArmor =
+    entite.stats?.armor && typeof entite.stats.armor === "object"
+      ? entite.stats.armor
+      : { current: 0, max: 0 };
+
+  createUmbraBlock(
+    statParent,
+    armorLabel,
+    () => permanentArmor,
+    entite,
+    "armor",
+    false,
+    null,
+    false,
+    { showMissingAsNew: true, newLineContext: "preview" }
+  );
+
+  renderStatPair(entite, "armor", statParent);
+}
+// -------------------------
+// 3bis) ✅ Cas spécial : extraLife n’existe pas MAIS extraLife est présent en preview
+// -------------------------
+const previewExtraLife = entite?.modifierStats?.preview?.generated?.extraLife;
+
+const hasExtraLifeDelta =
+  previewExtraLife &&
+  typeof previewExtraLife === "object" &&
+  (
+    Number(previewExtraLife.current ?? 0) !== 0 ||
+    Number(previewExtraLife.max ?? 0) !== 0
+  );
+
+const extraLifeBlockMissing = !document.querySelector(
+  `.stat-container[data-stat="extraLife"][data-entity-id="${entite.id}"]`
+);
+
+if (extraLifeBlockMissing && hasExtraLifeDelta) {
+  const extraDef = STATS_DATA.find(s => s.key === "extraLife");
+  const extraLabel = extraDef ? extraDef.name : "Vie supplémentaire";
+
+  const permanentExtraLife =
+    entite.stats?.extraLife && typeof entite.stats.extraLife === "object"
+      ? entite.stats.extraLife
+      : { current: 0, max: 0 };
+
+  createUmbraBlock(
+    statParent,
+    extraLabel,
+    () => permanentExtraLife,
+    entite,
+    "extraLife",
+    false,
+    null,
+    false,
+    { showMissingAsNew: true, newLineContext: "preview" }
+  );
+
+  renderStatPair(entite, "extraLife", statParent);
+}
+
+// -------------------------
+// 3ter) ✅ Cas spécial : charge n’existe pas MAIS charge est présente en preview
+// -------------------------
+const previewCharge =
+  entite?.modifierStats?.preview?.total?.charge;
+const permanentCharge = Number(entite.stats?.charge ?? 0) || 0;
+
+const hasChargeDelta = Number(previewCharge ?? permanentCharge) !== permanentCharge;
+
+const chargeBlockMissing = !document.querySelector(
+  `.stat-container[data-stat="charge"][data-entity-id="${entite.id}"]`
+);
+
+if (chargeBlockMissing && hasChargeDelta) {
+  const chargeDef = STATS_DATA.find(s => s.key === "charge");
+  const chargeLabel = chargeDef ? chargeDef.name : "Charge";
+
+  createUmbraBlock(
+    statParent,
+    chargeLabel,
+    () => permanentCharge,
+    entite,
+    "charge",
+    false,
+    null,
+    false,
+    { showMissingAsNew: true, newLineContext: "preview" }
+  );
+
+  renderStatPair(entite, "charge", statParent);
+}
+} else {
+  console.warn(`[invest] Pas de sous-stat trouvée pour ${nextKey} (${stageName})`);
+}
+
+
+    }
+
+    // 🧾 Historique
+    state.history.push({
+      short,
+      archetypeKey: nextKey,
+      level,
+      stage,
+      prevLevel,
+      prevStage,
+      subKey: pickKey
+    });
+
+    // 🎨 UI / stats / preview...
+    a.value.textContent = state.stats[key];
+   if (!isAttributeKey(key)) {
+  renderStatPair(entite, key, nodes.statsRoot);
+}
+    if (pickKey) {
+  const pickBlock = document.querySelector(`.stat-container[data-stat="${pickKey}"][data-entity-id="${entite.id}"]`);
+  const pickRoot = pickBlock?.closest(".entity-stats-section") || nodes.statsRoot || document.body;
+  renderStatPair(entite, pickKey, pickRoot);
+}
+
+refreshActiveStatPreview(entite, nodes.statsRoot, { recalculate: false });
+
+/*
+ * Si strength ou indestructibility ont changé,
+ * hpBattleRegen doit être immédiatement recalculée et affichée.
+ */
+refreshPreviewHpBattleRegen(entite, nodes.statsRoot);
+
+    // 👉 rendu avec gestion du délai :
+    //    - si prevKey === nextKey → pas de délai
+    //    - si arch change       → invest = jauge d'abord, label après
+    renderAll('invest', prevKey, nextKey);
+
+    // marquage visuel
+    document.querySelectorAll('.stat-container.last-substat')
+      .forEach(el => el.classList.remove('last-substat'));
+    document.querySelectorAll('.stat-container.last-attribut')
+      .forEach(el => el.classList.remove('last-attribut'));
+
+    const subContainer = pickKey
+      ? document.querySelector(`.stat-container[data-stat="${pickKey}"][data-entity-id="${entite.id}"]`)
+      : null;
+    const attrContainer = document.querySelector(
+      `.stat-container[data-stat="${key}"][data-entity-id="${entite.id}"]`
+    );
+
+    if (subContainer)  subContainer.classList.add('last-substat');
+    if (attrContainer) attrContainer.classList.add('last-attribut');
+
+    if (entite.modifierStats?.preview?.statLeveled) {
+      saveUpgradedEntity(entite);
+      console.log(`💾 Preview sauvegardée pour ${entite.name} (${entite.id})`);
+    }
+
+    // Resolve only once the final point, its sub-stat and milestone are complete.
+    if (info.completed) {
+      void resolveArchetypeCycleCompletion(nextKey, entite, cycleLenAfter, prevLevel, prevStage, {
+        awakening: autoConfirmAfter,
+      });
+    }
+  }
+
+  // ===============================
+  // 📉 UNINVEST
+  // ===============================
+  function uninvest(short) {
+    const entite = state.currentEntity;
+    if (!entite) return;
+
+    if (!state.history.length) return;
+
+    const last = state.history[state.history.length - 1];
+    if (!last || last.short !== short) return;
+
+    const a = nodes.attributs[short];
+    if (!a) return;
+
+    const key = a.line.dataset.key;
+    const backLevel = state.tempLevel;
+    const c = costAt(costMap, backLevel);
+    if (c == null) return;
+
+    closeOpenHelpers();
+    clearEntityStatDeltaClasses(entite.id);
+
+    // archetype AVANT le désinvestissement
+    const prevKey = getActiveArchetypeKey();
+
+    // 🧹 suppression éventuelle d’icône de jalon
+    const justFinishedCycle = last.stage > last.prevStage;
+    if (justFinishedCycle) {
+      const uidToRemove = `preview-${entite.id}-${last.archetypeKey}-${last.prevLevel}`;
+      const icon = document.querySelector(
+        `#archetype-icons-${entite.id} [data-archetype-uid="${uidToRemove}"]`
+      );
+      if (icon) icon.remove();
+    }
+
+    // ==========================
+    // ROLLBACK NIVEAU
+    // ==========================
+    refundLevelUpInvestmentCost(state, c);
+    removePreviewStat(entite, key);
+    state.stats = getLevelUpAttributes(entite, true);
+
+    // ==========================
+    // ROLLBACK ARCHETYPE
+    // ==========================
+    restoreLevelUpArchetypeStage(state, last);
+
+    // ==========================
+    // ROLLBACK SOUS-STAT
+    // ==========================
+    const attributName = attribut_SHORT_TO_NAME[short];
+
+    if (last.subKey) {
+      removePreviewStat(entite, last.subKey);
+
+      const arr = state.subHistory[attributName];
+      if (Array.isArray(arr) && arr.length) arr.pop();
+
+      const currentVal = entite.stats[last.subKey] ?? 0;
+      const previewVal = entite.modifierStats?.preview?.statLeveled?.[last.subKey] ?? 0;
+
+      if (currentVal <= 0 && previewVal <= 0) {
+        const domStat = document.querySelector(
+          `.stat-container[data-stat="${last.subKey}"][data-entity-id="${entite.id}"]`
+        );
+        if (domStat) domStat.remove();
+      }
+    }
+
+    // ==========================
+    // HISTORIQUE & UI
+    // ==========================
+    state.history.pop();
+    a.value.textContent = state.stats[key];
+if (!isAttributeKey(key)) {
+  renderStatPair(entite, key, nodes.statsRoot);
+}
+   if (last.subKey) {
+  const subBlock = document.querySelector(
+    `.stat-container[data-stat="${last.subKey}"][data-entity-id="${entite.id}"]`
+  );
+  const subRoot = (subBlock && subBlock.closest(".entity-stats-section"))
+    || nodes.statsRoot
+    || document.body;
+
+  renderStatPair(entite, last.subKey, subRoot);
+}
+refreshActiveStatPreview(entite, nodes.statsRoot, { recalculate: false });
+
+refreshPreviewHpBattleRegen(
+  entite,
+  nodes.statsRoot
+);
+
+    // archetype APRÈS le désinvestissement
+    const nextKey = getActiveArchetypeKey();
+
+    // 👉 rendu avec gestion du délai :
+    //    - uninvest = archétype tout de suite, jauge après si changement
+    renderAll('uninvest', prevKey, nextKey);
+
+    // 🌟 Mise à jour du marquage visuel
+    document.querySelectorAll('.stat-container.last-substat')
+      .forEach(el => el.classList.remove('last-substat'));
+
+    document.querySelectorAll('.stat-container.last-attribut')
+      .forEach(el => el.classList.remove('last-attribut'));
+
+    const prev = state.history[state.history.length - 1];
+    if (prev) {
+      const prevAttr = nodes.attributs[prev.short];
+      if (prevAttr) {
+        const prevKeyAttr = prevAttr.line.dataset.key;
+        const attrContainer = document.querySelector(
+          `.stat-container[data-stat="${prevKeyAttr}"][data-entity-id="${entite.id}"]`
+        );
+        if (attrContainer) attrContainer.classList.add('last-attribut');
+      }
+
+      if (prev.subKey) {
+        const subContainer = document.querySelector(
+          `.stat-container[data-stat="${prev.subKey}"][data-entity-id="${entite.id}"]`
+        );
+        if (subContainer) subContainer.classList.add('last-substat');
+      }
+    }
+
+    if (entite.modifierStats?.preview?.statLeveled) {
+      saveUpgradedEntity(entite);
+    }
+  }
+
+// UPGRADE ARROW LVL ECOUTEUR
+dom.levelUpSection.addEventListener('click', (e) => {
+  const arrow = e.target.closest('.xp-arrow');
+  if (!arrow || !dom.levelUpSection.contains(arrow)) return;
+
+  const line = arrow.closest('.axis-line');
+  const short = line?.dataset.short;
+  if (!short) return;
+
+  // 🟢 Invest / Uninvest
+  if (arrow.classList.contains('right-arrow')) {
+    invest(short);
+  } else if (arrow.classList.contains('left-arrow')) {
+    uninvest(short);
+  }
+
+  // invest/uninvest already save the updated draft once.
+});
+
+// Clear all : rejoue tous les uninvest dans l'ordre inverse
+dom.clearBtn.addEventListener('click', () => {
+  closeOpenHelpers();
+  // On annule TOUT l'historique courant en déroulant les steps à l'envers
+  while (state.history.length > 0) {
+    const last = state.history[state.history.length - 1];
+    if (!last || !last.short) break;
+    uninvest(last.short);
+  }
+
+  // ❌ NE PLUS TOUCHER state.awakened ICI
+  // state.awakened = isEntityAwakened(entite);  // → à supprimer
+
+  // Recalcule la preview et rafraîchit l'UI
+  refreshActiveStatPreview(entite, nodes.statsRoot);
+  renderAll();
+});
+
+// ✅ CONFIRMER LEVEL UP (valide les stats preview et les applique)
+dom.confirmButton.addEventListener('click', () => {
+  confirmLevelUp();
+});
+
+// Rafraîchit le marqueur visuel via comparaison permanent/preview.
+function markStatUpgraded(entite, statKey) {
+  const block = document.querySelector(
+    `.stat-container[data-stat="${statKey}"][data-entity-id="${entite.id}"]`
+  );
+  if (!block) return;
+  renderStatPair(
+    entite,
+    statKey,
+    block.closest(".entity-stats-section") || nodes.statsRoot || document.body
+  );
+}
+
+// Même logique au retrait : le rendu décide entre up/down/égal.
+function unmarkStatUpgraded(entite, statKey) {
+  const block = document.querySelector(
+    `.stat-container[data-stat="${statKey}"][data-entity-id="${entite.id}"]`
+  );
+  if (!block) return;
+  renderStatPair(
+    entite,
+    statKey,
+    block.closest(".entity-stats-section") || nodes.statsRoot || document.body
+  );
+}
+function refreshPreviewHpBattleRegen(entite, fallbackRoot = null) {
+  if (!entite) return;
+  const total = entite?.modifierStats?.preview?.total;
+  const previewHpBattleRegen = Math.max(0, Number(total?.hpBattleRegen) || 0);
+  const permanentHpBattleRegen = Math.max(0, getConfirmedStatValue(entite, "hpBattleRegen", 0));
+  let block = document.querySelector(`.stat-container[data-stat="hpBattleRegen"][data-entity-id="${entite.id}"]`);
+  const statParent = block?.closest(".entity-stats-section") || fallbackRoot || document.querySelector(`#codex-entity_${entite.id} .umbra-submenu.new.entity-stats-section`) || document.querySelector(`.umbra-submenu.new.entity-stats-section`) || nodes.statsRoot || document.body;
+
+  /*
+   * La stat peut apparaître pour la première fois parce que
+   * la preview vient de donner de l'indestructibilité.
+   */
+  if (!block && previewHpBattleRegen > 0) {
+    const statDef = STATS_DATA.find(stat => stat.key === "hpBattleRegen");
+    const statLabel = statDef?.name || "Régénération de combat";
+    createUmbraBlock(
+      statParent,
+      statLabel,
+      () => permanentHpBattleRegen,
+      entite,
+      "hpBattleRegen",
+      false,
+      null,
+      true,
+      { showMissingAsNew: true, newLineContext: "preview" }
+    );
+    block = document.querySelector(`.stat-container[data-stat="hpBattleRegen"][data-entity-id="${entite.id}"]`);
+  }
+
+  if (!block) return;
+  const root = block.closest(".entity-stats-section") || statParent;
+  renderStatPair(entite, "hpBattleRegen", root);
+
+  /*
+   * Si la stat n'existe ni en permanent ni en preview,
+   * on retire le bloc créé temporairement.
+   */
+  if (previewHpBattleRegen <= 0 && permanentHpBattleRegen <= 0) block.remove();
+}
+function refreshPreviewVitals(entite) {
+  ComputeStatPreview(entite);
+
+  let b;
+
+  b = document.querySelector(`.stat-container[data-stat="HP"][data-entity-id="${entite.id}"]`);
+  renderStatPair(entite, "HP", b?.closest(".entity-stats-section") || nodes.statsRoot || document.body);
+
+  b = document.querySelector(`.stat-container[data-stat="armor"][data-entity-id="${entite.id}"]`);
+  renderStatPair(entite, "armor", b?.closest(".entity-stats-section") || nodes.statsRoot || document.body);
+
+  b = document.querySelector(`.stat-container[data-stat="extraLife"][data-entity-id="${entite.id}"]`);
+  renderStatPair(entite, "extraLife", b?.closest(".entity-stats-section") || nodes.statsRoot || document.body);
+
+  b = document.querySelector(`.stat-container[data-stat="charge"][data-entity-id="${entite.id}"]`);
+  renderStatPair(entite, "charge", b?.closest(".entity-stats-section") || nodes.statsRoot || document.body);
+
+  b = document.querySelector(`.stat-container[data-stat="dayHpRegen"][data-entity-id="${entite.id}"]`);
+  renderStatPair(entite, "dayHpRegen", b?.closest(".entity-stats-section") || nodes.statsRoot || document.body);
+
+  refreshPreviewHpBattleRegen(entite, nodes.statsRoot);
+}
+
+function addPreviewStat(entite, statKey, amount = 1) {
+  statKey = addLevelUpPreviewStat(entite, statKey, amount);
+  if (!statKey) return;
+
+  if (
+    statKey === "vitality" ||
+    statKey === "robustness" ||
+    statKey === "transcendence" ||
+    statKey === "weaponMastery" ||
+    statKey === "strength" ||
+    statKey === "indestructibility" ||
+    statKey === "hpBattleRegen"
+  ) {
+    refreshPreviewVitals(entite);
+  } else if (statKey === "velocity") {
+    refreshPreviewSpeed(entite);
+  } else {
+    ComputeStatPreview(entite);
+  }
+
+  markStatUpgraded(entite, statKey);
+}
+
+function removePreviewStat(entite, statKey, amount = 1) {
+  statKey = removeLevelUpPreviewStat(entite, statKey, amount);
+  if (!statKey) return;
+
+  if (
+    statKey === "vitality" ||
+    statKey === "robustness" ||
+    statKey === "transcendence" ||
+    statKey === "weaponMastery" ||
+    statKey === "strength" ||
+    statKey === "indestructibility" ||
+    statKey === "hpBattleRegen"
+  ) {
+    refreshPreviewVitals(entite);
+  } else if (statKey === "velocity") {
+    refreshPreviewSpeed(entite);
+  } else {
+    ComputeStatPreview(entite);
+  }
+
+  unmarkStatUpgraded(entite, statKey);
+}
+function removeNewStatClasses(entite) {
+  const entitySelector = entite?.id
+    ? `.stat-container[data-entity-id="${entite.id}"].new`
+    : ".stat-container.new";
+
+  document.querySelectorAll(entitySelector).forEach(el => {
+    if (isLevelUpNewStatsArea(el)) {
+      el.classList.remove("new");
+      delete el.dataset.statLineCreatedAsNew;
+    }
+  });
+
+  document.querySelectorAll('.entite-stat.new-stat').forEach(el => {
+    const statKey = el.dataset.stat;
+    const entityId = el.dataset.entityId;
+
+    // Supprime la classe "new-stat"
+    el.classList.remove('new-stat');
+
+    // Récupère l’entité correspondante si non passée en argument
+    const targetEntite = entite || (window.entites?.find(e => e.id == entityId));
+
+    // Vérifie la valeur réelle de la stat
+    const statValue =
+      targetEntite?.stats?.[statKey] ??
+      targetEntite?.modifierStats?.durable?.statLeveled?.[statKey] ??
+      targetEntite?.modifierStats?.preview?.statLeveled?.[statKey] ??
+      0;
+
+    // Si la stat n’a plus aucune valeur → supprime le conteneur complet
+    if ((statValue == null || statValue <= 0) && !ZERO_VALUE_VISIBLE_STAT_KEYS.has(normalizeStatKey(statKey))
+      && !getStatMalusSources(targetEntite, statKey).length) {
+      const statContainer = el.closest(`.stat-container[data-stat="${statKey}"][data-entity-id="${entityId}"]`);
+      if (statContainer) {
+        console.log(`🗑️ Suppression stat vide '${statKey}' pour entité ${entityId}`);
+        statContainer.remove();
+      }
+    }
+  });
+}
+
+
+
+
+
+
+
+
+  // Init
+  dom.initialXPDisplay.textContent = `${playerExperience}`;
+  renderAll();
+function confirmLevelUp() {
+  closeOpenHelpers();
+  const confirmation = applyLevelUpPreview(entite, state);
+  if (!confirmation) return;
+  if (confirmation.error === 'insufficient-xp') {
+    window.alert('XP insuffisante. Annulez la prévisualisation ou réactivez le mode admin.');
+    return;
+  }
+  const { payment, statsBeforeConfirm } = confirmation;
+
+  // ✅ Passe les icônes preview -> leveled
+  document.querySelectorAll(`#archetype-icons-${entite.id} .archetype-icon.preview`)
+    .forEach(icon => {
+      const oldUid = icon.dataset.archetypeUid;
+      icon.dataset.archetypeUid = oldUid.replace("preview-", "leveled-");
+      icon.classList.remove("preview");
+      icon.classList.add("leveled");
+    });
+
+  // ✅ Nettoyage preview
+  delete entite.modifierStats.preview;
+
+  // ✅ Retire upgraded partout
+  document
+    .querySelectorAll(`.stat-container[data-entity-id="${entite.id}"].upgraded`)
+    .forEach(el => el.classList.remove('upgraded'));
+
+  const saveState = snapshotLevelUpSaveState(state);
+  saveState.tempLevel = getEntityLevelCurrent(entite);
+  saveEntityLevelUP(entite, saveState, payment);
+  refreshConfirmedLevelDom(entite);
+  refreshLevelUpStateAfterSave(state, entite);
+
+  // ✅ Remet les valeurs d'attributs affichées
+  for (const attribut of attributS) {
+    const short = attribut.short;
+    nodes.attributs[short].value.textContent = state.stats[attribut.key];
+  }
+
+  // ✅ Rerender stats
+  if (typeof renderAllStats === 'function') {
+    renderAllStats(entite, nodes.statsRoot);
+  } else {
+    Object.keys(entite.baseStats).forEach(k => renderStatPair(entite, k, nodes.statsRoot));
+  }
+
+  if (!awakeningPresentationPending) updateArchetypeBadge(state, nodes);
+  updategraph(state, nodes);
+
+  // ✅ HP counters + barres + compteur armure
+  updateHPCounters(entite.id, entite.stats.HP.current, entite.stats.HP.max);
+  updateHealthBar(
+    entite.stats.HP.current,
+    entite.stats.HP.max,
+    entite.stats.armor?.current ?? 0,
+    entite.stats.armor?.max ?? 0,
+    entite.id
+  );
+  updateArmorCounter(entite);
+
+  // (Optionnel mais logique si extraLife existe)
+  updateBonusLifeCounters(entite);
+
+  if (typeof window !== "undefined" && typeof window.refreshCodexUmbraPanel === "function") {
+    window.refreshCodexUmbraPanel(entite, {
+      oldStats: statsBeforeConfirm,
+      newStats: entite.stats,
+    });
+  }
+
+  removeNewStatClasses(entite);
+  if (typeof updateExperienceDisplay === 'function') updateExperienceDisplay();
+  renderAll();
+  showStatGainsFromDiff(entite, statsBeforeConfirm);
+}
+
+}
+
+function updateArchetypeBadge(state, nodes) {
+  if (!nodes.archetypeLabel) return;
+
+  const entite = state.currentEntity;
+  const { strength, agility, intelligence } = state.stats;
+  const level = state.tempLevel ?? state.level ?? 1;
+
+  // 👉 Seul vrai signal d’éveil : state.awakened
+  const awakened = !!state.awakened;
+
+  const keyLower = String(
+    getClassFromAttributs(
+      strength,
+      agility,
+      intelligence,
+      level,
+      awakened,   // tant que false → "egare"
+      entite
+    )
+  ).trim().toLowerCase();
+
+  const meta = CLASS_INDEX[keyLower];
+  let name = meta?.name || "Égaré";
+
+  // 🆕 Ajout / retrait de la classe .stray sur le graph container
+  if (nodes.graphCtx?.canvas) {
+    const graphContainer = nodes.graphCtx.canvas.closest('.attribut-graph-container');
+    if (graphContainer) {
+      if (keyLower === "egare") {
+        graphContainer.classList.add("stray");
+      } else {
+        graphContainer.classList.remove("stray");
+      }
+    }
+  }
+  // --- fin du bloc ajouté ---
+
+  const progress = state.archetypeProgress || {};
+  const prog = progress[keyLower] || { level: 1, stage: 0 };
+  const archLevel = Math.max(1, prog.level | 0);
+
+  const prevValue = nodes.archetypeLabel.dataset.value || "";
+  if (prevValue && prevValue !== name) {
+    nodes.archetypeLabel.classList.add("changed");
+    clearTimeout(nodes.archetypeLabel._changedTimeout);
+    nodes.archetypeLabel._changedTimeout = setTimeout(() => {
+      nodes.archetypeLabel.classList.remove("changed");
+    }, 1500);
+  }
+
+  nodes.archetypeLabel.dataset.value = name;
+  nodes.archetypeLabel.innerHTML = "";
+  nodes.archetypeLabel.append(document.createTextNode(name));
+
+  if (archLevel > 1) {
+    const lvlSpan = document.createElement("span");
+    lvlSpan.className = "arch-lvl-label";
+    lvlSpan.textContent = " " + toRoman(archLevel);
+    nodes.archetypeLabel.appendChild(lvlSpan);
+  }
+
+  if (nodes.archetypeDesc) {
+    nodes.archetypeDesc.textContent = meta?.description || "";
+  }
+}
+
+function updateArchetypeGauge(state, nodes) {
+  if (!nodes.gauge) return;
+
+  const entite = state.currentEntity;
+  const level = state.tempLevel ?? state.level ?? 1;
+  const awakened = !!state.awakened;
+
+  const activeName = String(
+    getClassFromAttributs(
+      state.stats.strength,
+      state.stats.agility,
+      state.stats.intelligence,
+      level,
+      awakened,
+      entite
+    ) || ""
+  ).trim().toLowerCase();
+
+  const cycleLen = getCycleLenFor(activeName, entite);
+  const prog = state.archetypeProgress[activeName] || { level: 1, stage: 0 };
+  const nice = getClassLabel(activeName) || activeName;
+
+  if (cycleLen === 0) {
+    nodes.gauge.label.textContent = `${nice} — aucun cycle`;
+    nodes.gauge.fill.style.width = '0%';
+    return;
+  }
+
+  const clampedStage = Math.min(prog.stage, cycleLen);
+  const pct = Math.round((clampedStage / cycleLen) * 100);
+
+  nodes.gauge.label.textContent =
+    `${nice} ${prog.level} — ${clampedStage}/${cycleLen} · ${pct}%`;
+
+  nodes.gauge.fill.style.width = `${pct}%`;
+}
+
+function updateArchetypeMilestones(state, nodes) {
+  if (!nodes.gauge?.milestones) return;
+
+  const entite   = state.currentEntity;
+  const level    = state.tempLevel ?? state.level ?? 1;
+  const awakened = !!state.awakened;
+
+  const activeName = String(
+    getClassFromAttributs(
+      state.stats.strength,
+      state.stats.agility,
+      state.stats.intelligence,
+      level,
+      awakened,
+      entite
+    ) || ""
+  ).trim().toLowerCase();
+
+  const cycle   = getCycleForKey(activeName, entite) || DEFAULT_CYCLE;
+  const total   = cycle.length;
+  const prog    = state.archetypeProgress[activeName] || { stage: 0, milestones: [] };
+  const jalons  = getArchetypeMilestones(activeName, entite);
+
+  const milestoneList = Array.isArray(prog.milestones) ? prog.milestones : [];
+
+  // Keep mounted spheres and their animation timelines while levels are adjusted.
+  const existingMilestones = new Map([...nodes.gauge.milestones.children]
+    .map(el => [el.dataset.index, el]));
+
+  jalons.forEach(j => {
+    const el = existingMilestones.get(String(j.index)) || document.createElement("div");
+    existingMilestones.delete(String(j.index));
+    el.className = "milestone";
+    el.dataset.index = j.index;
+    el.querySelector('.gemme')?.remove();
+
+    if (j.stageName) {
+      const [nature, lvlStr] = j.stageName.split("-");
+      if (nature) {
+        el.classList.add(nature);
+        if (lvlStr) el.classList.add(`${nature}-${lvlStr}`);
+      }
+	  // ✅ Shape selon la nature
+if (nature === "utilitaire") el.classList.add("shape-round");
+else if (nature === "defense") el.classList.add("shape-square");
+else if (nature === "attaque") el.classList.add("shape-diamond");
+    }
+
+    if (j.level) el.classList.add(`lvl-${j.level}`);
+
+    const stageNumber = j.index + 1;
+    const pct = (stageNumber / total) * 100;
+    el.style.left = `calc(${pct}% - 6px)`;
+    let rewardAttribute = null;
+
+    if (prog.stage >= stageNumber) {
+      el.classList.add("filled");
+
+      let attrClass = milestoneList[stageNumber - 1] || null;
+
+      // fallback : on remonte dans l'historique courant si besoin
+      if (!attrClass && state.history?.length) {
+        const stepEvent = state.history
+          .slice()
+          .reverse()
+          .find(h => h.archetypeKey === activeName && h.stage === stageNumber);
+
+        if (stepEvent && stepEvent.short) {
+          attrClass = attribut_SHORT_TO_NAME[stepEvent.short];
+        }
+      }
+
+      if (attrClass) {
+        rewardAttribute = attrClass;
+        el.classList.add(attrClass);
+        if (j.level !== 3) {
+          const gem = document.createElement("div");
+          gem.className = `gemme ${attrClass}`;
+          el.appendChild(gem);
+        }
+      }
+
+      if (prog.stage === stageNumber) {
+        el.classList.add("last");
+        setTimeout(() => el.classList.remove("last"), 1000);
+      }
+    }
+
+    if (j.level === 3) {
+      el.classList.add("has-essence-reward");
+      const rewardColor = getMilestoneEssenceColor(rewardAttribute);
+      updateMilestoneEssenceElement(el, rewardColor);
+      el.dataset.essenceRewardColor = rewardColor || "neutral";
+      el.title = buildMilestoneEssenceHelper(Boolean(rewardColor), { preview: true });
+    } else {
+      el.querySelector('.milestone-essence')?.remove();
+      delete el.dataset.essenceRewardColor;
+      el.removeAttribute('title');
+    }
+    if (el.parentElement !== nodes.gauge.milestones) nodes.gauge.milestones.appendChild(el);
+  });
+  existingMilestones.forEach(el => el.remove());
 }

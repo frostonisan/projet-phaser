@@ -178,7 +178,8 @@ try {
       check(JSON.stringify(gearActor) === before, `${efficiency}: rendering is read-only`);
     }
     G.saveToLocalStorage('equippedItems', []);
-    window.__malusAudit = { entity, E, D, S, U, G, goodItem, items: [] };
+    const statViews = await import("/js/ui/statistics/components.js");
+    window.__malusAudit = { entity, E, D, S, U, G, statViews, goodItem, items: [] };
     return passed;
   }));
   const setup = async view => page.evaluate(async view => {
@@ -243,7 +244,7 @@ try {
     await page.evaluate(key => {
       const { active, U } = window.__malusAudit;
       active.modifierStats.preview = { statLeveled: { [key]: -2 } };
-      U.refreshActiveStatPreview(active, document.getElementById('malus-audit'));
+      window.__malusAudit.statViews.refreshActiveStatPreview(active, document.getElementById('malus-audit'));
     }, key);
     await page.waitForFunction(({ scope, key, penalty }) => document.querySelector(`#malus-audit ${scope} [data-stat="${key}"] .stat-curse-marker`)?.dataset.malusLabel === String(penalty - 2), { scope, key, penalty });
     if (view === 'Stats') {
@@ -253,7 +254,7 @@ try {
     await page.evaluate(() => {
       const { active, U } = window.__malusAudit;
       active.modifierStats.preview.statLeveled = {};
-      U.refreshActiveStatPreview(active, document.getElementById('malus-audit'));
+      window.__malusAudit.statViews.refreshActiveStatPreview(active, document.getElementById('malus-audit'));
     });
     await page.waitForFunction(({ scope, key, penalty }) => document.querySelector(`#malus-audit ${scope} [data-stat="${key}"] .stat-curse-marker`)?.dataset.malusLabel === String(penalty), { scope, key, penalty });
     checks.push(`${view}: total, badge, source, subhelper, live preview and cancellation`);
@@ -276,7 +277,7 @@ try {
       const result = await I.itemApplyEffect(entity, 'itemPermanentStat', crystal);
       if (!result.ok) throw new Error('Crystal fixture consumption failed');
     }
-    U.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
+    window.__malusAudit.statViews.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
     const row = document.querySelector('#malus-audit .section-content.stats [data-stat="physicalDamage"].stat-container');
     row.querySelector('.stat-name').dataset.baseLabel = 'Puissance Physique Ω :! Ω';
     row.querySelector('.stat-curse-marker').textContent = '!';
@@ -330,7 +331,7 @@ try {
   await page.evaluate(() => {
     const { entity, U } = window.__malusAudit;
     entity.modifierStats.preview = { statLeveled: { strength: 10, vigueur: -5 } };
-    U.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
+    window.__malusAudit.statViews.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
   });
   assert.equal(await page.locator('[data-umbra-detail]').count(), 1, 'Calculation subhelper survives a change in source detail');
   const previewTotal = await page.evaluate(() => {
@@ -343,7 +344,7 @@ try {
   await page.evaluate(() => {
     const { entity, U } = window.__malusAudit;
     entity.modifierStats.preview.statLeveled = {};
-    U.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
+    window.__malusAudit.statViews.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
   });
   checks.push('Pinned calculation and Malus details refresh without closing, including inherited Umbra penalties');
   checks.push('mixed sources: crystals absorbed into Umbra/normal/plus, equipment still named, saved gains and totals unchanged');
@@ -359,7 +360,7 @@ try {
   await page.evaluate(() => {
     const { active, U } = window.__malusAudit;
     active.modifierStats.preview = { statLeveled: { vigueur: 4 } };
-    U.refreshActiveStatPreview(active, document.getElementById('malus-audit'));
+    window.__malusAudit.statViews.refreshActiveStatPreview(active, document.getElementById('malus-audit'));
   });
   assert.equal(await page.evaluate(() => JSON.stringify(window.__malusAudit.active.baseStats)), ownedPoints, 'Preview preserves every permanently owned point');
   assert.notEqual(await umbraHelper.innerText(), ownedUmbraText, 'Umbra preview refreshes the pinned card');
@@ -393,7 +394,7 @@ try {
     const { entity, E, U } = window.__malusAudit;
     delete entity.modifierStats.durable.statLeveled.physicalDamage;
     E.recomputeEntityStats(entity, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
-    U.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
+    window.__malusAudit.statViews.refreshActiveStatPreview(entity, document.getElementById('malus-audit'));
   });
   assert.equal(await row.locator('.stat-curse-marker').count(), 0, 'removed penalty removes badge');
   await helper.locator('[data-helper-source="fixed"]').hover();

@@ -1,9 +1,9 @@
 import { gameStorage as localStorage } from './sessionStorage.js';
 import { generateUniqueID } from "../entities/runtime.js";
 import { getOrCreateWorldMapID, initializeArmyConfig, ResetGameStages, ResetEntitesB, ResetXp, ResetGameDay, detectPageReload } from "../ui/application.js";
-import { updateExperienceDisplay } from "../entities/progression.js";
 import { resetStoredArmorCurrentToMax } from "./entityStorage.js";
 import { StopGame } from "../app/state.js";
+import { updateExperienceDisplay } from "../ui/codex/stats.js";
 
 export const PLAYER_INFO_STORAGE_KEY = 'playerInfo.json';
 

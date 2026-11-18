@@ -26,7 +26,9 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
-    // Enter the game's module graph in its normal startup order.
+    // Match app/startup.js: initialize shared storage before loading panels in parallel.
+    // Isolated-entry failures remain covered by verify-ui-modules-browser.mjs.
+    await import("/js/storage/gameStorage.js");
     await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import("/js/entities/statSystem.js");
     const E = await import("/js/entities/runtime.js");
@@ -912,7 +914,7 @@ try {
   await page.locator('#system-test .section-content.stats [data-mode="stat"]').click();
   await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await import("/js/ui/statistics/components.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
     const before = structuredClone(entity.stats);
@@ -969,7 +971,7 @@ try {
   await page.screenshot({ path: resolve(output, 'source-inline-calculation.png'), animations: 'disabled' });
   await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await import("/js/ui/statistics/components.js");
     const { entity } = window.__helperEquipmentAudit;
     const updated = structuredClone(entity);
     updated.stuff = {};
@@ -984,12 +986,12 @@ try {
   assert.match(await row.locator('.entite-stat').innerText(), /2\s*%/);
   await page.keyboard.press('Escape');
   await page.evaluate(async () => {
-    const U = await import("/js/entities/progression.js");
+    const U = await import("/js/entities/progression.js"), _levelForms = await import("/js/ui/codex/stats.js");
     const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const entity = structuredClone(window.__helperEquipmentAudit.entity);
     U.setPlayerExperience(1000000);
-    const form = U.createLevelUpForm(entity);
+    const form = _levelForms.createLevelUpForm(entity);
     document.body.append(form);
     try {
       entity.modifierStats.preview = { statLeveled: { magicalPen: 1, magicalPenPlus: 2 } };
@@ -1137,12 +1139,12 @@ try {
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
-    const U = await import("/js/entities/progression.js");
+    const U = await import("/js/entities/progression.js"), _levelForms2 = await import("/js/ui/codex/stats.js");
     const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
     const before = JSON.stringify(entity.stats);
-    const form = U.createLevelUpForm(entity);
+    const form = _levelForms2.createLevelUpForm(entity);
     document.body.append(form);
     try {
       entity.modifierStats.preview = { statLeveled: { shiftPlus: 3, movement: 2, agility: 4 } };

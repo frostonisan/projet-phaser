@@ -60,7 +60,7 @@ try {
   const setup = async (state, preview, view) => page.evaluate(async ({ keys, state, preview, view }) => {
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import("/js/entities/runtime.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await import("/js/entities/progression.js"), _statViews = await import("/js/ui/statistics/components.js");
     const S = await import("/js/entities/statSystem.js");
     UI.closeOpenHelpers();
     document.getElementById('color-audit')?.remove();
@@ -91,7 +91,7 @@ try {
       activeEntity.modifierStats.preview = { statLeveled: { strength: 6, physicalDamage: 5,
         ...(withUmbra ? { bloodFury: 5 } : {}),
         ...Object.fromEntries(keys.map(key => [withPlus ? `${key}Plus` : key, 1])) } };
-      U.refreshActiveStatPreview(activeEntity, host);
+      _statViews.refreshActiveStatPreview(activeEntity, host);
     }
     window.__executionColorAudit = { entity: activeEntity, committed };
     return Object.fromEntries(keys.map(key => [key, S.getStatSystemResult(activeEntity, key)]));
@@ -252,7 +252,7 @@ try {
     [null, 'normal'],
   ]) {
     const expected = await page.evaluate(async delta => {
-      const U = await import("/js/entities/progression.js");
+      const U = await import("/js/ui/statistics/components.js");
       const S = await import("/js/entities/statSystem.js");
       const { entity, committed } = window.__executionColorAudit;
       if (delta) entity.modifierStats.preview = { statLeveled: delta };

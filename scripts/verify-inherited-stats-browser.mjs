@@ -25,7 +25,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
-    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js");
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js"), _statViews = await import("/js/ui/statistics/components.js");
     const State = await import("/js/app/state.js");
     window.levelRunning = 'worldmap'; G.setAdminMode(true); State.refreshStageAccess();
     const entity = structuredClone(E.entitesNestUp[0]);
@@ -47,7 +47,7 @@ try {
     window.__inheritedAudit = { host, entity, active,
       preview(values) {
         active.modifierStats.preview = { statLeveled: values };
-        P.refreshActiveStatPreview(active, host);
+        _statViews.refreshActiveStatPreview(active, host);
       } };
   });
   const sidebar = page.locator('#inherited-audit .codex-colomn-6');

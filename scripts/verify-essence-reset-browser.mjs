@@ -102,7 +102,7 @@ try {
     const stats = await import("/js/entities/runtime.js");
     const { getSafe } = await import("/js/entities/rules.js");
     const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
-    const levels = await import("/js/entities/progression.js");
+    const levels = await import("/js/entities/progression.js"), _levelForms = await import("/js/ui/codex/stats.js");
     const { equip, unequip } = await import('/js/items/equipement.js');
     const check = (ok, message) => { if (!ok) throw new Error(message); };
     const results = [];
@@ -132,7 +132,7 @@ try {
       check(getSafe(entity, 'strength') === -5, `${source}: initial debt ${getSafe(entity, 'strength')}`);
       levels.setPlayerExperience(1000000);
       ui.createUmbraBlock(host, 'Force', () => entity.stats.strength, entity, 'strength');
-      const form = levels.createLevelUpForm(entity);
+      const form = _levelForms.createLevelUpForm(entity);
       host.appendChild(form);
       const statRow = host.querySelector('.stat-container[data-stat="strength"]');
       const redBackground = getComputedStyle(statRow).backgroundImage;
@@ -203,7 +203,7 @@ try {
   });
   const result = await page.evaluate(async () => {
     const { enrichEntityStats } = await import("/js/entities/runtime.js");
-    const { createLevelUpForm } = await import("/js/entities/progression.js");
+    const { createLevelUpForm } = await import("/js/ui/codex/stats.js");
     const { syncEntityLinkedEssenceInventory } = await import("/js/items/essences.js");
     const entity = {
       id: 900001, name: "Test Anima", side: "A", type: "sbire", class: "TestReset",
@@ -351,10 +351,10 @@ try {
   assert.equal(anima.quality, 7);
   await page.locator('#reset-test-host .level-purify-button').waitFor({ state: 'visible' });
   await page.evaluate(async () => {
-    const api = await import("/js/entities/progression.js");
+    const api = await import("/js/entities/progression.js"), _levelForms2 = await import("/js/ui/codex/stats.js");
     window.__actionTestXP = api.playerExperience;
     api.setPlayerExperience(1000000);
-    document.getElementById('reset-test-host').replaceChildren(api.createLevelUpForm(window.__resetTestEntity));
+    document.getElementById('reset-test-host').replaceChildren(_levelForms2.createLevelUpForm(window.__resetTestEntity));
   });
   await page.locator('#reset-test-host .axis-line[data-key="strength"] .right-arrow').click({ force: true });
   await page.locator('#reset-test-host .axis-line[data-key="strength"] .right-arrow').click({ force: true });
@@ -381,9 +381,9 @@ try {
   await page.locator('#reset-test-host .confirm-button.clear').click();
   assert.equal(await page.locator('#reset-test-host .level-purify-button').isVisible(), true);
   await page.evaluate(async () => {
-    const api = await import("/js/entities/progression.js");
+    const api = await import("/js/entities/progression.js"), _levelForms3 = await import("/js/ui/codex/stats.js");
     api.setPlayerExperience(window.__actionTestXP);
-    document.getElementById('reset-test-host').replaceChildren(api.createLevelUpForm(window.__resetTestEntity));
+    document.getElementById('reset-test-host').replaceChildren(_levelForms3.createLevelUpForm(window.__resetTestEntity));
   });
   await page.locator('#reset-test-host .level-purify-button').click();
   await page.locator('.anima-reset-confirm').waitFor({ state: 'visible' });
@@ -437,7 +437,7 @@ try {
   assert.equal(afterAnima.unusedPotion, true);
   await page.evaluate(async () => {
     const { acquireItem, DropInventorytoCodex } = await import('/js/items/itemManager.js');
-    const { createLevelUpForm } = await import("/js/entities/progression.js");
+    const { createLevelUpForm } = await import("/js/ui/codex/stats.js");
     const item = acquireItem({ serial: 'i45' }, 'pure-entity-test');
     window.__pureAnimaId = item.itemId;
     const target = JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001);
@@ -510,7 +510,7 @@ try {
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001).level.current), 1);
   const purificationPlacement = await page.evaluate(async () => {
     const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
-    const { createLevelUpForm } = await import("/js/entities/progression.js");
+    const { createLevelUpForm } = await import("/js/ui/codex/stats.js");
     const army = JSON.parse(localStorage.getItem('selectedArmyA'));
     const entity = structuredClone(army.find(e => e.id === 900001));
     entity.id = 900030;
@@ -541,7 +541,7 @@ try {
     graph.classList.remove('stray');
     if (!getComputedStyle(graph).backgroundImage.includes('cadre-soul-entite.png')) throw new Error('Normal frame missing');
     window.__awakeningFrameStart = performance.now();
-    (await import("/js/entities/progression.js")).playAwakeningExtasis({ id: 900030 });
+    (await import("/js/rendering/animations.js")).playAwakeningExtasis({ id: 900030 });
     if (getComputedStyle(graph).backgroundImage !== 'none') throw new Error('Awakening frame appeared immediately');
     if (!document.querySelector('#soul-section-900030 .extasis.intro')) throw new Error('Frame delay blocked awakening GIF');
   });

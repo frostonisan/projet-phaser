@@ -428,7 +428,7 @@ try {
     const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
     const { entites, entitesNestUp, recomputeEntityStats } = await import("/js/entities/runtime.js");
     const { calculateDirectAttackHps } = await import("/js/combat/statistics.js");
-    const { syncDOMWithStats } = await import("/js/entities/progression.js");
+    const { syncDOMWithStats } = await import("/js/ui/statistics/components.js");
     const { readAttackDefinitionsForEntity, getAttackPowerRatios } = await import("/js/combat/attackResolution.js");
     const reports = [];
     const check = (ok, label) => { if (!ok) throw Error(label); reports.push(label); };

@@ -28,7 +28,7 @@ try {
   await dismissStarterForFixture(page);
   const setup = async (view, preview) => page.evaluate(async ({ view, preview }) => {
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), E = await import("/js/entities/runtime.js");
-    const U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
+    const U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts)), _statViews = await import("/js/ui/statistics/components.js");
     const { stats } = await import('/js/data/statsData.js');
     const { STAT_HELPER_DESCRIPTIONS } = await import('/js/data/helpers.js');
     UI.closeOpenHelpers(); document.getElementById('intro-audit')?.remove();
@@ -51,9 +51,9 @@ try {
     const previewPoints = Object.fromEntries(keys.map(key => [key, 5]));
     if (preview) {
       active.modifierStats.preview = { statLeveled: previewPoints };
-      U.refreshActiveStatPreview(active, host);
+      _statViews.refreshActiveStatPreview(active, host);
     }
-    window.__introAudit = { UI, U, active, host, committed, previewPoints, descriptions: STAT_HELPER_DESCRIPTIONS };
+    window.__introAudit = { UI, U, statViews: _statViews, active, host, committed, previewPoints, descriptions: STAT_HELPER_DESCRIPTIONS };
     return keys;
   }, { view, preview });
   const helper = page.locator('[data-umbra-pinned="true"]');
@@ -130,9 +130,9 @@ try {
     }
     if (!preview) {
       await page.evaluate(() => {
-        const { U, active, host, previewPoints } = window.__introAudit;
+        const { statViews, active, host, previewPoints } = window.__introAudit;
         window.__introAudit.openHelper = document.querySelector('[data-umbra-pinned]');
-        active.modifierStats.preview = { statLeveled: previewPoints }; U.refreshActiveStatPreview(active, host);
+        active.modifierStats.preview = { statLeveled: previewPoints }; statViews.refreshActiveStatPreview(active, host);
       });
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       assert.ok(await helper.evaluate(node => node === window.__introAudit.openHelper), 'Live preview keeps the same pinned helper');

@@ -27,7 +27,7 @@ try {
   const checks = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), S = await import("/js/entities/statSystem.js");
     const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"), H = await import('/js/data/helpers.js');
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js"), _statViews = await import("/js/ui/statistics/components.js");
     const G = await import("/js/storage/gameStorage.js");
     const checks = [];
     const check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
@@ -149,7 +149,7 @@ try {
         const entity = mode === 'Stats' ? probe : UI.helperEntityByRoot.get(mount.querySelector('.level-up-section'));
         if (mode === 'Preview') {
           entity.modifierStats.preview = { statLeveled: { strength: 2, vigueur: 1 } };
-          U.refreshActiveStatPreview(entity, mount);
+          _statViews.refreshActiveStatPreview(entity, mount);
         }
         this.entity = entity;
         return S.getStatSystemResult(entity, 'physicalDamage').value;

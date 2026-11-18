@@ -444,7 +444,7 @@ try {
   const colorChecks = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js");
     const D = await import("/js/rendering/hud.js");
-    const P = await import("/js/entities/progression.js");
+    const P = await import("/js/entities/progression.js"), _statViews = await import("/js/ui/statistics/components.js");
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import("/js/storage/gameStorage.js");
     const { createMovementCounter } = await import("/js/rendering/entities.js");
@@ -509,7 +509,7 @@ try {
       sample.style.cssText = 'margin:0 0 14px;padding:6px;border-bottom:1px solid #795e27';
       sample.append(title, createMovementCounter(entity));
       gallery.append(sample);
-      P.syncDOMWithStats(entity.stats, entity.stats, entity.id, entity);
+      _statViews.syncDOMWithStats(entity.stats, entity.stats, entity.id, entity);
       inspect(counter, 'current', expectedCurrent, `${label} synchronized HUD`);
       inspect(counter, 'max', expectedMax, `${label} synchronized HUD`);
       check(entity.stats.shift.current === JSON.parse(before).shift.current, 'Color synchronization preserves current movement');
@@ -534,7 +534,7 @@ try {
     const committed = JSON.stringify(active.stats);
     for (const delta of [4, -4]) {
       active.modifierStats.preview = { statLeveled: { shift: delta } };
-      P.refreshActiveStatPreview(active, host);
+      _statViews.refreshActiveStatPreview(active, host);
       const stat = host.querySelector('.stat-container[data-stat="shift"]');
       check(Boolean(stat), 'Shared Level up preview renders the movement stat row');
       inspect(stat.querySelector('.entite-stat.preview'), 'max', delta > 0 ? 'movement-buffed' : 'movement-reduced', 'Level up preview');
@@ -543,7 +543,7 @@ try {
       check(JSON.stringify(active.stats) === committed, 'Color preview never changes real movement');
     }
     active.modifierStats.preview = { statLeveled: {} };
-    P.refreshActiveStatPreview(active, host);
+    _statViews.refreshActiveStatPreview(active, host);
     check(host.querySelector('.stat-container[data-stat="shift"] .entite-stat.preview').classList.contains('is-hidden'), 'Cancelling preview hides preview colors');
     host.replaceChildren(gallery);
     host.style.cssText = 'position:fixed;left:20px;top:20px;width:300px;padding:16px;box-sizing:border-box;background:#240000;color:white;z-index:10';

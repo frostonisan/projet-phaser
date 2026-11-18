@@ -309,7 +309,7 @@ try {
     const graphForward = D.calculateStatGraphValue({ armor: { current: 10, max: 500 }, robustness: 1 }, stats);
     const graphReverse = D.calculateStatGraphValue({ robustness: 1, armor: { current: 10, max: 500 } }, stats);
     check(JSON.stringify(graphForward) === JSON.stringify(graphReverse), 'Graph scoring is independent of key order');
-    const Upgrade = await import("/js/entities/progression.js");
+    const Upgrade = await import("/js/entities/progression.js"), _levelForms = await import("/js/ui/codex/stats.js");
     const levelFixture = { id: 99109, name: 'Frozen XP test', type: 'sbire', side: 'A', level: 1,
       archetypeFrozen: true, baseStats: { HP: 100, will: 20, strength: 1, agility: 1, intelligence: 1 },
       attacks: ['autoAttack'] };
@@ -319,7 +319,7 @@ try {
     S.saveToLocalStorage('ArmyA', { entities: [levelFixture] });
     S.saveToLocalStorage('playerExperience', 0);
     S.setAdminMode(true);
-    const form = Upgrade.createLevelUpForm(levelFixture);
+    const form = _levelForms.createLevelUpForm(levelFixture);
     document.body.appendChild(form);
     form.querySelector('.axis-line[data-key="strength"] .right-arrow').click();
     const oldLevel = levelFixture.level.current;

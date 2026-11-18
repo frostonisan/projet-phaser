@@ -1,12 +1,13 @@
 import { applyMovementDestabilisation, wakeFromMovement } from "../combat/effects.js";
-import { setIntervalFrom, remainingCombatTimer } from "../combat/clock.js";
-import { registerCombatState } from "../combat/clock.js";
-import { removeCombatVisualAfter } from "../combat/clock.js";
-import { setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow } from "../combat/clock.js";
+import {
+  setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
+  clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow,
+} from "../combat/clock.js";
 import { playCachedGif, cachedResourceUrl } from "../data/loaderList.js";
 import { QuitCurrentLevel } from "../app/stages.js";
 import { getSafe, getBattleEntityDomPrefix, getBattleEntityElement } from "../entities/rules.js";
 import { getAttackResolutionFlags } from "../combat/attackResolution.js";
+import { buildStatGraphHelper } from "../data/helpers.js";
 
 const originalImages = new WeakMap();
 const canvasRuns = new Map();
@@ -4588,3 +4589,284 @@ for (const type of ['battleStopped', 'stageInterfaceClosing']) window.addEventLi
     for (const run of [...canvasRuns.values()]) run.stop?.();
     canvasRuns.clear();
 });
+
+
+// Presentation de la progression : ame, graphe et effets d'eveil.
+// Ces effets d'interface utilisent globalThis pour rester independants de la pause du combat.
+export function soulScaling(level) {
+  const element = document.getElementById('eclipse');
+  const soul = document.querySelector('.attribut-entitySoul');
+  const soulTwo = document.querySelector('.attribut-entitySoul.two');
+
+  // clamp 1..99
+  level = Math.max(1, Math.min(100, level));
+  const isMax = level === 100;
+
+  const opacityMin = 0.6, opacityMax = 0.8;
+  const scaleMin = 0.5, scaleMax = 0.9;
+
+  // taille entitySoul
+  const sizeMin = 30; // px
+  const sizeMax = 85; // px
+  const sizeMaxLevel99 = 125; // statut spécial level max
+
+  // soulTwo scaling
+  const soulTwoMin = 0.1;
+  const soulTwoMax = 0.8;
+
+  const ratio = (level - 1) / 98;
+
+  const opacity = opacityMin + (opacityMax - opacityMin) * ratio;
+  const scale = scaleMin + (scaleMax - scaleMin) * ratio;
+  let size = sizeMin + (sizeMax - sizeMin) * ratio;
+
+  // filter scaling (100% → 120%)
+  const satPct = isMax ? 120 : 100 + 20 * ratio;
+  const ctrPct = isMax ? 120 : 100 + 20 * ratio;
+
+  const soulTwoValue = soulTwoMin + (soulTwoMax - soulTwoMin) * ratio;
+
+  if (element) {
+    element.style.opacity = (isMax ? opacityMax : opacity).toFixed(3);
+    element.style.transform = `scale(${(isMax ? scaleMax : scale).toFixed(3)})`;
+  }
+
+  if (soul) {
+    if (isMax) {
+      soul.style.width = `${sizeMaxLevel99}px`;
+      soul.style.height = `${sizeMaxLevel99}px`;
+    } else {
+      soul.style.width = `${size.toFixed(1)}px`;
+      soul.style.height = `${size.toFixed(1)}px`;
+    }
+    soul.style.filter = `saturate(${satPct.toFixed(1)}%) contrast(${ctrPct.toFixed(1)}%)`;
+  }
+
+  if (soulTwo) {
+    soulTwo.style.opacity = (isMax ? soulTwoMax : soulTwoValue).toFixed(3);
+  }
+}
+
+
+function roundTripleTo100(fPct, aPct, iPct) {
+  let f = Math.round(fPct), a = Math.round(aPct), i = Math.round(iPct);
+  let corr = 100 - (f + a + i);
+  if (corr !== 0) {
+    const arr = [{k:'f',v:f},{k:'a',v:a},{k:'i',v:i}].sort((x,y)=>y.v-x.v);
+    arr[0].v += corr; f = arr.find(x=>x.k==='f').v; a = arr.find(x=>x.k==='a').v; i = arr.find(x=>x.k==='i').v;
+  }
+  return { f, a, i };
+}
+
+
+function normalizeAngle(a) {
+  // Ramène un angle dans [0, 2π)
+  return (a + 2 * Math.PI) % (2 * Math.PI);
+}
+
+
+function drawRealtimegraph(ctx, strength, agility, intelligence, hoverSlice = null) {
+  if (!ctx) return;
+  const canvas = ctx.canvas;
+  const total = strength + agility + intelligence;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (total <= 0) return;
+
+  const { f, a, i } = roundTripleTo100(
+    (strength / total) * 100,
+    (agility / total) * 100,
+    (intelligence / total) * 100
+  );
+
+  const sections = [
+    { label: 'Force',        value: f, color: '#870000' },
+    { label: 'Agilité',      value: a, color: '#ffde00' },
+    { label: 'Intelligence', value: i, color: '#001a66' }
+  ];
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r  = Math.min(cx, cy) - 6;
+
+  let currentAngle = -Math.PI / 2;
+
+  sections.forEach(sec => {
+    const slice = (sec.value / 100) * 2 * Math.PI;
+    const start = currentAngle;
+    const end   = currentAngle + slice;
+
+    sec.start = normalizeAngle(start);
+    sec.end   = normalizeAngle(end);
+
+    ctx.save();
+
+    // ⚡ Si hover actif et ce n’est PAS la portion survolée → désaturation
+    if (hoverSlice && hoverSlice.label !== sec.label) {
+      ctx.filter = "grayscale(100%)";
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = sec.color;
+    ctx.fill();
+
+    ctx.restore();
+
+    currentAngle = end;
+  });
+
+  // --- Tooltip ---
+  let tooltip = document.querySelector('.graph-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'graph-tooltip';
+    document.body.appendChild(tooltip);
+  }
+
+  canvas.onmousemove = e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - cx;
+    const y = e.clientY - rect.top - cy;
+    const dist = Math.sqrt(x * x + y * y);
+
+    if (dist <= r) {
+      let ang = normalizeAngle(Math.atan2(y, x));
+
+      const slice = sections.find(sec => {
+        if (sec.start < sec.end) {
+          return ang >= sec.start && ang < sec.end;
+        } else {
+          return ang >= sec.start || ang < sec.end;
+        }
+      });
+
+      if (slice) {
+        tooltip.textContent = buildStatGraphHelper(slice);
+        tooltip.style.left = e.pageX + 10 + 'px';
+        tooltip.style.top  = e.pageY + 10 + 'px';
+        tooltip.style.display = 'block';
+
+        // redraw en mode focus
+        drawRealtimegraph(ctx, strength, agility, intelligence, slice);
+        return;
+      }
+    }
+    tooltip.style.display = 'none';
+    drawRealtimegraph(ctx, strength, agility, intelligence, null);
+  };
+
+  canvas.onmouseleave = () => {
+    tooltip.style.display = 'none';
+    drawRealtimegraph(ctx, strength, agility, intelligence, null);
+  };
+}
+
+
+function animateMilestone(jalonIndex, nodes) {
+  const milestone = nodes.gauge.milestones.querySelector(
+    `.milestone[data-index="${jalonIndex}"]`
+  );
+  if (!milestone) return;
+
+  // Supprimons les anciens pulses éventuels
+  milestone.querySelectorAll(".milestone-pulse").forEach(e => e.remove());
+
+  // Ajoute le conteneur pulse
+  const pulse = document.createElement("div");
+  pulse.className = "milestone-pulse";
+  milestone.appendChild(pulse);
+
+  // Auto-suppression après animation
+  globalThis.setTimeout(() => {
+    pulse.remove();
+  }, 650); // légèrement > durée de l’animation
+}
+
+
+export function updategraph(state, nodes) {
+  const { strength, agility, intelligence } = state.stats;
+  drawRealtimegraph(nodes.graphCtx, strength, agility, intelligence);
+
+}
+
+
+const extasisTimeoutsByEntity = new Map();
+
+
+function noCacheSrc(path) {
+  const salt = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${path}?v=${salt}`;
+}
+
+
+function clearExtasisForEntity(entite) {
+  if (!entite || !entite.id) return;
+
+  const soulSection = document.getElementById(`soul-section-${entite.id}`);
+  if (soulSection) {
+    soulSection.querySelectorAll('.awakening-frame-pending')
+      .forEach(el => el.classList.remove('awakening-frame-pending'));
+    // On ne retire que les containers d'animation
+    soulSection
+      .querySelectorAll('.awakening-animation-container')
+      .forEach(el => el.remove());
+  }
+
+  const timeouts = extasisTimeoutsByEntity.get(entite.id) || [];
+  timeouts.forEach(id => globalThis.clearTimeout(id));
+  extasisTimeoutsByEntity.delete(entite.id);
+}
+
+
+export function playAwakeningExtasis(entite, { onReveal } = {}) {
+  if (!entite || !entite.id) return;
+
+  const soulSection = document.getElementById(`soul-section-${entite.id}`);
+  if (!soulSection) return;
+
+  // Nettoie toute ancienne animation pour CETTE entité
+  clearExtasisForEntity(entite);
+
+  // Container dédié à l’animation (seul élément supprimé à la fin)
+  const wrapper = document.createElement('div');
+  wrapper.className = 'awakening-animation-container';
+  soulSection.appendChild(wrapper);
+
+  const timeouts = [];
+  const graphContainer = soulSection.querySelector('.attribut-graph-container');
+  if (graphContainer) {
+    graphContainer.classList.add('awakening-frame-pending');
+    timeouts.push(globalThis.setTimeout(() => {
+      if (!wrapper.isConnected) return;
+      graphContainer.classList.remove('awakening-frame-pending');
+      onReveal?.();
+    }, 4000));
+  }
+
+  // 1) Premier GIF immédiatement (avec anti-cache)
+  const gif1 = document.createElement('img');
+  gif1.src = noCacheSrc('./media/assets/effects/extase-01.gif');
+  gif1.className = 'extasis intro';
+  wrapper.appendChild(gif1);
+
+  // 2) Deuxième GIF très vite après (avec anti-cache)
+  const timeoutSecondGif = globalThis.setTimeout(() => {
+    if (!wrapper.isConnected) return;
+
+    const gif2 = document.createElement('img');
+    gif2.src = noCacheSrc('./media/assets/effects/extase-02.gif');
+    gif2.className = 'extasis end';
+    wrapper.appendChild(gif2);
+  }, 1);
+  timeouts.push(timeoutSecondGif);
+
+  // 3) Fin de l’animation : on enlève UNIQUEMENT le wrapper
+  const timeoutRemoveAll = globalThis.setTimeout(() => {
+    clearExtasisForEntity(entite);
+  }, 7000); // 7 s au total
+  timeouts.push(timeoutRemoveAll);
+
+  extasisTimeoutsByEntity.set(entite.id, timeouts);
+}

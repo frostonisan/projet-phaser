@@ -67,3 +67,8 @@ les formules sont dans `combat/statistics.js`, l'application des charges dans
 Les priorités de ciblage restent dans `combat/roles.js`. Les badges et listes de cibles
 sont regroupés dans `rendering/hud.js`, et les rôles visuels des cases dans
 `rendering/boardElements.js`.
+
+La montée de niveau suit la même organisation : les calculs et la confirmation
+restent dans `entities/progression.js`, les formulaires dans `ui/codex/stats.js`,
+la projection des statistiques dans `ui/statistics/components.js` et les animations
+d'éveil dans `rendering/animations.js`. Ces fichiers existaient déjà.

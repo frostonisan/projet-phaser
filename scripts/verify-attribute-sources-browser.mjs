@@ -27,7 +27,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js"), _statViews = await import("/js/ui/statistics/components.js");
     const D = await import("/js/combat/statistics.js"), Gear = await import('/js/items/equipement.js');
     const State = await import("/js/app/state.js"), { ItemDetails } = await import('/js/data/itemList.js');
     let actors, active, key, mode, host, pinned, snapshot;
@@ -69,7 +69,7 @@ try {
         active = mode === 'stats' ? actors[0] : UI.helperEntityByRoot.get(mount.querySelector('.level-up-section'));
         if (mode === 'preview') {
           active.modifierStats.preview = { statLeveled: { [key]: 3 } };
-          P.refreshActiveStatPreview(active, mount);
+          _statViews.refreshActiveStatPreview(active, mount);
         }
         host = [...mount.querySelectorAll(`.stat-container[data-stat="${key}"], [data-attribute-helper][data-stat="${key}"]`)]
           .find(node => node.getClientRects().length && (mode !== 'stats' || node.closest('.section-content.stats')));

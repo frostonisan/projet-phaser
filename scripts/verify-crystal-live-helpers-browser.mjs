@@ -27,7 +27,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js"), _statViews = await import("/js/ui/statistics/components.js");
     const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"), S = await import("/js/entities/statSystem.js");
     const H = await import('/js/data/helpers.js');
     const P = await import('/js/items/permanentItems.js'), M = await import('/js/items/itemManager.js');
@@ -62,7 +62,7 @@ try {
         draft = mode === 'Stats' ? entity : UI.helperEntityByRoot.get(mount.querySelector('.level-up-section'));
         if (mode === 'Preview') {
           draft.modifierStats.preview = { statLeveled: { strength: 2, vigueur: 1 } };
-          U.refreshActiveStatPreview(draft, mount);
+          _statViews.refreshActiveStatPreview(draft, mount);
         }
         if (mode === 'Invested') {
           mount.querySelector('.axis-line[data-key="strength"] .right-arrow').click();

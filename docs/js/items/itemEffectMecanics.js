@@ -4,8 +4,6 @@ import { updateHealthBar, updateBonusLifeCounters } from "../rendering/vitalFeed
 import {
   removeCombatVisualAfter, setTimeout,
 } from "../combat/clock.js";
-
-import { syncDOMWithStats } from "../entities/progression.js";
 import {
   itemSaveEntityHPToStorage,
   recordEntityCombatAmount,
@@ -18,13 +16,13 @@ import {
 import { itemEffects } from './itemEffects.js';
 import { showHealingFeedback, toggleEffectClass, rez } from "../combat/effects.js";
 import { LifeandDeath } from "../combat/vitals.js";
-
 import { addMovementCharges, addFadedLife } from './resourceStocks.js';
 import { getStageAccess, refreshStageAccess } from "../app/state.js";
 import { calculateResistances, recomputeEntityStats } from "../entities/runtime.js";
 import { getPermanentStatGrant } from './permanentItems.js';
 import { loadFromLocalStorage } from "../storage/gameStorage.js";
 import { showGamePopupMessage, showStatGainFeedback } from "../ui/display.js";
+import { syncDOMWithStats } from "../ui/statistics/components.js";
 
 export function calculateItemDamages(target, effect, item) {
     if (!target || !target.stats.HP) {

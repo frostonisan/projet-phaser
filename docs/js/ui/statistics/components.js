@@ -1,38 +1,40 @@
-import { renderMovementCounter } from "../../rendering/hud.js";
+import {
+  updateMovementDisplay, renderMovementCounter,
+} from "../../rendering/hud.js";
 import { clockNow, setInterval, clearInterval, isCombatPaused } from "../../combat/clock.js";
 import { getStatSystemResult } from "../../entities/statSystem.js";
 import { STAT_EFFECT_HELPERS, buildStatCurseHelper, buildEntityRateHelper } from "../../data/helpers.js";
 import { cachedResourceUrl } from "../../data/loaderList.js";
 import { getSafe, getDisplayStatKey, normalizeStatKey } from "../../entities/rules.js";
 import {
-  calculatePhysicalPenPercent, calculateMagicalPenPercent, getBloodThirstyPercent,
-  calculateEsoterismPercent, calculateTranscendenceExtraLife, getMovementWeightMalus,
-  getStatMalusSources, entites,
+  calculateVelocityReduction, calculatePhysicalPenPercent, calculateMagicalPenPercent,
+  getBloodThirstyPercent, calculateEsoterismPercent, calculateTranscendenceExtraLife,
+  getMovementWeightMalus, getStatMalusSources, entites,
 } from "../../entities/runtime.js";
 import {
-  getStatContributions, calculateResistanceReductionPercent, calculateMagicalTotal,
-  getFinalAttackPreparationReduc, getFinalAttackExecutionReduc, getFinalAttackCooldownReduc,
-  getFinalAttackRecoveryReduc, getFinalAttackProjectileSpeed, calculateCritTotalChance,
-  calculateCritDamageBonus, getFinalCriticalChanceFlat, getFinalCriticalDamageFlat,
-  calculateAmbidextryTotalChance, calculateAmbidextryDamageBonus, calculateBloodFuryExecutionPercent,
-  calculateBloodFuryTargetThreshold, calculateBloodFuryExecChanceBonus, calculateBloodThirstyPercent,
-  calculateExecutionDamage, calculateHypercognitionEssences, calculateCognitiveExplosionTotal,
-  calculateRangeRatio, calculateBullsEyePercent, calculateTotalDodgeBonus,
-  calculateResilienceCritTotalBonus, calculateResilienceTotalCancelBonus,
-  calculateResilienceAlterationTotalBonus, caluclateIndestructibilityReductionTotal,
-  calculateIndestructibilityPercentFromEntity, calculateEsoterismtotalReduction,
-  calculateHpBattleRegenPercent, calculateAstralityTotal, calculateTranscendenceConsoProtectionTotal,
-  calculateTotalRegenAmount, calculateInvisibleTargetAvoidChance, calculateBrokenSpellDamage,
-  calculateBrokenSpellChance, totalMeleeExecReduction, totalPiercingRecupReductionWithAgi,
-  totalTranspiercingRecupReductionWithAgi, transpiercingAgiRatio, transpiercingTotal,
-  brutalityPercantBonus, psionicPercantBonus, calculateMeleeExecBonus, calculateMysticismProcChance,
-  calculateMysticismTranceDuration, calculateMysticismPreparationAcceleration,
-  calculateMysticismTotalDamageBonus, calculateEquilibreAggroReduction,
-  calculateEquilibreInvisibleDetection, calculateEquilibreAttackChance, calculateAgileRetreatChance,
-  calculateOccultismInvisibilityChance, calculateOccultismTargetableChanceDisplay,
-  calculateOccultismDodgeBonus, calculateOccultismCritChanceBonus,
-  calculateOccultismShadowFragilityPercent, calculateMovementMaxCharges,
-  calculateMovementStartingChargePercent, calculateMovementStartingCharges,
+  calculateLvlMaxEntiteWithWill, getStatContributions, calculateResistanceReductionPercent,
+  calculateMagicalTotal, getFinalAttackPreparationReduc, getFinalAttackExecutionReduc,
+  getFinalAttackCooldownReduc, getFinalAttackRecoveryReduc, getFinalAttackProjectileSpeed,
+  calculateCritTotalChance, calculateCritDamageBonus, getFinalCriticalChanceFlat,
+  getFinalCriticalDamageFlat, calculateAmbidextryTotalChance, calculateAmbidextryDamageBonus,
+  calculateBloodFuryExecutionPercent, calculateBloodFuryTargetThreshold,
+  calculateBloodFuryExecChanceBonus, calculateBloodThirstyPercent, calculateExecutionDamage,
+  calculateHypercognitionEssences, calculateCognitiveExplosionTotal, calculateRangeRatio,
+  calculateBullsEyePercent, calculateTotalDodgeBonus, calculateResilienceCritTotalBonus,
+  calculateResilienceTotalCancelBonus, calculateResilienceAlterationTotalBonus,
+  caluclateIndestructibilityReductionTotal, calculateIndestructibilityPercentFromEntity,
+  calculateEsoterismtotalReduction, calculateHpBattleRegenPercent, calculateAstralityTotal,
+  calculateTranscendenceConsoProtectionTotal, calculateTotalRegenAmount,
+  calculateInvisibleTargetAvoidChance, calculateBrokenSpellDamage, calculateBrokenSpellChance,
+  totalMeleeExecReduction, totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi,
+  transpiercingAgiRatio, transpiercingTotal, brutalityPercantBonus, psionicPercantBonus,
+  calculateMeleeExecBonus, calculateMysticismProcChance, calculateMysticismTranceDuration,
+  calculateMysticismPreparationAcceleration, calculateMysticismTotalDamageBonus,
+  calculateEquilibreAggroReduction, calculateEquilibreInvisibleDetection,
+  calculateEquilibreAttackChance, calculateAgileRetreatChance, calculateOccultismInvisibilityChance,
+  calculateOccultismTargetableChanceDisplay, calculateOccultismDodgeBonus,
+  calculateOccultismCritChanceBonus, calculateOccultismShadowFragilityPercent,
+  calculateMovementMaxCharges, calculateMovementStartingChargePercent, calculateMovementStartingCharges,
   calculateMovementMarathonChance, calculateWeaponOrfevreWeaponMastery, calculateWeaponOrfevreStrength,
   getFinalWeaponOrfevreBonus, getFinalWeaponCollectorBonus, calculateChargeEquipmentSlots,
   calculateWeaponMasteryTotalChargeBonus, calculateWeaponMasteryTrophyChance, getMarathonChance,
@@ -40,7 +42,9 @@ import {
   calculateArmyPower, getPowerConfigurationSignature,
 } from "../../combat/statistics.js";
 import { isDisplayableStatContribution, calculateStatsDisplay, getStatImprovement } from "./details.js";
-import { stats } from "../../data/statsData.js";
+import {
+  stats as STATS_DATA, stats,
+} from "../../data/statsData.js";
 import {
   clamp, LEVEL_UP_HELPER_SCOPE, STOCK_HELPER_STATS, bindHelperEntity, getBoundHelperEntity,
   findStatKeyFromLabel, umbraDetection, getStatValue, readStatLabel, contextualStatDefinition,
@@ -51,6 +55,13 @@ import { getPowerBreakdownLines, roundPower, readOwnedPowerAttacks } from "../..
 import { isAdminMode, loadFromLocalStorage, loadEquippedItems } from "../../storage/gameStorage.js";
 import { attackSelectionKey } from "../../combat/attackResolution.js";
 import { EFFECT_VISUALS } from "../../data/effectVisuals.js";
+import {
+  updateBonusLifeCounters, ensureHPDom, updateHealthBar, updateHPCounters, updateArmorCounter,
+} from "../../rendering/vitalFeedback.js";
+import {
+  getEntityLevelCurrent, isObjStat, getPermStats, getPreviewStats, ComputeStatPreview,
+} from "../../entities/progression.js";
+import { gameStorage as localStorage } from "../../storage/sessionStorage.js";
 
 // Presentation des statistiques : composants, puissance, Umbra et effets actifs.
 
@@ -1364,3 +1375,1881 @@ export function clearEntityEffectViews() {
 }
 window.addEventListener('entityCombatSideChanged', ({ detail }) => refreshEntityEffectViews(detail.entity));
 for (const event of ['battleEnding', 'battleStopped', 'battleResolved', 'stageInterfaceClosing']) window.addEventListener(event, clearEntityEffectViews);
+
+
+// Projection des statistiques permanentes et prevues dans les vues existantes.
+const DISPLAYABLE_STAT_KEYS = new Set(
+  STATS_DATA.flatMap(({ key }) => [key, normalizeStatKey(key)])
+);
+
+
+const DOM_NON_STAT_KEYS = new Set([
+  "hp-bar",
+  "armor-bar",
+  "armor-text",
+  "extraLife-value",
+  "stuffSlot",
+]);
+
+
+export const ZERO_VALUE_VISIBLE_STAT_KEYS = new Set([
+  "HP",
+  "armor",
+  "extraLife",
+  "shift",
+  "speed",
+  "strength",
+  "agility",
+  "intelligence",
+  "will",
+]);
+
+
+const STAT_SYNC_CALCULATORS = {
+  calculateMagicalTotal,
+  calculateMeleeExecutionPercent: entite =>
+    Math.max(0, 100 - (Number(getFinalAttackExecutionReduc(entite)) || 0)),
+  calculateCritTotalChance: entite => calculateCritTotalChance(entite),
+  calculateCritDamageBonus: entite => calculateCritDamageBonus(entite),
+  getFinalCriticalChanceFlat,
+  getFinalCriticalDamageFlat,
+  calculateAmbidextryTotalChance,
+  calculateAmbidextryDamageBonus,
+  calculateBloodFuryExecutionPercent,
+  calculateBloodFuryTargetThreshold,
+  calculateBloodFuryExecChanceBonus: entite =>
+    calculateBloodFuryExecChanceBonus(Number(getSafe(entite, "strength", 0)) || 0),
+  calculateExecutionDamage,
+  calculateBloodThirstyPercent,
+  getBloodThirstyPercent,
+  calculatePhysicalPenPercent,
+  calculateMagicalPenPercent,
+  calculateHypercognitionEssences,
+  calculateCognitiveExplosionTotal,
+  calculateRangeRatio: entite => Number(calculateRangeRatio(entite).toFixed(2)),
+  calculateBullsEyePercent,
+  calculateTotalDodgeBonus,
+  calculateResilienceCritTotalBonus,
+  calculateResilienceTotalCancelBonus,
+  calculateResilienceAlterationTotalBonus,
+  caluclateIndestructibilityReductionTotal,
+  calculateIndestructibilityPercentFromEntity,
+  calculateHpBattleRegenPercent,
+  calculateAstralityTotal,
+  calculateTranscendenceConsoProtectionTotal,
+  calculateTranscendenceExtraLife: entite =>
+    calculateTranscendenceExtraLife(Number(getSafe(entite, "transcendence", 0)) || 0),
+  calculateEsoterismPercent,
+  calculateTotalRegenAmount,
+  getFinalAttackPreparationReduc,
+  getFinalAttackExecutionReduc,
+  getFinalAttackCooldownReduc,
+  getFinalAttackRecoveryReduc,
+  getFinalAttackProjectileSpeed,
+  calculateInvisibleTargetAvoidChance,
+  calculateBrokenSpellChance,
+  calculateBrokenSpellDamage,
+  totalMeleeExecReduction,
+  totalPiercingRecupReductionWithAgi,
+  totalTranspiercingRecupReductionWithAgi,
+  transpiercingAgiRatio,
+  transpiercingTotal,
+  brutalityPercantBonus,
+  psionicPercantBonus,
+  calculateMeleeExecBonus,
+  calculateMysticismProcChance,
+  calculateMysticismTranceDuration,
+  calculateMysticismPreparationAcceleration,
+  calculateMysticismTotalDamageBonus,
+  calculateLvlMaxEntiteWithWill: entite =>
+    calculateLvlMaxEntiteWithWill(entite, Number(getSafe(entite, "will", 0)) || 0),
+  calculateEquilibreAggroReduction,
+  calculateEquilibreInvisibleDetection,
+  calculateEquilibreAttackChance,
+  calculateAgileRetreatChance,
+  calculateOccultismInvisibilityChance,
+  calculateOccultismTargetableChanceDisplay,
+  calculateOccultismDodgeBonus,
+  calculateOccultismCritChanceBonus,
+  calculateOccultismShadowFragilityPercent,
+  calculateMovementMaxCharges,
+  calculateMovementStartingChargePercent,
+  calculateMovementStartingCharges,
+  calculateMovementMarathonChance,
+  getMarathonChance,
+  getTrailerChance,
+  getFinalWeaponOrfevreBonus,
+  getFinalWeaponCollectorBonus,
+  calculateChargeEquipmentSlots,
+  calculateWeaponMasteryTotalChargeBonus,
+  calculateWeaponMasteryTrophyChance,
+};
+
+
+const STATS_PANEL_DYNAMIC_ROWS = {
+  fatalSurvival: { sectionClass: 'defence', sourceStat: 'fatalSurvival', label: 'Survie fatale :', valueTemplate: '${value} %', autonomousHelper: true },
+  ...Object.fromEntries([
+    ['criticalResistance', 'Résistance aux critiques'],
+    ['alterationResistance', 'Résistance aux altérations'],
+    ['hindranceResistance', 'Résistance aux entraves'],
+    ['resilienceTotal', 'Résilience totale'],
+  ].map(([key, label]) => [key, {
+    sectionClass: 'defence', sourceStat: key, label: `${label} :`,
+    valueTemplate: '${value} %', autonomousHelper: true, beforeStats: ['astrality'],
+  }])),
+  bloodThirsty: {
+    sectionClass: "attack",
+    sourceStat: "bloodThirsty",
+    label: "Soif de sang :",
+    value: value => `${formatDynamicStatValue(value)} %`,
+    beforeStats: ["magicalDamage"],
+  },
+  hpBattleRegen: {
+    sectionClass: "defence",
+    sourceStat: "hpBattleRegen",
+    label: "Régénération de Combat :",
+    value: value => `${formatDynamicStatValue(value)} % des HP max / tour`,
+    beforeStats: ["astrality"],
+  },
+  marathon: {
+    sectionClass: "utilitaire",
+    sourceStat: "marathon",
+    label: "Marathonien :",
+    value: value => `${formatDynamicStatValue(value)} %`,
+    beforeStats: ["trailer", "weaponOrfevre", "weaponCollector", "charge"],
+  },
+  trailer: {
+    sectionClass: "utilitaire",
+    sourceStat: "trailer",
+    label: "Trailer :",
+    value: value => `${formatDynamicStatValue(value)} %`,
+    beforeStats: ["weaponOrfevre", "weaponCollector", "charge"],
+  },
+  weaponOrfevre: {
+    sectionClass: "utilitaire",
+    sourceStat: "weaponOrfevre",
+    label: "Efficacité des équipements :",
+    value: value => `+ ${formatDynamicStatValue(value)}%`,
+    beforeStats: ["weaponCollector", "charge"],
+  },
+  weaponCollector: {
+    sectionClass: "utilitaire",
+    sourceStat: "weaponCollector",
+    label: "Butins d'équipement :",
+    value: value => `+ ${formatDynamicStatValue(value)}%`,
+    beforeStats: ["charge"],
+  },
+  attackCooldownReduc: {
+    sectionClass: "utilitaire",
+    displayStat: "cooldownTime",
+    sourceStat: "attackCooldownReduc",
+    originStat: "haste",
+    label: "Durée de Cooldown :",
+    valueTemplate: "- ${value} %",
+    calculatorName: "getFinalAttackCooldownReduc",
+  },
+  attackPreparationReduc: {
+    sectionClass: "utilitaire",
+    displayStat: "preparationTime",
+    sourceStat: "attackPreparationReduc",
+    originStat: "haste",
+    label: "Durée de Préparation :",
+    valueTemplate: "- ${value} %",
+    calculatorName: "getFinalAttackPreparationReduc",
+  },
+  attackExecutionReduc: {
+    sectionClass: "utilitaire",
+    displayStat: "executionTime",
+    sourceStat: "attackExecutionReduc",
+    originStat: "haste",
+    label: "Durée d'Exécution :",
+    valueTemplate: "- ${value} %",
+    calculatorName: "getFinalAttackExecutionReduc",
+  },
+  attackRecoveryReduc: {
+    sectionClass: "utilitaire",
+    displayStat: "recuperationTime",
+    sourceStat: "attackRecoveryReduc",
+    originStat: "haste",
+    label: "Durée de Récupération :",
+    valueTemplate: "- ${value} %",
+    calculatorName: "getFinalAttackRecoveryReduc",
+  },
+  attackProjectileSpeed: {
+    sectionClass: "utilitaire",
+    displayStat: "projectileTime",
+    sourceStat: "attackProjectileSpeed",
+    originStat: "haste",
+    label: "Vitesse des projectiles :",
+    valueTemplate: "+ ${value} %",
+    calculatorName: "getFinalAttackProjectileSpeed",
+  },
+};
+
+
+export function refreshResetDom(entity, oldStats, entityApi, codexApi) {
+  if (typeof document === 'undefined') return;
+  // Existing consumables only change HP/status immediately and leave cosmetic effects.
+  document.getElementById(`spriteContainer_${entity.id}`)?.classList.remove('itemheal', 'itemdamage', 'itemrez');
+  document.getElementById(`codex-entity-sprite-container_${entity.id}`)
+    ?.querySelectorAll('.itemeffectVfx').forEach(node => node.remove());
+  document.querySelectorAll('.entity-level, [data-stat="lvl"][data-entity-id]').forEach(node => {
+    if (String(node.dataset?.entityId) === String(entity.id)) node.textContent = '1';
+  });
+  syncDOMWithStats(oldStats, entity.stats, entity.id, entity);
+  updateBonusLifeCounters(entity);
+  entityApi.updateCurrentAttackDisplay(entity);
+  const codex = document.getElementById(`codex-entity_${entity.id}`);
+  if (codex?.parentElement) {
+    const parent = codex.parentElement;
+    const position = codex.classList.contains('right') ? 'right' : codex.classList.contains('left') ? 'left' : '';
+    const dual = codex.classList.contains('dual-view');
+    const id = codex.id;
+    codex.remove();
+    codexApi.createCodexEntityScan(entity, parent, id, position);
+    if (dual) document.getElementById(id)?.classList.add('dual-view');
+  }
+}
+
+
+export function refreshConfirmedLevelDom(entite) {
+  if (typeof document === "undefined" || !entite?.id) return;
+
+  const entityId = cssEscapeValue(entite.id);
+  const levelValue = getEntityLevelCurrent(entite);
+
+  document
+    .querySelectorAll(`[data-stat="lvl"][data-entity-id="${entityId}"]`)
+    .forEach(node => { node.textContent = String(levelValue); });
+
+  document
+    .querySelectorAll(`#codex-entity_${entityId} .entite-stat-level`)
+    .forEach(node => { node.textContent = ` - Level ${levelValue}`; });
+}
+
+
+function containerOf(el) {
+  if (!el || typeof el.closest !== "function") return null;
+  return el.closest(".stat-container, .codex-profile-battle-stat, .codex-profile-umbra-stat");
+}
+
+
+function getStatComparableValue(value, fallback = 0) {
+  if (value && typeof value === "object") {
+    return Number(value.max ?? value.current ?? fallback) || 0;
+  }
+
+  return Number(value ?? fallback) || 0;
+}
+
+
+function getSnapshotComparableValue(stats, key, fallback = 0) {
+  if (!stats || stats[key] === undefined) return fallback;
+  return getStatComparableValue(stats[key], fallback);
+}
+
+
+function formatDynamicStatValue(value) {
+  const n = getStatComparableValue(value, 0);
+  if (!Number.isFinite(n)) return "0";
+  if (Number.isInteger(n)) return String(n);
+  return String(Math.round(n * 100) / 100).replace(/\.0+$/, "");
+}
+
+
+function formatSyncedStatValue(value) {
+  if (value && typeof value === "object") {
+    const current = Number(value.current ?? value.max ?? 0) || 0;
+    const max = Number(value.max ?? value.current ?? 0) || 0;
+    return current !== max ? `${formatDynamicStatValue(current)} / ${formatDynamicStatValue(max)}` : formatDynamicStatValue(max);
+  }
+
+  return formatDynamicStatValue(value);
+}
+
+
+function formatStatTemplate(template, value) {
+  if (typeof template === "string" && template.includes("${value}")) {
+    return template.replaceAll("${value}", formatSyncedStatValue(value));
+  }
+
+  return formatSyncedStatValue(value);
+}
+
+
+function getStatSyncCalculator(calculatorName) {
+  const name = String(calculatorName || "").trim();
+  return name ? STAT_SYNC_CALCULATORS[name] : null;
+}
+
+
+function resolveStatSyncValue(entite, statKey, {
+  calculatorName = null,
+  fallback = 0,
+} = {}) {
+  const canonical = normalizeStatKey(statKey);
+  const fn = getStatSyncCalculator(calculatorName);
+
+  if (typeof fn === "function") {
+    try {
+      return fn(entite, getSafe(entite, canonical, fallback));
+    } catch (error) {
+      console.warn(`Calculateur de stat impossible a executer: ${calculatorName}`, error);
+    }
+  }
+
+  const rawValue = getSafe(entite, canonical, fallback);
+  const computed = calculateStatsDisplay(canonical, entite, rawValue, { includeHelper: false });
+  return computed?.displayValue ?? rawValue;
+}
+
+
+function resolveStatContainerValue(container, entite, statKey, fallback = 0) {
+  const sourceStat = normalizeStatKey(container?.dataset?.sourceStat || statKey);
+  const calculatorName = container?.dataset?.calculatorName || "";
+  const value = resolveStatSyncValue(entite, sourceStat, { calculatorName, fallback });
+  const html = formatStatTemplate(container?.dataset?.valueTemplate, value);
+
+  return { value, html };
+}
+
+
+function getStatsPanelDynamicConfig(stat) {
+  const statKey = normalizeStatKey(stat);
+  return STATS_PANEL_DYNAMIC_ROWS[statKey] || null;
+}
+
+
+function getStatsPanelDynamicSourceStat(stat, config = null) {
+  const statKey = normalizeStatKey(stat);
+  if (STATS_PANEL_DYNAMIC_ROWS[statKey]) return statKey;
+  return normalizeStatKey(config?.sourceStat || statKey);
+}
+
+
+function getStatsPanelDynamicDisplayStat(stat, config = null) {
+  const cfg = config || getStatsPanelDynamicConfig(stat);
+  return cfg?.displayStat || stat;
+}
+
+
+function getStatsPanelDynamicValue(stat, config, entite, fallback = 0) {
+  if (!config) return fallback;
+  return resolveStatSyncValue(entite, getStatsPanelDynamicSourceStat(stat, config), {
+    calculatorName: config.calculatorName,
+    fallback,
+  });
+}
+
+
+function formatStatsPanelDynamicValue(config, value) {
+  if (typeof config?.value === "function" && !config.valueTemplate) {
+    return config.value(value);
+  }
+
+  return formatStatTemplate(config?.valueTemplate, value);
+}
+
+
+function cssEscapeValue(value) {
+  return globalThis.CSS?.escape
+    ? CSS.escape(String(value))
+    : String(value).replace(/["\\]/g, "\\$&");
+}
+
+
+function getStatSnapshotValue(stats, statKey, fallback = undefined) {
+  if (!stats) return fallback;
+  const canonical = normalizeStatKey(statKey);
+  if (stats[statKey] !== undefined) return stats[statKey];
+  if (stats[canonical] !== undefined) return stats[canonical];
+  return fallback;
+}
+
+
+function isStatsSnapshotDifferent(a, b) {
+  if (a === b) return false;
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+
+
+function getLiveEntityForStatSync(entityId) {
+  const id = String(entityId);
+  const win = globalThis.window || {};
+  const pools = [
+    entites,
+    win.entites,
+    win.selectedArmyA,
+    win.selectedArmyB,
+    win.entitesNestUp,
+  ];
+
+  for (const pool of pools) {
+    if (!Array.isArray(pool)) continue;
+    const found = pool.find(entity => String(entity?.id) === id);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+
+function buildStatsSnapshotEntity(liveEntity, statsSnapshot, entityId, modifierStatsSnapshot = undefined) {
+  const modifierSource =
+    modifierStatsSnapshot !== undefined
+      ? modifierStatsSnapshot
+      : liveEntity?.modifierStats;
+  const modifierStats = {
+    ...(modifierSource || {}),
+    preview: null,
+  };
+
+  return {
+    ...(liveEntity || {}),
+    id: liveEntity?.id ?? entityId,
+    stats: statsSnapshot || {},
+    modifierStats,
+  };
+}
+
+
+function getRenderedStatKeysForEntity(entityId) {
+  if (typeof document === "undefined" || !entityId) return [];
+
+  const escapedEntityId = cssEscapeValue(entityId);
+  const renderedKeys = new Set();
+
+  document
+    .querySelectorAll(
+      `.stat-container[data-entity-id="${escapedEntityId}"][data-stat], ` +
+      `.codex-profile-battle-stat[data-entity-id="${escapedEntityId}"][data-stat], ` +
+      `.codex-profile-umbra-stat[data-entity-id="${escapedEntityId}"][data-stat]`
+    )
+    .forEach((node) => {
+      const statKey = node.dataset.stat;
+      const canonical = normalizeStatKey(statKey);
+      if (!statKey || DOM_NON_STAT_KEYS.has(statKey) || DOM_NON_STAT_KEYS.has(canonical)) return;
+      if (!DISPLAYABLE_STAT_KEYS.has(statKey) && !DISPLAYABLE_STAT_KEYS.has(canonical)) return;
+      renderedKeys.add(statKey);
+    });
+
+  return [...renderedKeys];
+}
+
+
+function getRenderedStatContainersForEntity(entityId) {
+  const state = {
+    containers: new WeakSet(),
+    statKeys: new Set(),
+  };
+
+  if (typeof document === "undefined" || !entityId) return state;
+
+  const escapedEntityId = cssEscapeValue(entityId);
+  document
+    .querySelectorAll(
+      `.stat-container[data-entity-id="${escapedEntityId}"][data-stat], ` +
+      `.codex-profile-battle-stat[data-entity-id="${escapedEntityId}"][data-stat], ` +
+      `.codex-profile-umbra-stat[data-entity-id="${escapedEntityId}"][data-stat]`
+    )
+    .forEach((node) => {
+      const statKey = node.dataset.stat;
+      const canonical = normalizeStatKey(statKey);
+      if (!statKey || DOM_NON_STAT_KEYS.has(statKey) || DOM_NON_STAT_KEYS.has(canonical)) return;
+
+      state.containers.add(node);
+      state.statKeys.add(statKey);
+      state.statKeys.add(canonical);
+      state.statKeys.add(getDisplayStatKey(canonical));
+    });
+
+  return state;
+}
+
+
+function shouldMarkExistingContainerAsNew(renderedBefore, container) {
+  return Boolean(container && renderedBefore && !renderedBefore.containers.has(container));
+}
+
+
+function shouldRemoveFinalZeroStatContainer(container, stat, nextValue, beforeValue) {
+  if (!container) return false;
+  if (container.dataset.statCursed === 'true') return false;
+
+  const statKey = normalizeStatKey(stat || container.dataset?.stat);
+  if (!statKey) return false;
+  if (DOM_NON_STAT_KEYS.has(statKey) || ZERO_VALUE_VISIBLE_STAT_KEYS.has(statKey)) return false;
+  if (container.closest?.(".level-up-section")) return false;
+
+  const beforeComparable = getStatComparableValue(beforeValue, 0);
+  const nextComparable = getStatComparableValue(nextValue, 0);
+
+  return beforeComparable > 0 && nextComparable <= 0;
+}
+
+
+function getStatDisplayImpactScore(statKey, entite, statsSnapshot) {
+  if (!statKey || !entite) return null;
+
+  try {
+    const statValue = getStatSnapshotValue(statsSnapshot, statKey, undefined);
+    const computed = calculateStatsDisplay(statKey, entite, statValue);
+    if (!computed || typeof computed !== "object") return null;
+
+    let score = 0;
+    for (const [key, value] of Object.entries(computed)) {
+      if (key === "helpContent" || key === "ambianceContent") continue;
+      if (typeof value === "number" && Number.isFinite(value)) {
+        score += value;
+      }
+    }
+
+    return Math.round(score * 1000) / 1000;
+  } catch (error) {
+    console.warn(`Impact helper impossible a calculer pour ${statKey}`, error);
+    return null;
+  }
+}
+
+
+function addRenderedStatImpactDiffs(changedStats, oldStats, newStats, entityId, entityContext = null, options = {}) {
+  const renderedStatKeys = getRenderedStatKeysForEntity(entityId);
+  if (!renderedStatKeys.length) return changedStats;
+
+  const liveEntity = entityContext || getLiveEntityForStatSync(entityId);
+  if (!liveEntity) return changedStats;
+
+  const beforeEntity = buildStatsSnapshotEntity(liveEntity, oldStats, entityId, options.oldModifierStats);
+  const afterEntity = buildStatsSnapshotEntity(liveEntity, newStats, entityId, options.newModifierStats);
+
+  for (const statKey of renderedStatKeys) {
+    const beforeScore = getStatDisplayImpactScore(statKey, beforeEntity, oldStats);
+    const afterScore = getStatDisplayImpactScore(statKey, afterEntity, newStats);
+
+    if (!Number.isFinite(beforeScore) || !Number.isFinite(afterScore)) continue;
+    if (beforeScore === afterScore) continue;
+
+    const newValue = getStatSnapshotValue(newStats, statKey, 0);
+    if (!changedStats[statKey]) {
+      changedStats[statKey] = {
+        value: newValue,
+        isNew: false,
+      };
+    }
+
+    changedStats[statKey].visualBefore = beforeScore;
+    changedStats[statKey].visualAfter = afterScore;
+  }
+
+  return changedStats;
+}
+
+
+function addStatsPanelDynamicDiffs(changedStats, oldStats, newStats, entityId, entityContext = null, options = {}) {
+  const liveEntity = entityContext || getLiveEntityForStatSync(entityId);
+  const beforeEntity = buildStatsSnapshotEntity(liveEntity, oldStats, entityId, options.oldModifierStats);
+  const afterEntity = buildStatsSnapshotEntity(liveEntity, newStats, entityId, options.newModifierStats);
+
+  for (const statKey of Object.keys(STATS_PANEL_DYNAMIC_ROWS)) {
+    const config = STATS_PANEL_DYNAMIC_ROWS[statKey];
+    const displayStatKey = getStatsPanelDynamicDisplayStat(statKey, config);
+    const beforeFallback = getStatSnapshotValue(oldStats, statKey, 0);
+    const nextFallback = getStatSnapshotValue(newStats, statKey, 0);
+    const beforeValue = getStatsPanelDynamicValue(statKey, config, beforeEntity, beforeFallback);
+    const nextValue = getStatsPanelDynamicValue(statKey, config, afterEntity, nextFallback);
+    const beforeComparable = getStatComparableValue(beforeValue, 0);
+    const nextComparable = getStatComparableValue(nextValue, 0);
+
+    if (beforeComparable === nextComparable) continue;
+
+    const payload = {
+      value: nextValue,
+      isNew: false,
+      visualBefore: beforeComparable,
+      visualAfter: nextComparable,
+    };
+
+    changedStats[statKey] = payload;
+    changedStats[displayStatKey] = payload;
+  }
+
+  return changedStats;
+}
+
+
+function getPayloadStatDeltaComparison(payload, nextValue, beforeValue) {
+  const visualBefore = Number(payload?.visualBefore);
+  const visualAfter = Number(payload?.visualAfter);
+
+  if (Number.isFinite(visualBefore) && Number.isFinite(visualAfter)) {
+    return { next: visualAfter, before: visualBefore };
+  }
+
+  return { next: nextValue, before: beforeValue };
+}
+
+
+function findStatsPanelSectionForEntity(entityId, sectionClass) {
+  if (typeof document === "undefined" || !entityId || !sectionClass) return null;
+  const escapedEntityId = cssEscapeValue(entityId);
+  const sections = Array.from(document.querySelectorAll(`.stat-section-codex.${sectionClass}`));
+
+  const exact = sections
+    .find(section => section.querySelector(`[data-entity-id="${escapedEntityId}"]`));
+  if (exact) return exact;
+
+  const visibleStatsSections = sections.filter(section =>
+    section.closest(".section-content.stats, .section-content.statistiques")
+  );
+
+  return visibleStatsSections.length === 1 ? visibleStatsSections[0] : null;
+}
+
+
+function findStatsPanelInsertionAnchor(section, beforeStats = []) {
+  if (!section || !Array.isArray(beforeStats)) return null;
+  const beforeSet = new Set(beforeStats.map(stat => normalizeStatKey(stat)));
+
+  return Array.from(section.children).find(child => {
+    const stat = normalizeStatKey(child?.dataset?.stat);
+    return stat && beforeSet.has(stat);
+  }) || null;
+}
+
+
+function getStatsDataSectionClass(def) {
+  const type = String(def?.type || "").toLowerCase();
+  if (type.startsWith("attaque")) return "attack";
+  if (type.startsWith("defense") || type.startsWith("défense") || type.startsWith("defence")) return "defence";
+  if (type.startsWith("utilitaire") || type === "special") return "utilitaire";
+  return "utilitaire";
+}
+
+
+function findStatsPanelSectionForStat(entityId, def) {
+  return findStatsPanelSectionForEntity(entityId, getStatsDataSectionClass(def));
+}
+
+
+function findStatsDefinition(stat) {
+  const statKey = normalizeStatKey(stat);
+  return STATS_DATA.find(def => normalizeStatKey(def.key) === statKey) || null;
+}
+
+
+function createMissingStatsPanelStatRow({
+  entityId,
+  stat,
+  value,
+  payload = {},
+  entityContext = null,
+}) {
+  const statKey = normalizeStatKey(stat);
+  const nextComparable = getStatComparableValue(payload?.visualAfter ?? value, 0);
+  if (nextComparable <= 0 && !ZERO_VALUE_VISIBLE_STAT_KEYS.has(statKey) && !getStatMalusSources(entityContext, statKey).length) return null;
+
+  const dynamicRow = createStatsPanelDynamicRow({
+    entityId,
+    stat: statKey,
+    value,
+    payload,
+    beforeValue: 0,
+    entityContext,
+  });
+  if (dynamicRow) return dynamicRow;
+
+  const def = findStatsDefinition(statKey);
+  const section = findStatsPanelSectionForStat(entityId, def);
+  if (!def || !section) return null;
+
+  const rowEntity = {
+    ...(entityContext || {}),
+    id: entityId,
+    stats: {
+      ...(entityContext?.stats || {}),
+      [statKey]: value,
+    },
+  };
+
+  createUmbraBlock(
+    section,
+    def.name,
+    () => value,
+    rowEntity,
+    def.key,
+    false,
+    null,
+    null,
+    { forceNew: nextComparable > 0, newLineContext: "sync" }
+  );
+
+  return Array.from(section.children).find(child =>
+    normalizeStatKey(child?.dataset?.stat) === statKey &&
+    String(child?.dataset?.entityId || "") === String(entityId)
+  ) || null;
+}
+
+
+function findStatsPanelDynamicRow(entityId, stat) {
+  const statKey = normalizeStatKey(stat);
+  const config = STATS_PANEL_DYNAMIC_ROWS[statKey];
+  if (!config) return null;
+
+  const section = findStatsPanelSectionForEntity(entityId, config.sectionClass);
+  if (!section) return null;
+  const displayStatKey = normalizeStatKey(getStatsPanelDynamicDisplayStat(statKey, config));
+  const sourceStatKey = normalizeStatKey(getStatsPanelDynamicSourceStat(statKey, config));
+
+  return Array.from(section.children).find(child =>
+    (
+      normalizeStatKey(child?.dataset?.stat) === statKey ||
+      normalizeStatKey(child?.dataset?.stat) === displayStatKey ||
+      normalizeStatKey(child?.dataset?.sourceStat) === statKey ||
+      normalizeStatKey(child?.dataset?.sourceStat) === sourceStatKey
+    ) &&
+    String(child?.dataset?.entityId || "") === String(entityId)
+  ) || null;
+}
+
+
+function createStatsPanelDynamicRow({
+  entityId,
+  stat,
+  value,
+  payload = {},
+  beforeValue = 0,
+  entityContext = null,
+}) {
+  const statKey = normalizeStatKey(stat);
+  const config = STATS_PANEL_DYNAMIC_ROWS[statKey];
+  if (!config) return null;
+
+  const section = findStatsPanelSectionForEntity(entityId, config.sectionClass);
+  if (!section) return null;
+
+  const existing = findStatsPanelDynamicRow(entityId, statKey);
+  if (existing) {
+    updateStatsPanelDynamicRow(existing, {
+      entityId,
+      stat: statKey,
+      value,
+      payload: { ...payload, isNew: false },
+      beforeValue,
+      entityContext,
+    });
+    return existing;
+  }
+
+  const displayStatKey = getStatsPanelDynamicDisplayStat(statKey, config);
+  const visualStatKey = getDisplayStatKey(displayStatKey);
+  const root = document.createElement("div");
+  root.className = `${visualStatKey}-stat stat-container`;
+  root.dataset.stat = displayStatKey;
+  root.dataset.sourceStat = normalizeStatKey(config.sourceStat || statKey);
+  if (config.originStat) root.dataset.originStat = normalizeStatKey(config.originStat);
+  if (config.calculatorName) root.dataset.calculatorName = config.calculatorName;
+  if (config.valueTemplate) root.dataset.valueTemplate = config.valueTemplate;
+  if (config.autonomousHelper) root.dataset.autonomousHelper = 'true';
+  root.dataset.hover = "true";
+  root.dataset.entityId = String(entityId);
+  root.dataset.codexDynamicStat = "true";
+
+  const wrap = document.createElement("div");
+  wrap.className = `stat-picto-valeur ${visualStatKey}`;
+
+  const picto = document.createElement("div");
+  picto.className = `picto-stat ${visualStatKey}`;
+
+  const name = document.createElement("div");
+  name.className = "stat-name";
+  name.textContent = config.label;
+
+  const mainVal = document.createElement("div");
+  mainVal.className = "entite-stat";
+  mainVal.dataset.stat = displayStatKey;
+  mainVal.dataset.hover = "true";
+  mainVal.dataset.entityId = String(entityId);
+
+  wrap.append(picto, name, mainVal);
+  root.appendChild(wrap);
+
+  updateStatsPanelDynamicRow(root, {
+    entityId,
+    stat: statKey,
+    value,
+    payload: { ...payload, isNew: true },
+    beforeValue,
+    entityContext,
+  });
+
+  const anchor = findStatsPanelInsertionAnchor(section, config.beforeStats);
+  section.insertBefore(root, anchor);
+  return root;
+}
+
+
+function updateStatsPanelDynamicRow(row, {
+  entityId,
+  stat,
+  value,
+  payload = {},
+  beforeValue = 0,
+  entityContext = null,
+}) {
+  const statKey = normalizeStatKey(stat);
+  const config = STATS_PANEL_DYNAMIC_ROWS[statKey];
+  if (!row || !config) return;
+
+  const displayStatKey = getStatsPanelDynamicDisplayStat(statKey, config);
+  const visualStatKey = getDisplayStatKey(displayStatKey);
+
+  row.classList.add(`${visualStatKey}-stat`, "stat-container");
+  row.dataset.stat = displayStatKey;
+  row.dataset.sourceStat = getStatsPanelDynamicSourceStat(statKey, config);
+  if (config.originStat) row.dataset.originStat = normalizeStatKey(config.originStat);
+  if (config.calculatorName) row.dataset.calculatorName = config.calculatorName;
+  if (config.valueTemplate) row.dataset.valueTemplate = config.valueTemplate;
+  if (config.autonomousHelper) row.dataset.autonomousHelper = 'true';
+  row.dataset.codexDynamicStat = "true";
+
+  const mainVal = Array.from(row.querySelectorAll(".entite-stat"))
+    .find(el => normalizeStatKey(el?.dataset?.stat) === statKey);
+  if (mainVal) {
+    mainVal.innerHTML = formatStatsPanelDynamicValue(config, value);
+    mainVal.dataset.stat = displayStatKey;
+    mainVal.dataset.hover = "true";
+    mainVal.dataset.entityId = String(entityId);
+  }
+
+  row.dataset.hover = "true";
+  row.dataset.entityId = String(entityId);
+
+  const helperEntity = entityContext || { id: entityId, stats: { [statKey]: value } };
+  syncStatCurseMarker(row, helperEntity, statKey);
+  const computed = calculateStatsDisplay(displayStatKey, helperEntity, value);
+  if (computed?.helpContent) row.dataset.helperText = computed.helpContent;
+
+  const comparison = getPayloadStatDeltaComparison(payload, value, beforeValue);
+  if (shouldRemoveFinalZeroStatContainer(row, displayStatKey, comparison.next, comparison.before)) {
+    row.remove();
+    return;
+  }
+
+  applyStatDeltaClass(row, comparison.next, comparison.before, {
+    isNew: payload?.isNew === true,
+    zeroAsHidden: false,
+  });
+}
+
+
+function syncStatsPanelDynamicRows(entityId, oldStats = {}, newStats = {}, entityContext = null, changedStats = {}, renderedBefore = null, options = {}) {
+  if (!entityId || typeof document === "undefined") return;
+
+  const liveEntity = entityContext || getLiveEntityForStatSync(entityId);
+  const beforeEntity = buildStatsSnapshotEntity(liveEntity, oldStats, entityId, options.oldModifierStats);
+  const afterEntity = buildStatsSnapshotEntity(liveEntity, newStats, entityId, options.newModifierStats);
+
+  for (const statKey of Object.keys(STATS_PANEL_DYNAMIC_ROWS)) {
+    const config = STATS_PANEL_DYNAMIC_ROWS[statKey];
+    const displayStatKey = getStatsPanelDynamicDisplayStat(statKey, config);
+    const beforeFallback = getStatSnapshotValue(oldStats, statKey, 0);
+    const nextFallback = getStatSnapshotValue(newStats, statKey, 0);
+    const beforeValue = getStatsPanelDynamicValue(statKey, config, beforeEntity, beforeFallback);
+    const nextValue = getStatsPanelDynamicValue(statKey, config, afterEntity, nextFallback);
+    const beforeComparable = getStatComparableValue(beforeValue, 0);
+    const nextComparable = getStatComparableValue(nextValue, 0);
+    const existing = findStatsPanelDynamicRow(entityId, statKey);
+    const existedBefore = existing && renderedBefore?.containers?.has(existing);
+    const rowPayload = changedStats[statKey] || changedStats[displayStatKey] || {
+      value: nextValue,
+      isNew: false,
+      visualBefore: beforeComparable,
+      visualAfter: nextComparable,
+    };
+
+    if (existing) syncStatCurseMarker(existing, afterEntity, statKey);
+    if (nextComparable <= 0 && !getStatMalusSources(afterEntity, statKey).length) {
+      if (existing) existing.remove();
+      continue;
+    }
+
+    createStatsPanelDynamicRow({
+      entityId,
+      stat: statKey,
+      value: nextValue,
+      payload: {
+        ...rowPayload,
+        isNew: (renderedBefore ? !existedBefore : !existing) && nextComparable > 0,
+      },
+      beforeValue,
+      entityContext: afterEntity,
+    });
+  }
+}
+
+
+function applyStatDeltaClass(container, nextValue, beforeValue, { isNew = false, zeroAsHidden = true } = {}) {
+  if (!container) return null;
+
+  const nextComparable = getStatComparableValue(nextValue, 0);
+  const beforeComparable = getStatComparableValue(beforeValue, 0);
+  const showsNew = isNew && nextComparable > beforeComparable && nextComparable > 0;
+  const valueEls = Array.from(container.querySelectorAll(".entite-stat:not(.preview)"));
+
+  container.classList.remove("upgraded", "reducted", "new");
+  container.removeAttribute("upgraded");
+  delete container.dataset.previewDelta;
+  valueEls.forEach(el => el.classList.remove("new-stat", "stat-new"));
+
+  if (showsNew) {
+    container.classList.add("new");
+    valueEls.forEach(el => el.classList.add("new-stat"));
+  }
+
+  container.classList.remove("zero");
+
+  if (nextComparable > beforeComparable) {
+    container.classList.add("upgraded");
+    return "up";
+  }
+
+  if (nextComparable < beforeComparable) {
+    container.classList.add("reducted");
+    return "down";
+  }
+
+  if (zeroAsHidden && nextComparable <= 0 && container.dataset.statCursed !== 'true'
+    && !ZERO_VALUE_VISIBLE_STAT_KEYS.has(normalizeStatKey(container.dataset.stat))) {
+    container.classList.add("zero");
+    container.classList.remove("last");
+  }
+
+  return null;
+}
+
+
+export function clearEntityStatDeltaClasses(entityId, root = document) {
+  if (!entityId) return;
+  const scope = root?.querySelectorAll ? root : document;
+  const escapedEntityId = cssEscapeValue(entityId);
+
+  scope
+    .querySelectorAll(
+      `.stat-container[data-entity-id="${escapedEntityId}"], ` +
+      `.codex-profile-battle-stat[data-entity-id="${escapedEntityId}"], ` +
+      `.codex-profile-umbra-stat[data-entity-id="${escapedEntityId}"]`
+    )
+    .forEach((container) => {
+      if (container.dataset.codexDynamicStat === "true") {
+        const valueEl = container.querySelector(".entite-stat:not(.preview)");
+        const currentValue = Number(
+          String(valueEl?.textContent || "0")
+            .replace(",", ".")
+            .replace(/[^0-9.\-]/g, "")
+        ) || 0;
+
+        if (currentValue <= 0 && container.dataset.statCursed !== 'true') {
+          container.remove();
+          return;
+        }
+      }
+
+      container.classList.remove("upgraded", "reducted", "new");
+      container.removeAttribute("upgraded");
+      delete container.dataset.previewDelta;
+      container
+        .querySelectorAll(".entite-stat:not(.preview)")
+        .forEach(el => el.classList.remove("new-stat", "stat-new"));
+    });
+}
+
+
+export function updateStatsInDOM(statsObject, baseStats = {}, entityContext = null, options = {}) {
+  const entityId = baseStats.id || statsObject.id || statsObject.entityId;
+  if (!entityId) return;
+
+  const renderedBefore = options.renderedBefore || getRenderedStatContainersForEntity(entityId);
+  clearEntityStatDeltaClasses(entityId);
+
+  const liveEntity = entityContext || getLiveEntityForStatSync(entityId) || { id: entityId };
+  const nextStatsSnapshot = { ...baseStats };
+  for (const [stat, payload] of Object.entries(statsObject || {})) {
+    const statKey = normalizeStatKey(stat);
+    if (!statKey || statKey === "id" || statKey === "entityId") continue;
+    nextStatsSnapshot[statKey] =
+      (typeof payload === "object" && payload !== null && "value" in payload)
+        ? payload.value
+        : payload;
+  }
+  const beforeEntity = buildStatsSnapshotEntity(liveEntity, baseStats, entityId);
+  const afterEntity = entityContext || buildStatsSnapshotEntity(liveEntity, nextStatsSnapshot, entityId);
+
+  document.querySelectorAll(`.stat-container[data-entity-id="${cssEscapeValue(entityId)}"][data-stat]`)
+    .forEach(container => syncStatCurseMarker(container, afterEntity, container.dataset.stat));
+  document.querySelectorAll(`[data-attribute-helper][data-entity-id="${cssEscapeValue(entityId)}"]`)
+    .forEach(container => bindHelperEntity(container, afterEntity));
+
+  const getDomStatKeys = (stat) => {
+    const raw = String(stat || "");
+    const canonical = normalizeStatKey(raw);
+    const display = getDisplayStatKey(canonical);
+    return [...new Set([raw, canonical, display].filter(Boolean))];
+  };
+
+  const qAll = (stat, { preview = false } = {}) => {
+    const selectors = getDomStatKeys(stat).map((key) => {
+      const statSelector = cssEscapeValue(key);
+      const entitySelector = cssEscapeValue(entityId);
+      return preview
+        ? `.entite-stat.preview[data-stat="${statSelector}"][data-entity-id="${entitySelector}"]`
+        : `.entite-stat[data-stat="${statSelector}"][data-entity-id="${entitySelector}"]:not(.preview)`;
+    });
+
+    return Array.from(document.querySelectorAll(selectors.join(","))).filter(el =>
+      !el.closest(".Game-helper, .shop-item-card, .item-description-card, .item-stats-block")
+    );
+  };
+
+  // 🔹 fonction utilitaire : gérer le "last"
+  const setLastUpgraded = (containers) => {
+    if (!Array.isArray(containers)) containers = [containers];
+
+    // wipe tous les "last" avant
+    const allStats = document.querySelectorAll(`.entite-stat[data-entity-id="${entityId}"]`);
+    allStats.forEach((el) => {
+      const c = containerOf(el);
+      if (c) c.classList.remove("last");
+    });
+
+    // puis marquer tous les containers donnés
+    containers.forEach(c => {
+      if (c) c.classList.add("last");
+    });
+  };
+
+  const shouldMarkNew = (container, requested = false) =>
+    Boolean(requested && shouldMarkExistingContainerAsNew(renderedBefore, container));
+
+  for (const [stat, payload] of Object.entries(statsObject)) {
+    const value = (typeof payload === "object" && "value" in payload) ? payload.value : payload;
+    const isNew = (typeof payload === "object" && payload.isNew);
+
+    // --- VITALITY → met à jour HP.max ---
+if (stat === "vitality") {
+  const vitEls = Array.from(qAll("vitality"));
+  const upgradedContainers = [];
+
+  vitEls.forEach((vitEl) => {
+    const vitC = containerOf(vitEl);
+    if (!vitC) return;
+
+    if (shouldRemoveFinalZeroStatContainer(vitC, stat, value, baseStats.vitality)) {
+      vitC.remove();
+      return;
+    }
+
+    vitEl.textContent = value;
+    const direction = applyStatDeltaClass(
+      vitC,
+      value,
+      baseStats.vitality,
+      { isNew: shouldMarkNew(vitC, isNew) }
+    );
+    if (direction === "up") upgradedContainers.push(vitC);
+  });
+
+  if (upgradedContainers.length) {
+    setLastUpgraded(upgradedContainers);
+  }
+
+  continue;
+}
+    // --- HP normal ---
+// --- HP permanent (NE DOIT PAS écraser la preview) ---
+if (stat === 'HP' && typeof value === 'object') {
+  ensureHPDom(entityId);
+
+  const els = qAll('HP'); // ✅ uniquement non-preview
+  if (!els.length) continue;
+
+  const baseMax =
+    typeof baseStats.HP === 'object'
+      ? (baseStats.HP.max ?? 0)
+      : (baseStats.HP ?? 0);
+
+  // 1) Texte permanent
+  els.forEach((el) => {
+    el.textContent = `${value.current} / ${value.max}`;
+
+    const c = containerOf(el);
+    if (!c) return;
+
+    const direction = applyStatDeltaClass(
+      c,
+      value,
+      { current: baseMax, max: baseMax },
+      { isNew: shouldMarkNew(c, isNew) }
+    );
+    if (direction === "up") setLastUpgraded(c);
+  });
+
+  // 2) Barres HP/armure (permanent)
+  const armorCur = (typeof baseStats.armor === "object")
+    ? (baseStats.armor.current ?? 0)
+    : (baseStats.armor ?? 0);
+
+  const armorMax = (typeof baseStats.armor === "object")
+    ? (baseStats.armor.max ?? 0)
+    : (baseStats.armor ?? 0);
+
+  updateHealthBar(value.current, value.max, armorCur, armorMax, entityId);
+  updateHPCounters(entityId, value.current, value.max);
+  continue;
+}
+
+if (stat === "armor" && value && typeof value === "object") {
+  const els = qAll("armor");
+  const armorMax = Number(value.max ?? value.current ?? 0) || 0;
+  const baseArmorMax = getSnapshotComparableValue(baseStats, "armor", 0);
+
+  els.forEach((armorEl) => {
+    armorEl.textContent = String(armorMax);
+
+    const armorContainer = containerOf(armorEl);
+    if (!armorContainer) return;
+
+    const direction = applyStatDeltaClass(
+      armorContainer,
+      { current: armorMax, max: armorMax },
+      { current: baseArmorMax, max: baseArmorMax },
+      { isNew: shouldMarkNew(armorContainer, isNew) }
+    );
+
+    if (direction === "up") {
+      setLastUpgraded(armorContainer);
+    }
+  });
+
+  continue;
+}
+
+if (
+  (stat === "extraLife" || stat === "shift") &&
+  value &&
+  typeof value === "object"
+) {
+  const els = qAll(stat);
+  const current = Number(value.current ?? 0) || 0;
+  const max = Number(value.max ?? value.current ?? 0) || 0;
+  const upgradedContainers = [];
+
+  els.forEach((el) => {
+    if (stat === 'shift') renderMovementCounter(el, { ...afterEntity, stats: { ...afterEntity.stats, shift: value } });
+    else el.textContent = max > 0 ? `${current} / ${max}` : String(current);
+    const c = containerOf(el);
+    const direction = applyStatDeltaClass(c, value, baseStats[stat], {
+      isNew: shouldMarkNew(c, isNew),
+    });
+    if (direction === "up" && c) upgradedContainers.push(c);
+  });
+
+  if (upgradedContainers.length) {
+    setLastUpgraded(upgradedContainers);
+  }
+
+  continue;
+}
+
+    // --- autres stats ---
+    const oldValueForStat = getStatSnapshotValue(baseStats, stat, 0);
+    const dynamicComparable = getStatComparableValue(value, 0);
+    const dynamicBaseComparable = getStatComparableValue(oldValueForStat, 0);
+
+    if (
+      STATS_PANEL_DYNAMIC_ROWS[normalizeStatKey(stat)] &&
+      !findStatsPanelDynamicRow(entityId, stat) &&
+      (dynamicComparable > 0 || dynamicBaseComparable > 0)
+    ) {
+      createStatsPanelDynamicRow({
+        entityId,
+        stat,
+        value,
+        payload,
+        beforeValue: oldValueForStat,
+        entityContext,
+      });
+    }
+
+    const els = Array.from(qAll(stat));
+    if (!els.length) {
+      const createdDynamicRow = createMissingStatsPanelStatRow({
+        entityId,
+        stat,
+        value,
+        payload,
+        entityContext,
+      });
+
+      if (createdDynamicRow) {
+        continue;
+      }
+      continue;
+    }
+
+    if (stat === 'velocity') {
+      const baseSpeed = baseStats.speed ?? 1000;
+      const { adjustedSpeed } = calculateVelocityReduction(value, baseSpeed);
+
+      const upgradedContainers = [];
+      const velocityEls = Array.from(qAll("velocity"));
+      velocityEls.forEach((velEl) => {
+        const velC = containerOf(velEl);
+        if (!velC) return;
+
+        if (shouldRemoveFinalZeroStatContainer(velC, stat, value, baseStats.velocity)) {
+          velC.remove();
+          return;
+        }
+
+        velEl.textContent = value;
+        const direction = applyStatDeltaClass(
+          velC,
+          value,
+          baseStats.velocity,
+          { isNew: shouldMarkNew(velC, isNew) }
+        );
+        if (direction === "up") upgradedContainers.push(velC);
+      });
+
+      const speedEls = Array.from(qAll('speed'));
+      speedEls.forEach((speedEl) => {
+        const spdC = containerOf(speedEl);
+        if (!spdC) return;
+
+        const sec = (Number(adjustedSpeed ?? 0) / 1000).toFixed(1);
+		speedEl.textContent = `${sec} s`;
+        const direction = applyStatDeltaClass(
+          spdC,
+          adjustedSpeed,
+          baseSpeed,
+          { isNew: false }
+        );
+
+        if (direction === "up") {
+          upgradedContainers.push(spdC);
+        }
+      });
+
+      if (upgradedContainers.length) {
+        setLastUpgraded(upgradedContainers);
+      }
+
+      continue;
+    }
+
+    if (stat === 'speed') {
+      const upgradedContainers = [];
+      const speedEls = Array.from(qAll("speed"));
+      const nextSpeed = Number(value ?? 0) || 0;
+      const baseSpeed = getSnapshotComparableValue(baseStats, "speed", 0);
+
+      speedEls.forEach((speedEl) => {
+        const spdC = containerOf(speedEl);
+        if (!spdC) return;
+
+        speedEl.textContent = `${(nextSpeed / 1000).toFixed(2)} s`;
+        const direction = applyStatDeltaClass(
+          spdC,
+          nextSpeed,
+          baseSpeed,
+          { isNew: shouldMarkNew(spdC, isNew) }
+        );
+        if (direction === "up") upgradedContainers.push(spdC);
+      });
+
+      if (upgradedContainers.length) {
+        setLastUpgraded(upgradedContainers);
+      }
+
+      continue;
+    }
+
+    // cas générique
+    const comparison = getPayloadStatDeltaComparison(payload, value, oldValueForStat);
+    const dynamicRowConfig = STATS_PANEL_DYNAMIC_ROWS[normalizeStatKey(stat)];
+    const upgradedContainers = [];
+
+    els.forEach((el) => {
+      const c = containerOf(el);
+      const usesSyncedCalculator = Boolean(c?.dataset?.calculatorName || c?.dataset?.valueTemplate);
+      let nextForClass = comparison.next;
+      let beforeForClass = comparison.before;
+
+      if (usesSyncedCalculator) {
+        const resolvedNext = resolveStatContainerValue(c, afterEntity, stat, value);
+        const resolvedBefore = resolveStatContainerValue(c, beforeEntity, stat, oldValueForStat);
+        el.innerHTML = resolvedNext.html;
+        nextForClass = payload?.visualAfter ?? resolvedNext.value;
+        beforeForClass = payload?.visualBefore ?? resolvedBefore.value;
+      } else if (dynamicRowConfig && el.closest(".stat-section-codex")) {
+        el.innerHTML = formatStatsPanelDynamicValue(dynamicRowConfig, value);
+      } else {
+        el.textContent = value;
+      }
+
+      if (!c) return;
+
+      if (shouldRemoveFinalZeroStatContainer(c, stat, nextForClass, beforeForClass)) {
+        c.remove();
+        return;
+      }
+
+      if (getStatComparableValue(nextForClass, 0) <= 0) {
+        applyStatDeltaClass(c, nextForClass, beforeForClass, {
+          isNew: shouldMarkNew(c, isNew),
+        });
+      } else {
+        c.classList.remove("last");
+        const direction = applyStatDeltaClass(c, nextForClass, beforeForClass, {
+          isNew: shouldMarkNew(c, isNew),
+        });
+        if (direction === "up") upgradedContainers.push(c);
+      }
+    });
+
+    if (upgradedContainers.length) {
+      setLastUpgraded(upgradedContainers);
+    }
+  }
+}
+
+
+function syncEntityResourceCounters(entityId, stats, entityContext = null) {
+  if (!entityId || !stats) return;
+
+  const hp = stats.HP;
+  const armor = stats.armor;
+  const currentHP = Number(hp?.current ?? 0) || 0;
+  const maxHP = Number(hp?.max ?? 0) || 0;
+  const currentArmor = Number(armor?.current ?? 0) || 0;
+  const maxArmor = Number(armor?.max ?? 0) || 0;
+  const entity = { id: entityId, stats };
+
+  if (hp && typeof hp === "object") {
+    updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entityId);
+    updateHPCounters(entityId, currentHP, maxHP);
+  }
+
+  updateArmorCounter(entity);
+  updateBonusLifeCounters(entity);
+  updateMovementDisplay({ ...(entityContext || getLiveEntityForStatSync(entityId)), ...entity }, { animate: false });
+}
+
+
+export function syncDOMWithStats(oldStats = {}, newStats = {}, entityId, entityContext = null, options = {}) {
+  if (!entityId) return;
+
+  const renderedBefore = options.renderedBefore || getRenderedStatContainersForEntity(entityId);
+  const changedStats = {};
+  const allKeys = new Set([...Object.keys(oldStats), ...Object.keys(newStats)]);
+
+  for (const stat of allKeys) {
+    const oldVal = oldStats[stat];
+    const newVal = (newStats[stat] !== undefined) ? newStats[stat] : 0;
+
+    if (isStatsSnapshotDifferent(oldVal, newVal)) {
+      changedStats[stat] = {
+        value: newVal,
+        isNew: false
+      };
+    }
+  }
+
+  addRenderedStatImpactDiffs(changedStats, oldStats, newStats, entityId, entityContext, options);
+  addStatsPanelDynamicDiffs(changedStats, oldStats, newStats, entityId, entityContext, options);
+
+  // ✅ IMPORTANT : si velocity change, on force aussi la MAJ de speed
+  // (sinon ton DOM peut garder une speed obsolète)
+  if ("velocity" in changedStats) {
+    if (newStats.speed !== undefined) {
+      changedStats.speed = {
+        value: newStats.speed,
+        isNew: false
+      };
+    }
+  }
+
+  updateStatsInDOM(changedStats, { id: entityId, ...oldStats }, entityContext, { renderedBefore });
+  syncStatsPanelDynamicRows(entityId, oldStats, newStats, entityContext, changedStats, renderedBefore, options);
+  syncEntityResourceCounters(entityId, newStats, entityContext);
+  const currentEntity = entityContext || getLiveEntityForStatSync(entityId);
+  document.querySelectorAll('.level-up-section').forEach(section => section._refreshStats?.(currentEntity));
+  document.querySelectorAll(`.attack-submenu-infos[data-entity-id="${cssEscapeValue(entityId)}"]`)
+    .forEach(section => section._refreshStats?.(currentEntity || { id: entityId, stats: newStats }));
+  if (typeof window !== "undefined" && typeof window.refreshCodexUmbraPanel === "function") {
+    window.refreshCodexUmbraPanel(
+      entityContext || { id: entityId, stats: newStats },
+      { oldStats, newStats, changedStats }
+    );
+  }
+  localStorage.setItem("entityStats", JSON.stringify(newStats));
+  return changedStats; // optionnel, mais pratique en debug
+}
+
+
+function ensureStatNodes(entiteId, key, rootEl) {
+  // rootEl doit être un ELEMENT, pas document
+  let container = rootEl;
+
+  // Fallbacks intelligents si rootEl non fourni ou invalide
+  if (!container || container.nodeType !== 1) {
+    // Essaye de trouver un container dédié à l’entité
+    container = document.querySelector(`.entity-stats-section[data-entity-id="${entiteId}"]`)
+             || document.querySelector(`#stats-${entiteId}`)
+             || document.body; // dernier recours, mais ÉVITE si possible
+  }
+
+  // Recherche dans le container
+  let perm = container.querySelector(`.entite-stat[data-entity-id="${entiteId}"][data-stat="${key}"]:not(.preview)`);
+  let prev = container.querySelector(`.entite-stat.preview[data-entity-id="${entiteId}"][data-stat="${key}"]`);
+
+  // Crée le permanent si absent
+  if (!perm) {
+    perm = document.createElement('div');
+    perm.className = 'entite-stat';
+    perm.dataset.entityId = String(entiteId);
+    perm.dataset.stat = key;
+    container.insertAdjacentElement('beforeend', perm);
+  }
+
+  // Crée le preview si absent (juste après le perm)
+  if (!prev) {
+    prev = document.createElement('div');
+    prev.className = 'entite-stat preview is-hidden';
+    prev.dataset.entityId = String(entiteId);
+    prev.dataset.stat = key;
+    perm.insertAdjacentElement('afterend', prev);
+  }
+
+  return { perm, prev };
+}
+
+
+function formatProgressionStatValue(v) {
+  if (isObjStat(v)) return `${Number(v.current ?? 0)} / ${Number(v.max ?? 0)}`;
+  return String(v ?? "");
+}
+
+
+export function isLevelUpNewStatsArea(container) {
+  return !!container?.closest?.(
+    ".level-up-section, .umbra-submenu.new.entity-stats-section"
+  );
+}
+
+
+export function renderStatPair(entite, key, rootEl) {
+  const { perm, prev } = ensureStatNodes(entite.id, key, rootEl);
+
+  const permStats = getPermStats(entite);
+  const prevStats = getPreviewStats(entite);
+
+  const statContainer = containerOf(perm);
+  syncStatCurseMarker(statContainer, entite, key);
+  const usesSyncedCalculator = Boolean(
+    statContainer?.dataset?.calculatorName ||
+    statContainer?.dataset?.valueTemplate
+  );
+
+  let permVal = getStatSnapshotValue(permStats, key, undefined);
+  let prevVal = getStatSnapshotValue(prevStats, key, undefined);
+  let permHtml = null;
+  let prevHtml = null;
+
+  if (usesSyncedCalculator) {
+    const permEntity = buildStatsSnapshotEntity(entite, permStats, entite.id);
+    const prevEntity = buildStatsSnapshotEntity(entite, prevStats, entite.id);
+    const resolvedPerm = resolveStatContainerValue(statContainer, permEntity, key, permVal);
+    const resolvedPrev = resolveStatContainerValue(statContainer, prevEntity, key, prevVal);
+
+    permVal = resolvedPerm.value;
+    prevVal = resolvedPrev.value;
+    permHtml = resolvedPerm.html;
+    prevHtml = resolvedPrev.html;
+  }
+
+  const isObj = (v) => v && typeof v === "object" && ("current" in v || "max" in v);
+
+  const toMs = (v) => {
+    if (v == null) return 0;
+    if (typeof v === "number") return v;
+    // tolère "2426 ms", "2.4 s", etc.
+    return parseFloat(String(v).replace(",", ".")) || 0;
+  };
+
+  const isZero = (v) => {
+    if (isObj(v)) return Number(v.current ?? 0) <= 0 && Number(v.max ?? 0) <= 0;
+    return v == null || Number(v) <= 0;
+  };
+
+  const hasPreview =
+    !!entite?.modifierStats?.preview?.statLeveled &&
+    Object.keys(entite.modifierStats.preview.statLeveled).length > 0;
+
+  // ✅ SPEED: comparaison sur la valeur BRUTE (ms), pas sur le texte formaté
+  const permMs = key === "speed" ? toMs(permVal) : null;
+  const prevMs = key === "speed" ? toMs(prevVal) : null;
+const SPEED_DISPLAY_STEP_MS = 10; // 0.01 s = 10 ms (car toFixed(2))
+const speedHasDelta =
+  key === "speed" &&
+  hasPreview &&
+  Math.round(permMs / SPEED_DISPLAY_STEP_MS) !== Math.round(prevMs / SPEED_DISPLAY_STEP_MS);
+  // ✅ affichage "MAX only" pour HP + armor (+ speed en secondes)
+  const fmtKey = (v) => {
+   if ((key === "HP" || key === "armor" || key === "extraLife") && isObj(v)) {
+      return String(Number(v.max ?? 0));
+    }
+if (key === "speed") {
+  const ms = toMs(v);
+  return `${(ms / 1000).toFixed(2)} s`; // ✅ visuel uniquement
+}
+    return formatProgressionStatValue(v);
+  };
+
+  const showPrev = hasPreview && (
+    usesSyncedCalculator
+      ? getStatComparableValue(prevVal, 0) !== getStatComparableValue(permVal, 0)
+      : key === "speed"
+        ? speedHasDelta
+        : fmtKey(prevVal) !== fmtKey(permVal)
+  );
+
+  const isNew =
+    showPrev &&
+    statContainer?.dataset?.statLineCreatedAsNew === "preview" &&
+    !isZero(prevVal);
+  const setPreviewDeltaState = (container, up, down) => {
+    if (!container) return;
+
+    if (up || down) {
+      container.dataset.previewDelta = up ? "up" : "down";
+      container.classList.remove("zero");
+      container.removeAttribute("upgraded");
+      container.classList.toggle("upgraded", up);
+      container.classList.toggle("reducted", down);
+      return;
+    }
+
+    container.classList.remove("upgraded", "reducted");
+    container.removeAttribute("upgraded");
+    delete container.dataset.previewDelta;
+  };
+
+  const comparableValue = (v) => {
+    return getStatComparableValue(v, 0);
+  };
+
+  if (statContainer && isLevelUpNewStatsArea(statContainer)) {
+    statContainer.classList.toggle("new", isNew);
+  }
+
+  // ✅ ARMOR: suppression si 0/0 sans preview
+if (key === "armor" || key === "extraLife" || key === "charge") {
+  const container =
+    containerOf(perm) ||
+    document.querySelector(`.stat-container[data-stat="${key}"][data-entity-id="${entite.id}"]`);
+
+  if (!showPrev && isZero(permVal) && !getStatMalusSources(entite, key).length) {
+    if (container) container.remove();
+    return;
+  }
+}
+
+  // ✅ upgraded/reducted sur container pour HP/armor
+if (key === "HP" || key === "armor" || key === "extraLife" || key === "charge") {
+  const container = containerOf(perm);
+  if (container) {
+    const permMax = isObj(permVal) ? Number(permVal.max ?? 0) : Number(permVal ?? 0);
+    const prevMax = isObj(prevVal) ? Number(prevVal.max ?? 0) : Number(prevVal ?? 0);
+
+    const up = showPrev && prevMax > permMax;
+    const down = showPrev && prevMax < permMax;
+
+    setPreviewDeltaState(container, up, down);
+  }
+}
+
+
+  // SPEED : la classe reflète la variation numérique brute.
+  if (key === "speed") {
+    const container = containerOf(perm);
+    if (container) {
+      const p = permMs;
+      const n = prevMs;
+
+      const up   = showPrev && n > p;
+      const down = showPrev && n < p;
+
+      setPreviewDeltaState(container, up, down);
+    }
+  }
+  if (key === "dayHpRegen") {
+    const container = containerOf(perm);
+    if (container) {
+      const p = Number(permVal ?? 0) || 0;
+      const n = Number(prevVal ?? 0) || 0;
+
+      const up   = showPrev && n > p;
+      const down = showPrev && n < p;
+
+      setPreviewDeltaState(container, up, down);
+    }
+  }
+
+  if (!["HP", "armor", "extraLife", "charge", "speed", "dayHpRegen"].includes(key)) {
+    const p = comparableValue(permVal);
+    const n = comparableValue(prevVal);
+
+    setPreviewDeltaState(
+      statContainer,
+      showPrev && n > p,
+      showPrev && n < p
+    );
+  }
+
+  // Helpers resolve the active draft on hover. Do not build every closed tooltip
+  // for each point spent, or retain text from a previous preview.
+  if (statContainer) delete statContainer.dataset.helperText;
+
+  // 1) Permanent
+  if (isNew) {
+    perm.classList.add("stat-new", "new-stat");
+    perm.textContent = "";
+  } else {
+    perm.classList.remove("stat-new", "new-stat");
+    if (permHtml != null) {
+      if (perm.innerHTML !== permHtml) perm.innerHTML = permHtml;
+    } else {
+      const permTxt = fmtKey(permVal);
+      if (perm.textContent !== permTxt) perm.textContent = permTxt;
+    }
+  }
+
+  // 2) Preview
+  if (showPrev) {
+    if (prevHtml != null) {
+      if (prev.innerHTML !== prevHtml) prev.innerHTML = prevHtml;
+    } else {
+      const prevTxt = fmtKey(prevVal);
+      if (prev.textContent !== prevTxt) prev.textContent = prevTxt;
+    }
+    prev.classList.remove("is-hidden");
+  } else {
+    prev.classList.add("is-hidden");
+  }
+  if (key === 'shift') {
+    if (!isNew && isObj(permVal)) renderMovementCounter(perm, buildStatsSnapshotEntity(entite, permStats, entite.id));
+    if (showPrev && isObj(prevVal)) renderMovementCounter(prev, buildStatsSnapshotEntity(entite, prevStats, entite.id));
+  }
+}
+
+
+export function renderAllStats(entite, rootEl) {
+  const perm = getPermStats(entite);
+  for (const key of Object.keys(perm)) {
+    renderStatPair(entite, key, rootEl);
+  }
+}
+
+
+function findEntityStatContainer(entityId, stat, root = document) {
+  if (!entityId || !root?.querySelectorAll) return null;
+
+  const statKey = normalizeStatKey(stat);
+  const escapedEntityId = cssEscapeValue(entityId);
+
+  return Array.from(
+    root.querySelectorAll(`.stat-container[data-entity-id="${escapedEntityId}"][data-stat]`)
+  ).find(block => normalizeStatKey(block?.dataset?.stat) === statKey) || null;
+}
+
+
+function getPreviewNewStatsParent(entite, root = document) {
+  if (!entite?.id) return null;
+  const escapedEntityId = cssEscapeValue(entite.id);
+  const scoped =
+    root?.querySelector?.(`#codex-entity_${escapedEntityId} .umbra-submenu.new.entity-stats-section`) ||
+    root?.closest?.(".umbra-submenu.new.entity-stats-section");
+  if (scoped) return scoped;
+
+  return (
+    document.querySelector(`#codex-entity_${escapedEntityId} .umbra-submenu.new.entity-stats-section`) ||
+    document.querySelector(".umbra-submenu.new.entity-stats-section")
+  );
+}
+
+
+function configureSyncedStatContainer(block, stat, config) {
+  if (!block || !config) return;
+
+  const statKey = normalizeStatKey(stat);
+  const displayStatKey = getStatsPanelDynamicDisplayStat(statKey, config);
+
+  block.dataset.stat = displayStatKey;
+  block.dataset.sourceStat = getStatsPanelDynamicSourceStat(statKey, config);
+  if (config.originStat) block.dataset.originStat = normalizeStatKey(config.originStat);
+  if (config.calculatorName) block.dataset.calculatorName = config.calculatorName;
+  if (config.valueTemplate) block.dataset.valueTemplate = config.valueTemplate;
+
+  block
+    .querySelectorAll(".entite-stat")
+    .forEach(el => {
+      el.dataset.stat = displayStatKey;
+      el.dataset.hover = "true";
+    });
+}
+
+
+function createPreviewStatBlock(parent, entite, stat, value, {
+  forceNew = false,
+  syncedConfig = null,
+} = {}) {
+  if (!parent || !entite?.id) return null;
+
+  const statKey = normalizeStatKey(stat);
+  const displayStatKey = syncedConfig
+    ? getStatsPanelDynamicDisplayStat(statKey, syncedConfig)
+    : getDisplayStatKey(statKey);
+  const def = findStatsDefinition(displayStatKey);
+  if (!def && !syncedConfig) return null;
+
+  const existing = findEntityStatContainer(entite.id, displayStatKey, parent);
+  if (existing) {
+    configureSyncedStatContainer(existing, statKey, syncedConfig);
+    renderStatPair(entite, displayStatKey, parent);
+    return existing;
+  }
+
+  createUmbraBlock(
+    parent,
+    def?.name || syncedConfig?.label || displayStatKey,
+    () => value,
+    entite,
+    displayStatKey,
+    false,
+    null,
+    def?.nature === "umbra",
+    { showMissingAsNew: true, forceNew, newLineContext: "preview" }
+  );
+
+  const block = findEntityStatContainer(entite.id, displayStatKey, parent);
+  if (block && forceNew) block.dataset.statLineCreatedAsNew = "preview";
+  configureSyncedStatContainer(block, statKey, syncedConfig);
+  renderStatPair(entite, displayStatKey, parent);
+  return block;
+}
+
+
+function syncPreviewIntroducedRows(entite, total, root = document) {
+  if (!entite?.id || !total) return;
+
+  const parent = getPreviewNewStatsParent(entite, root);
+  if (!parent) return;
+
+  const beforeEntity = buildStatsSnapshotEntity(entite, entite.stats || {}, entite.id);
+  const afterEntity = buildStatsSnapshotEntity(entite, total, entite.id);
+
+  parent
+    .querySelectorAll(`.stat-container[data-entity-id="${cssEscapeValue(entite.id)}"][data-stat]`)
+    .forEach((block) => {
+      const statKey = normalizeStatKey(block.dataset.stat);
+      const config = getStatsPanelDynamicConfig(statKey);
+      const beforeValue = config
+        ? getStatsPanelDynamicValue(statKey, config, beforeEntity, getStatSnapshotValue(entite.stats, statKey, 0))
+        : getStatSnapshotValue(entite.stats, statKey, 0);
+      const nextValue = config
+        ? getStatsPanelDynamicValue(statKey, config, afterEntity, getStatSnapshotValue(total, statKey, 0))
+        : getStatSnapshotValue(total, statKey, 0);
+      const beforeComparable = getStatComparableValue(beforeValue, 0);
+      const nextComparable = getStatComparableValue(nextValue, 0);
+
+      // Bind the actual draft, not a snapshot mistaken for an external update.
+      // The helper resolver already reads its preview totals.
+      syncStatCurseMarker(block, entite, statKey);
+      if (beforeComparable <= 0 && nextComparable <= 0
+        && !ZERO_VALUE_VISIBLE_STAT_KEYS.has(statKey) && block.dataset.statCursed !== 'true') {
+        block.remove();
+      }
+    });
+
+  for (const [key, value] of Object.entries(total)) {
+    const statKey = normalizeStatKey(key);
+    if (
+      !statKey ||
+      ["strength", "agility", "intelligence"].includes(statKey) ||
+      DOM_NON_STAT_KEYS.has(statKey)
+    ) continue;
+    const def = findStatsDefinition(statKey);
+    if (!def) continue;
+
+    const beforeValue = getStatSnapshotValue(entite.stats, statKey, 0);
+    const beforeComparable = getStatComparableValue(beforeValue, 0);
+    const nextComparable = getStatComparableValue(value, 0);
+    const existing = findEntityStatContainer(entite.id, statKey, parent);
+
+    if (getStatMalusSources(afterEntity, statKey).length || (nextComparable > 0 && (beforeComparable <= 0 || existing))) {
+      createPreviewStatBlock(parent, entite, statKey, beforeValue, {
+        forceNew: beforeComparable <= 0 && nextComparable > 0,
+      });
+    } else if (existing && beforeComparable <= 0 && nextComparable <= 0) {
+      existing.remove();
+    }
+  }
+
+  for (const [statKey, config] of Object.entries(STATS_PANEL_DYNAMIC_ROWS)) {
+    const displayStatKey = getStatsPanelDynamicDisplayStat(statKey, config);
+    const beforeFallback = getStatSnapshotValue(entite.stats, statKey, 0);
+    const nextFallback = getStatSnapshotValue(total, statKey, 0);
+    const beforeValue = getStatsPanelDynamicValue(statKey, config, beforeEntity, beforeFallback);
+    const nextValue = getStatsPanelDynamicValue(statKey, config, afterEntity, nextFallback);
+    const beforeComparable = getStatComparableValue(beforeValue, 0);
+    const nextComparable = getStatComparableValue(nextValue, 0);
+    const existing = findEntityStatContainer(entite.id, displayStatKey, parent);
+
+    if (getStatMalusSources(afterEntity, statKey).length || (nextComparable > 0 && (beforeComparable <= 0 || existing))) {
+      createPreviewStatBlock(parent, entite, statKey, beforeValue, {
+        forceNew: beforeComparable <= 0 && nextComparable > 0,
+        syncedConfig: config,
+      });
+    } else if (existing && beforeComparable <= 0 && nextComparable <= 0) {
+      existing.remove();
+    }
+  }
+}
+
+
+export function refreshActiveStatPreview(entite, rootEl = document, { recalculate = true } = {}) {
+  if (!entite?.id || !entite?.stats) {
+    return null;
+  }
+
+  const total = !recalculate && entite.modifierStats?.preview?.total || ComputeStatPreview(entite);
+  const root = rootEl?.querySelectorAll ? rootEl : document;
+  const escape = (value) =>
+    globalThis.CSS?.escape
+      ? CSS.escape(String(value))
+      : String(value).replace(/["\\]/g, "\\$&");
+
+  root
+    .querySelectorAll(`.stat-container[data-entity-id="${escape(entite.id)}"][data-stat]`)
+    .forEach((block) => {
+      const key = block.dataset.stat;
+      if (!key) return;
+
+      renderStatPair(entite, key, block);
+    });
+
+  syncPreviewIntroducedRows(entite, total, root);
+
+  return total;
+}

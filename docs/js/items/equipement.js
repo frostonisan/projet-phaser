@@ -19,7 +19,6 @@ import {
   recomputeEntityStats,
   getEquipmentSlotKeys,
 } from "../entities/runtime.js";
-import { syncDOMWithStats } from "../entities/progression.js";
 import { showStatGainsFromDiff } from "../ui/display.js";
 import { beginDragHelperCleanup, endDragHelperCleanup } from "../ui/drag.js";
 import { requireSafeMenuAccess } from "../app/state.js";
@@ -27,6 +26,8 @@ import { ensureStuffArmorReserve } from './armor.js';
 import { ensureStuffResourceStocks, getEquipmentResourceCurrent } from './resourceStocks.js';
 import { persistEquippedResourceStocks } from "../storage/entityStorage.js";
 import { getScoredItemQuality } from '../procedural/proc-bareme.js';
+import { syncDOMWithStats } from "../ui/statistics/components.js";
+
 export function stuffInteraction({
     mode,
     source,

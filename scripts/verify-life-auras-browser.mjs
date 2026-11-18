@@ -36,7 +36,7 @@ try {
     const A = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const R = await import('/js/items/resourceStocks.js');
     const Aura = await import("/js/rendering/auras.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await import("/js/ui/statistics/components.js");
     const Store = await import("/js/storage/entityStorage.js");
     const G = await import("/js/app/stages.js");
     const State = await import("/js/app/state.js");

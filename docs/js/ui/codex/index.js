@@ -8,7 +8,6 @@ import { getSafe } from "../../entities/rules.js";
 import { entites, calculateTranscendenceExtraLife, getMovementWeightMalus, getStatMalusSources } from "../../entities/runtime.js";
 import { attackSelectionKey } from "../../combat/attackResolution.js";
 import { calculateTotalRegenAmount, calculateMysticismTranceDuration } from "../../combat/statistics.js";
-import { createLevelUpForm, LevelupSignal } from "../../entities/progression.js";
 import { setAdminSelectedEntity, closeAdminEntityFormOnly } from "../../debug/admin.js";
 import {
   removeItemDescription,
@@ -56,13 +55,11 @@ import {
   createAttackSubmenu,
 } from "../attacks.js";
 import {
-  renderCodexUmbraSubstatPanel,
-  createSoulSubmenu,
-  createStatsSubmenu,
-  createSoulGraphPanel,
-  createArchetypesList,
+  createLevelUpForm, LevelupSignal, renderCodexUmbraSubstatPanel, createSoulSubmenu, createStatsSubmenu,
+  createSoulGraphPanel, createArchetypesList,
 } from "./stats.js";
 import { applyCombatProfileView } from "../../rendering/hud.js";
+
 // Army and entity Codex navigation, composition and focused attack routing.
 
 function escapeInventorySelectorValue(value = '') {

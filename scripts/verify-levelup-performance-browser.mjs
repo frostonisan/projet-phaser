@@ -11,7 +11,7 @@ await mkdir(output, { recursive: true });
 const probes = {
   "/js/entities/runtime.js": [['export function getStatSystemInputs(entity, { preview = true, combat = true } = {}) {', 'inputs']],
   "/js/entities/progression.js": [['export function ComputeStatPreview(entite) {', 'preview']],
-  "/js/combat/statistics.js": [['export function calculateStatsDisplay(statKey, entite, statValue, options = {}) {', 'display']],
+  "/js/ui/statistics/details.js": [['export function calculateStatsDisplay(statKey, entite, statValue, options = {}) {', 'display']],
 };
 const server = createServer(async (req, res) => {
   const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -135,6 +135,60 @@ try {
     check(saved.level.current === 3, 'Two confirmed points grant exactly two levels');
     for (const [key, value] of Object.entries(previewAttributes)) check(saved.stats[key] === value, 'Confirmation matches preview: ' + key);
     check(!Object.keys(saved.modifierStats.preview?.statLeveled || {}).length, 'Confirmed choices leave no pending points');
+    // The calculation API must also work without a mounted form or DOM access.
+    const progression = await import("/js/entities/progression.js");
+    const detached = structuredClone(saved);
+    detached.id = 999770;
+    detached.archetypeFrozen = false;
+    detached.Archetype = { current: { key: 'egare', level: 1, step: 0 }, inProgress: [], achieve: [] };
+    const committedStats = JSON.stringify(detached.stats);
+    const permanentPoints = JSON.stringify(detached.modifierStats.durable);
+    const htmlBefore = form.innerHTML;
+    const domMethods = ['querySelector', 'querySelectorAll', 'createElement'];
+    const descriptors = new Map(domMethods.map(name => [name, Object.getOwnPropertyDescriptor(document, name)]));
+    try {
+      for (const name of domMethods) Object.defineProperty(document, name, {
+        configurable: true, value() { throw Error('Calculation accessed document.' + name); }
+      });
+      const state = progression.createLevelUpDraft(detached, 100);
+      const originalLevel = state.tempLevel;
+      const originalStrength = state.stats.strength;
+      const costs = new Map([[originalLevel + 1, 13]]);
+      check(!progression.prepareLevelUpInvestment({ ...state, tempXP: 12 }, costs), 'Calculation rejects insufficient XP');
+      check(!progression.prepareLevelUpInvestment(state, new Map()), 'Calculation rejects missing level cost');
+      check(!progression.prepareLevelUpInvestment({ ...state, lockArchetype: true }, costs), 'Calculation respects an archetype transition lock');
+      check(!progression.prepareLevelUpInvestment({ ...state, tempLevel: detached.level.max }, costs), 'Calculation respects the entity maximum level');
+      const investment = progression.prepareLevelUpInvestment(state, costs);
+      check(investment.cost === 13 && investment.nextLevel === originalLevel + 1, 'Calculation selects the next level and cost');
+      check(state.tempXP === 100 && state.tempLevel === originalLevel, 'Preparing an investment spends nothing');
+      progression.applyLevelUpInvestmentCost(state, investment.cost, investment.nextLevel);
+      progression.addLevelUpPreviewStat(detached, 'strength');
+      progression.ComputeStatPreview(detached);
+      state.stats = progression.getLevelUpAttributes(detached, true);
+      check(state.tempXP === 87 && state.investedXP === 13, 'Draft applies the exact XP cost');
+      check(state.stats.strength === originalStrength + 1, 'Draft applies one attribute point');
+      const key = progression.getActiveLevelUpArchetypeKey(state, detached);
+      const stage = progression.advanceLevelUpArchetypeStage(state, key, detached);
+      check(!stage.skipped && stage.appliedStage === 1, 'Detached draft advances its archetype');
+      progression.resolveLevelUpReward(state, 'F', key, stage);
+      check(state.archetypeProgress[key].milestones[0] === 'force', 'Detached draft records the chosen attribute');
+      progression.restoreLevelUpArchetypeStage(state, { archetypeKey: key, ...stage });
+      progression.removeLevelUpPreviewStat(detached, 'strength');
+      progression.refundLevelUpInvestmentCost(state, investment.cost);
+      progression.ComputeStatPreview(detached);
+      state.stats = progression.getLevelUpAttributes(detached, true);
+      check(state.tempXP === 100 && state.investedXP === 0 && state.tempLevel === originalLevel, 'Undo restores XP and draft level');
+      check(state.stats.strength === originalStrength, 'Undo restores the preview attribute');
+      check(state.archetypeProgress[key].stage === stage.prevStage && state.archetypeProgress[key].milestones.length === 0, 'Undo restores the archetype stage and milestone');
+      check(JSON.stringify(detached.stats) === committedStats, 'Detached calculations preserve committed stats');
+      check(JSON.stringify(detached.modifierStats.durable) === permanentPoints, 'Detached calculations preserve permanent points');
+    } finally {
+      for (const [name, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(document, name, descriptor);
+        else delete document[name];
+      }
+    }
+    check(form.innerHTML === htmlBefore, 'Detached calculations leave the mounted form unchanged');
     return checks;
   });
   const weights = new Map();

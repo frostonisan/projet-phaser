@@ -466,7 +466,7 @@ try {
       }
     } finally { Object.assign(armorConfig.ratios, savedRatios); armorConfig.flatPerPoint = savedGift; }
     const Armor = await import('/js/items/armor.js');
-    const Upgrade = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
+    const Upgrade = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts)), _levelForms = await import("/js/ui/codex/stats.js");
     const makeArmorEntity = () => {
       const entity = { id: 987101, name: 'Armor audit', type: 'sbire', side: 'A', level: { current: 1, max: 250 },
         baseStats: { HP: 100, strength: 100, robustness: 150, will: 250, charge: 5 }, attacks: ['autoAttack'] };
@@ -623,7 +623,7 @@ try {
       Storage.saveToLocalStorage('selectedArmyA', [leveled]);
       Storage.saveToLocalStorage('ArmyA', { entities: [leveled] });
       Upgrade.setPlayerExperience(1000000);
-      const form = Upgrade.createLevelUpForm(leveled);
+      const form = _levelForms.createLevelUpForm(leveled);
       document.body.append(form);
       try {
         form.querySelector('.axis-line[data-key="strength"] .right-arrow').click();

@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const report = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
-    const UI = await import("/js/ui/display.js"), U = await import("/js/entities/progression.js");
+    const UI = await import("/js/ui/display.js"), U = await import("/js/entities/progression.js"), _levelForms = await import("/js/ui/codex/stats.js");
     const P = await import('/js/items/permanentItems.js'), I = await import('/js/items/itemEffectMecanics.js');
     const Rules = await import("/js/entities/rules.js"), State = await import("/js/app/state.js");
     const N = await import("/js/app/worldMap.js"), H = await import('/js/data/helpers.js');
@@ -105,7 +105,7 @@ try {
     clear();
     const leveling = actor(981732); E.enrichEntityStats(leveling);
     S.saveToLocalStorage('selectedArmyA', [leveling]); U.setPlayerExperience(1000000);
-    const form = U.createLevelUpForm(leveling); document.body.appendChild(form);
+    const form = _levelForms.createLevelUpForm(leveling); document.body.appendChild(form);
     form.querySelector('.axis-line[data-key="strength"] .right-arrow').click();
     check(!rows().length, 'Level-up preview stays silent');
     form.querySelector('.confirm-button.yes').click();

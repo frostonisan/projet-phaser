@@ -25,7 +25,7 @@ try {
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
     const E=await import("/js/entities/runtime.js"),D=await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)),UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
-    const F=await import('/js/combat/attacks.js'),G=await import("/js/storage/gameStorage.js"),U=await import("/js/entities/progression.js");
+    const F=await import('/js/combat/attacks.js'),G=await import("/js/storage/gameStorage.js"),U=await import("/js/ui/statistics/components.js");
     const R=await import("/js/combat/attackResolution.js"),State=await import("/js/app/state.js");
     const checks=[],check=(value,label)=>{if(!value)throw Error(label);checks.push(label);};
     const eq=(a,b,label)=>check(Math.abs(a-b)<1e-7,`${label}: ${a} != ${b}`);

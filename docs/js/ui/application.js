@@ -18,7 +18,6 @@ import { generateUniqueID, entitesNestUp, enrichEntityStats } from "../entities/
 import { hideCombatAttackControlPanel, createEntityAttackDisplay } from "./attacks.js";
 import { createSoundControls } from "../rendering/sound.js";
 import { generateArmyA } from "../entities/armies.js";
-import { updateExperienceDisplay } from "../entities/progression.js";
 import { clearItemDescriptions, setLastDraggedItemId } from '../items/itemManager.js';
 import { resetParallaxView, dismissGamePopups } from "./display.js";
 import {
@@ -36,6 +35,7 @@ import {
 } from "./statistics/components.js";
 import { PlayerEssenceur } from "./essences.js";
 import { PlayerArmyCodex } from "./codex/index.js";
+import { updateExperienceDisplay } from "./codex/stats.js";
 
 // Application shell, starter selection, settings and stage menu lifecycle.
 
