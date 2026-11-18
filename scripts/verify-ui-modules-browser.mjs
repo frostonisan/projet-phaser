@@ -37,11 +37,13 @@ try {
   // Import each public subsystem first in a fresh module graph. No bootstrap
   // ordering may be required to initialize its shared constants or registries.
   const independentFailures = [];
-  for (const entry of ["entities/runtime", "combat/attackResolution", "combat/statistics", "entities/rules",
+  const entriesToCheck = [...new Set(["entities/runtime", "combat/attackResolution", "combat/statistics", "entities/rules",
     "entities/statSystem", "entities/archetypes", "rendering/hud", "storage/gameStorage", "combat/vitals",
     "app/state", "combat/loop", "items/essenceInventory", "items/essences", 'items/resourceStocks',
     'items/itemManager', "entities/progression", "storage/entityStorage", 'procedural/proc-bareme',
-    'data/loaderList', "debug/simulation", "combat/pause"]) {
+    'data/loaderList', "debug/simulation", "combat/pause",
+    ...modules.map(file => file.slice(3, -3))])];
+  for (const entry of entriesToCheck) {
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
@@ -49,12 +51,43 @@ try {
     await page.goto(base + '/module-fixture.html');
     console.log(`Checking independent entry: ${entry}`);
     try {
-      await page.evaluate(async name => { await import(`/js/${name}.js`); }, entry);
+      const catalogue = await page.evaluate(async name => {
+        // No warm-up import: the selected subsystem must initialize first.
+        const first = await import(`/js/${name}.js`);
+        const runtime = await import('/js/entities/runtime.js');
+        const { entitesNest } = await import('/js/data/entityTemplates.js');
+        const entities = runtime.entitesNestUp;
+        const references = entities.slice();
+        const second = await import(`/js/${name}.js`);
+        return {
+          count: entities.length, expected: entitesNest.length,
+          ready: entities.every(entity => Number.isFinite(entity.stats?.HP?.max)
+            && Number.isFinite(entity.stats?.HP?.current) && Array.isArray(entity.attackDetails)),
+          shared: first === second && entities === window.entitesNestUp
+            && references.every((entity, index) => entity === runtime.entitesNestUp[index]),
+        };
+      }, entry);
+      assert.ok(catalogue.count > 0, `Nonempty catalogue after importing ${entry}`);
+      assert.equal(catalogue.count, catalogue.expected, `Complete catalogue after importing ${entry}`);
+      assert.equal(catalogue.ready, true, `Enriched catalogue after importing ${entry}`);
+      assert.equal(catalogue.shared, true, `Reimports preserve catalogue and module identity: ${entry}`);
       assert.deepEqual(errors, [], `Independent import: ${entry}`);
     } catch (error) {
       const failure = { entry, message: error.message.split('\n')[0] };
       independentFailures.push(failure);
       console.error('Independent import failed:', JSON.stringify(failure));
+    } finally { await context.close(); }
+  }
+  // Parallel imports must also work without a preferred subsystem loading first.
+  for (const entries of [entriesToCheck, [...entriesToCheck].reverse()]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    try {
+      await page.goto(base + '/module-fixture.html');
+      await page.evaluate(async names => { await Promise.all(names.map(name => import(`/js/${name}.js`))); }, entries);
+      assert.deepEqual(errors, [], 'Concurrent imports initialize without errors');
     } finally { await context.close(); }
   }
   const context = await browser.newContext();
@@ -103,4 +136,5 @@ try {
   await context.close();
   console.log(`PASS: ${modules.length} acyclic UI modules; one admin; shared exports and idempotent listeners.`);
   assert.deepEqual(independentFailures, [], 'All public subsystems initialize independently');
+  console.log(`PASS: ${entriesToCheck.length} independent entries with complete catalogues; concurrent imports in both orders.`);
 } finally { await browser.close(); await new Promise(done => server.close(done)); }

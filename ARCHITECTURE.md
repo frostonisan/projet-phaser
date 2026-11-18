@@ -442,6 +442,42 @@ Ce lot sépare les responsabilités de montée de niveau ; il ne rend pas encore
 le module importable indépendamment du navigateur. Les grands contrôleurs
 événementiels et les opérations de jeu placées dans le stockage restent à trier.
 
+## Correction des neuf erreurs d'import isolé
+
+Les neuf échecs historiques du lot précédent sont corrigés sans nouveau fichier.
+Ils provenaient de deux lectures prématurées pendant l'enrichissement du catalogue :
+
+- Les sept erreurs BOOSTABLE_POOL_STAT_KEYS disparaissent en plaçant cette donnée
+  dans data/statsData.js, avec les autres définitions de statistiques. Le module
+  entities/rules.js l'importe ; les valeurs et les calculs restent identiques.
+- Les deux erreurs gameStarted disparaissent en arrêtant le suivi des notifications
+  d'attaque lorsque la liste des combattants est vide. combat/loop.js n'a alors
+  aucune préparation active à vérifier et ne lit plus l'état de bataille trop tôt.
+  Les révisions d'attaque restent enregistrées, y compris hors combat.
+
+Le test existant verify-ui-modules-browser.mjs passe désormais pour 35 entrées :
+les 21 sous-systèmes déjà contrôlés et les 14 modules d'interface. Chaque entrée est
+chargée dans un navigateur neuf, sans import préalable imposé. Le catalogue doit
+être complet, enrichi, partagé avec window et conserver ses objets au réimport.
+Deux scénarios supplémentaires chargent toutes ces entrées simultanément dans les
+deux ordres. Le contrôle des abonnements répétés et du démarrage reste en place.
+
+Le test de statistiques n'impose plus de charger le stockage en premier : ses
+7 880 assertions passent avec les imports concurrents. L'environnement Node des
+entités suit aussi les propriétaires actuels des vues et isole le plateau DOM ;
+les calculs et les assertions de sélection des attaques restent réels.
+
+Validation dans outputs/fix-module-imports/ : imports, statistiques, sélection
+d'attaques, montée de niveau, pause/rechargement et démarrage PC/mobile passent,
+ainsi que les 51 tests de vérification habituels et les références de ressources.
+Le scénario verify-combat-continuity-browser.mjs échoue sur la conservation d'une
+préparation pendant un étourdissement ; la même assertion échoue sur l'instantané
+avant correction. Elle reste intacte et cet incident distinct reste à traiter.
+
+Le projet compte toujours 117 modules et 916 dépendances. Sa composante cyclique
+de 67 modules subsiste : cette correction supprime les lectures trop précoces
+constatées, sans prétendre supprimer tous les cycles du projet.
+
 ## Temps et présentation
 
 combat/clock.js reste l'horloge de combat ; combat/timeline.js ordonne les échéances et les

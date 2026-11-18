@@ -237,7 +237,9 @@ function revalidatePreparingAttack(entity, checkDefinition = true) {
 subscribeAttackSelection((entity, reason) => {
     if (!entity) return;
     attackRevisions.set(entity, (attackRevisions.get(entity) || 0) + 1);
-    if (!gameStarted || isBattleFinished() || reason === 'cooldown-start') return;
+    // Catalogue enrichment also notifies during module loading, before battle state exists.
+    // With no combatants there is no active preparation to revalidate.
+    if (!entites.length || !gameStarted || isBattleFinished() || reason === 'cooldown-start') return;
     // Notifications also cover gaining/removing controls and changing allegiance.
     for (const actor of entites) {
         const action = actor._combatAction;

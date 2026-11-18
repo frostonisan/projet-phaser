@@ -26,9 +26,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
-    // Match app/startup.js: initialize shared storage before loading panels in parallel.
-    // Isolated-entry failures remain covered by verify-ui-modules-browser.mjs.
-    await import("/js/storage/gameStorage.js");
+    // Load panels concurrently: initialization must not require a preferred entry module.
     await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import("/js/entities/statSystem.js");
     const E = await import("/js/entities/runtime.js");

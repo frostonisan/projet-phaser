@@ -1,5 +1,8 @@
 import { STAT_HELPER_DESCRIPTIONS } from './helpers.js';
 
+// Pool capacities are catalogue data, available before entity enrichment starts.
+export const BOOSTABLE_POOL_STAT_KEYS = new Set(["HP", "armor", "extraLife", "shift"]);
+
 // Stat naming is catalogue data, independent of entity/UI initialization.
 export const STAT_KEY_ALIASES = Object.freeze({
   cooldownTime: "attackCooldownReduc",

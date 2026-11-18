@@ -31,13 +31,16 @@ export async function installEntityTestEnvironment(initialEntries = []) {
   const unexpected = names => names.map(name =>
     `export function ${name}() { throw new Error('Unexpected browser/combat API: ${name}'); }`).join('\n');
   const stubs = new Map(Object.entries({
+    "board/controller.js": unexpected(['releaseEntityFootprint']),
     "debug/admin.js": unexpected(['selectAdminEntitiesForSideB']),
     "entities/armies.js": unexpected(['generateArmyA', 'selectRandomEntitiesForSideB', 'selectScriptedEntitiesForSideB']),
     "app/startup.js": unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
       'ResetXp', 'ResetGameDay', 'detectPageReload', 'createUmbraBlock', 'syncStatCurseMarker', 'bindHelperEntity', 'closeOpenHelpers']),
     "ui/application.js": unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
       'ResetXp', 'ResetGameDay', 'detectPageReload']),
-    "ui/statistics/components.js": unexpected(['createUmbraBlock', 'syncStatCurseMarker']),
+    "ui/statistics/components.js": noops(['refreshResetDom', 'syncDOMWithStats'])
+      + '\n' + unexpected(['createUmbraBlock', 'syncStatCurseMarker']),
+    "ui/codex/stats.js": noops(['updateExperienceDisplay']),
     "ui/statistics/helpers.js": unexpected(['bindHelperEntity', 'closeOpenHelpers']),
     "storage/entityStorage.js": noops(['recordEntityProgression']) + '\n' + unexpected([
       'saveEntityextraLifeToStorage', 'resetStoredArmorCurrentToMax', 'endEntityBattleRole', 'countCompletedArchetypes']),

@@ -10,7 +10,7 @@ import { getStatSystemResult, getDirectingStatResult, getEntityVelocityTiming } 
 import { syncEntityEssenceRewards } from "../items/essenceInventory.js";
 import { balanceData } from "../data/balanceData.js";
 import { cyclesData } from "../data/cycleData.js";
-import { stats as STATS_DATA, STAT_KEY_ALIASES, STAT_KEY_DISPLAY } from "../data/statsData.js";
+import { stats as STATS_DATA, STAT_KEY_ALIASES, STAT_KEY_DISPLAY, BOOSTABLE_POOL_STAT_KEYS } from "../data/statsData.js";
 import { isUmbraRestricted } from '../procedural/proc-bareme.js';
 import { calculateRobustnessBonus, syncEntityRobustnessArmorCapacity } from '../items/armor.js';
 
@@ -214,8 +214,6 @@ export function normalizeStatModifierMapInPlace(map) {
 function getByPath(obj, path) {
   return String(path).split(".").reduce((acc, key) => acc?.[key], obj);
 }
-
-const BOOSTABLE_POOL_STAT_KEYS = new Set(["HP", "armor", "extraLife", "shift"]);
 
 function getBattleBoostStatKey(path) {
   const rawPath = String(path || "");
