@@ -7,6 +7,18 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 - Branche de travail et de publication : `version-2`.
 - Sources du jeu : `docs/` ; outils de verification : `scripts/`.
 
+## Version affichée
+
+Le jeu affiche **The Dark Pit v0.86.0-dev** en bas à gauche.
+Les archives locales vont de `version - 1` (février 2024) à `version - 85`
+(novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` est le repère choisi
+pour cette branche après ces archives, pas une mesure du pourcentage terminé.
+
+Le libellé est défini une seule fois dans `docs/index.html` (`#game-version`).
+Incrémenter le dernier nombre pour une correction publiée (`0.86.1-dev`), et le
+nombre central pour une nouvelle étape importante (`0.87.0-dev`). Le suffixe
+`dev` indique que cette branche reste en développement.
+
 ## Publication
 
 Chaque push sur `origin/version-2` publie automatiquement `docs/` via GitHub Actions.
