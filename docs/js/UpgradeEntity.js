@@ -1561,24 +1561,9 @@ function ensureArmorBarDom(entityId, initialArmor = 0) {
   return armorBar;
 }
 
-export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entityId, incomingDamage = 0) {
-  // --- 1) Application du dégât sur armure puis HP ---
-  let remainingDamage = incomingDamage;
-
+// Render already applied resources. Combat arithmetic belongs to combat/vitalRules.js.
+export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entityId) {
   ensureHPDom(entityId);
-
-  if (remainingDamage > 0) {
-    if (currentArmor > 0) {
-      if (remainingDamage <= currentArmor) {
-        currentArmor -= remainingDamage;
-        remainingDamage = 0;
-      } else {
-        remainingDamage -= currentArmor;
-        currentArmor = 0;
-      }
-    }
-    if (remainingDamage > 0) currentHP = Math.max(0, currentHP - remainingDamage);
-  }
 
   // --- 2) Clamp ---
   const validHP = Math.max(0, Math.min(currentHP, maxHP));

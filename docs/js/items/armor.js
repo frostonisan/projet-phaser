@@ -1,15 +1,7 @@
+import { toNumber, toNonNegativeInt, clampPoolCurrent, clampPrecisePoolCurrent, normalizePool, composeStuffArmorLayer, normalizeStuffArmorLayer, calculateStuffArmorConsumption, calculateArmorAggregate, calculateArmorConsumption } from "../combat/armorRules.js";
 import { balanceData } from "../data/balanceData.js";
 
 const ARMOR_KEY = "armor";
-
-function toNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function toNonNegativeInt(value) {
-  return Math.max(0, Math.round(toNumber(value, 0)));
-}
 
 export function calculateRobustnessArmorDetails(robustness, strength = 0) {
   const cfg = balanceData.generatedStats.robustnessArmor;
@@ -33,18 +25,6 @@ export function calculateRobustnessArmorDetails(robustness, strength = 0) {
 
 export function calculateRobustnessBonus(robustness, strength = 0) {
   return calculateRobustnessArmorDetails(robustness, strength).armor;
-}
-
-function clampPoolCurrent(current, max) {
-  const cap = toNonNegativeInt(max);
-  return Math.max(0, Math.min(toNonNegativeInt(current), cap));
-}
-
-function clampPrecisePoolCurrent(current, max) {
-  const cap = toNonNegativeInt(max);
-  const value = Math.max(0, toNumber(current, 0));
-  if (value < 0.000001) return 0;
-  return Math.min(value, cap);
 }
 
 function normalizeStatName(stat) {
@@ -134,18 +114,6 @@ function entityEquippedIds(entity) {
     .filter(id => typeof id === "string" && id.startsWith("e"));
 }
 
-function normalizePool(pool, max, fallbackCurrent = max) {
-  const cap = toNonNegativeInt(max);
-  const currentSource = pool && typeof pool === "object" && Number.isFinite(Number(pool.current))
-    ? pool.current
-    : fallbackCurrent;
-
-  return {
-    current: clampPoolCurrent(currentSource, cap),
-    max: cap,
-  };
-}
-
 function allocateCurrentByConsumptionOrder(current, externalMax, robustnessMax) {
   const baseMax = externalMax + robustnessMax;
   const safeCurrent = clampPoolCurrent(current, baseMax);
@@ -212,107 +180,10 @@ function getEntityWeaponOrfevrePercent(entity) {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
-function normalizeReserveArmorPool(pool, maxFallback = 0, currentFallback = maxFallback) {
-  const max = toNonNegativeInt(pool?.max ?? maxFallback);
-  const preciseCurrent = clampPrecisePoolCurrent(
-    pool?.preciseCurrent ?? pool?.current ?? currentFallback,
-    max
-  );
-
-  return {
-    current: clampPoolCurrent(preciseCurrent, max),
-    preciseCurrent,
-    max,
-  };
-}
-
-function buildEffectiveStuffArmorPool(reserve, percent = 0) {
-  const reservePool = normalizeReserveArmorPool(reserve);
-  const activePercent = Math.max(0, toNumber(percent, 0));
-  const multiplier = 1 + activePercent / 100;
-  const max = toNonNegativeInt(reservePool.max * multiplier);
-  const preciseCurrent = Math.min(max, reservePool.preciseCurrent * multiplier);
-
-  return {
-    current: clampPoolCurrent(preciseCurrent, max),
-    preciseCurrent,
-    max,
-    percent: activePercent,
-    multiplier,
-    baseMax: reservePool.max,
-  };
-}
-
-function composeStuffArmorLayer(reserve, percent = 0) {
-  const reservePool = normalizeReserveArmorPool(reserve, reserve?.max ?? 0, reserve?.current ?? 0);
-  const effectivePool = buildEffectiveStuffArmorPool(reservePool, percent);
-  const orfevreCurrent = Math.max(0, effectivePool.current - reservePool.current);
-  const orfevreMax = Math.max(0, effectivePool.max - reservePool.max);
-
-  return {
-    current: effectivePool.current,
-    max: effectivePool.max,
-    reserve: reservePool,
-    effective: effectivePool,
-    // Derived compatibility fields used by descriptions/debug tools.
-    orfevre: {
-      current: orfevreCurrent,
-      max: orfevreMax,
-      percent: effectivePool.percent,
-      multiplier: effectivePool.multiplier,
-      baseMax: reservePool.max,
-    },
-    reserveCurrent: reservePool.current,
-    reserveMax: reservePool.max,
-    effectiveCurrent: effectivePool.current,
-    effectiveMax: effectivePool.max,
-    orfevreCurrent,
-    orfevreMax,
-  };
-}
-
-function normalizeStuffArmorLayer(layer) {
-  if (!layer || typeof layer !== "object") {
-    return composeStuffArmorLayer({ current: 0, max: 0 }, 0);
-  }
-
-  const reserve = layer.reserve && typeof layer.reserve === "object"
-    ? layer.reserve
-    : {
-        current: layer.reserveCurrent ?? layer.current ?? 0,
-        preciseCurrent: layer.reservePreciseCurrent ?? layer.preciseCurrent,
-        max: layer.reserveMax ?? layer.max ?? 0,
-      };
-  const percent = layer.effective?.percent
-    ?? layer.orfevre?.percent
-    ?? layer.orfevrePercent
-    ?? 0;
-
-  return composeStuffArmorLayer(reserve, percent);
-}
-
 function consumeStuffArmorLayer(layer, amount) {
-  const normalized = normalizeStuffArmorLayer(layer);
-  const absorbed = Math.min(
-    Math.max(0, toNumber(amount, 0)),
-    toNonNegativeInt(normalized.current)
-  );
-  if (absorbed <= 0) return 0;
-
-  const nextEffectivePrecise = Math.max(0, normalized.effective.preciseCurrent - absorbed);
-  const multiplier = Math.max(1, toNumber(normalized.effective.multiplier, 1));
-  const nextReservePrecise = clampPrecisePoolCurrent(
-    nextEffectivePrecise / multiplier,
-    normalized.reserve.max
-  );
-  const nextReserve = {
-    ...normalized.reserve,
-    preciseCurrent: nextReservePrecise,
-    current: clampPoolCurrent(nextReservePrecise, normalized.reserve.max),
-  };
-
-  Object.assign(layer, composeStuffArmorLayer(nextReserve, normalized.effective.percent));
-  return absorbed;
+  const result = calculateStuffArmorConsumption(layer, amount);
+  if (result.absorbed > 0) Object.assign(layer, result.layer);
+  return result.absorbed;
 }
 
 export function syncEntityArmorLayers(entity, {
@@ -436,100 +307,28 @@ function ensureConsumableLayers(entity) {
   return entity.armorLayers;
 }
 
-function recomputeArmorAggregate(entity) {
+// Commit a freshly calculated resource state. Preserve live consumable/spell pool identities.
+function applyArmorState(entity, state) {
   const layers = ensureConsumableLayers(entity);
-  const stuffEntries = Object.entries(layers.stuff || {});
-  let stuffCurrent = 0;
-  let stuffMax = 0;
-  for (const [equippedId, layer] of stuffEntries) {
-    const normalized = normalizeStuffArmorLayer(layer);
-    layers.stuff[equippedId] = normalized;
-    stuffCurrent += normalized.current;
-    stuffMax += normalized.max;
-  }
-  const external = normalizePool(layers.external, layers.external?.max ?? 0, 0);
-  const robustness = normalizePool(layers.robustness, layers.robustness?.max ?? 0, 0);
-
-  layers.external = external;
-  layers.robustness = robustness;
-
-  const totalCurrent = layers.consumable.current + external.current + layers.spell.current + stuffCurrent + robustness.current;
-  const totalMax = layers.consumable.max + external.max + layers.spell.max + stuffMax + robustness.max;
-
-  if (totalMax > 0) {
-    entity.stats ??= {};
-    entity.stats.armor = {
-      current: totalCurrent,
-      max: robustness.max,
-      totalMax,
-      externalMax: external.max + layers.consumable.max + layers.spell.max,
-      stuffMax,
-      robustnessMax: robustness.max,
-      regenMax: robustness.max,
-    };
-  } else if (entity.stats?.armor) {
-    delete entity.stats.armor;
-  }
-
+  Object.assign(layers.consumable, state.layers.consumable);
+  Object.assign(layers.spell, state.layers.spell);
+  layers.external = state.layers.external;
+  layers.robustness = state.layers.robustness;
+  for (const [id, layer] of Object.entries(state.layers.stuff)) layers.stuff[id] = layer;
+  if (state.armor) { entity.stats ??= {}; entity.stats.armor = state.armor; }
+  else if (entity.stats?.armor) delete entity.stats.armor;
   return entity.stats?.armor || null;
 }
 
-function consumePool(pool, amount) {
-  const damage = Math.max(0, toNumber(amount, 0));
-  const before = toNonNegativeInt(pool?.current ?? 0);
-  const absorbed = Math.min(before, damage);
-  pool.current = before - absorbed;
-  return absorbed;
+function recomputeArmorAggregate(entity) {
+  return applyArmorState(entity, calculateArmorAggregate(ensureConsumableLayers(entity)));
 }
 
 export function consumeEntityArmor(entity, amount) {
-  const layers = ensureConsumableLayers(entity);
-  let remaining = Math.max(0, toNumber(amount, 0));
-  const before = toNonNegativeInt(entity?.stats?.armor?.current ?? 0);
-  const stuffDamage = {};
-
-  const consumableAbsorbed = consumePool(layers.consumable, remaining);
-  remaining -= consumableAbsorbed;
-
-  let stuffAbsorbed = 0;
-  for (const equippedId of entityEquippedIds(entity)) {
-    const layer = layers.stuff?.[equippedId];
-    if (!layer || remaining <= 0) continue;
-
-    const absorbed = consumeStuffArmorLayer(layer, remaining);
-    if (absorbed > 0) {
-      stuffDamage[equippedId] = absorbed;
-      stuffAbsorbed += absorbed;
-      remaining -= absorbed;
-    }
-  }
-
-  const spellAbsorbed = consumePool(layers.spell, remaining);
-  remaining -= spellAbsorbed;
-  const naturalAbsorbed = consumePool(layers.external, remaining);
-  remaining -= naturalAbsorbed;
-  const externalAbsorbed = consumableAbsorbed + spellAbsorbed + naturalAbsorbed;
-  const robustnessAbsorbed = consumePool(layers.robustness, remaining);
-  remaining -= robustnessAbsorbed;
-
-  const armor = recomputeArmorAggregate(entity);
-  const absorbed = externalAbsorbed + stuffAbsorbed + robustnessAbsorbed;
-
-  return {
-    before,
-    after: armor?.current ?? 0,
-    absorbed,
-    remainingDamage: Math.max(0, remaining),
-    layers: {
-      external: externalAbsorbed,
-      consumable: consumableAbsorbed,
-      spell: spellAbsorbed,
-      natural: naturalAbsorbed,
-      stuff: stuffAbsorbed,
-      robustness: robustnessAbsorbed,
-    },
-    stuffDamage,
-  };
+  const plan = calculateArmorConsumption(ensureConsumableLayers(entity), entityEquippedIds(entity),
+    entity?.stats?.armor?.current ?? 0, amount);
+  applyArmorState(entity, plan);
+  return plan.outcome;
 }
 
 export function resetEntityRegenerableArmor(entity) {

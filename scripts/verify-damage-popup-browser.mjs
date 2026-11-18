@@ -102,6 +102,49 @@ try {
     return checks;
   });
   assert.ok(Object.values(feedback).every(Boolean), JSON.stringify(feedback));
+  const vitals = await page.evaluate(async () => {
+    const R = await import('/js/rendering/vitalFeedback.js');
+    const A = await import('/js/combat/vitalApplication.js');
+    const V = await import('/js/combat/vitalRules.js');
+    const id = 'vital-boundaries-audit';
+    const host = document.createElement('section');
+    host.innerHTML = '<div id="HeadsupLifeBars_' + id + '"><div class="health-bar" data-stat="hp-bar" data-entity-id="' + id + '"><div class="health-fill"></div></div></div>'
+      + '<span class="HP-counter" data-stat="HP" data-entity-id="' + id + '"></span>'
+      + '<div id="PopUp_' + id + '"></div><div id="PopDow_' + id + '"></div>';
+    document.body.append(host);
+    const entity = { id, name: 'Vitals', totalHeal: 0, stats: { HP: { current: 50, max: 100 }, armor: { current: 16, max: 0 } },
+      armorLayers: { consumable: { current: 16, max: 16 }, spell: { current: 0, max: 0 },
+        external: { current: 0, max: 0 }, robustness: { current: 0, max: 0 }, stuff: {} } };
+    const before = JSON.stringify(entity);
+    const hp = Object.freeze(V.calculateHpDamage(50, 13));
+    const calculationReadOnly = JSON.stringify(entity) === before;
+    A.applyHpChange(entity, hp);
+    const armor = A.applyArmorDamage(entity, 7);
+    const noPrematureDisplay = !host.querySelector('.damage-popup') && host.querySelector('.HP-counter').textContent === '';
+    const applied = JSON.stringify(entity);
+    const storageBefore = JSON.stringify(Object.keys(localStorage).sort().map(key => [key, localStorage.getItem(key)]));
+    const freeze = value => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
+    freeze(entity);
+    const outcome = freeze({ hpDamage: 13, armorDamage: 7, effects: [], sources: { physical: 13 },
+      content: '', nature: 'physicalDamage', execution: true, critical: true });
+    R.presentEntityVitals(entity);
+    R.presentDamageOutcome(entity, outcome);
+    R.presentEntityVitals(entity);
+    const checks = { calculationReadOnly, noPrematureDisplay,
+      hpAppliedOnce: entity.stats.HP.current === 37, armorAppliedOnce: entity.stats.armor.current === 9 && armor.absorbed === 7,
+      bar: host.querySelector('.HP-counter').textContent === 'HP : 37 / 100',
+      armorBar: host.querySelector('.armor-bar').dataset.prevArmor === '9',
+      combinedDamage: host.querySelector('.damage-popup-value').textContent === '−20',
+      executionCritical: !!host.querySelector('.damage-popup--execution-critical'),
+      unchanged: JSON.stringify(entity) === applied,
+      noStorageWrite: JSON.stringify(Object.keys(localStorage).sort().map(key => [key, localStorage.getItem(key)])) === storageBefore };
+    R.presentSupportHealing(entity, entity, 5);
+    R.presentExecutionHealing(entity, 5);
+    checks.healDisplayReadOnly = JSON.stringify(entity) === applied;
+    host.remove();
+    return checks;
+  });
+  assert.ok(Object.values(vitals).every(Boolean), JSON.stringify(vitals));
   await page.screenshot({ path: resolve(output, 'nature-and-totals.png') });
   assert.deepEqual(errors, []);
   console.log('PASS damage popups: eight nature colors, critical icons and !!!, size tiers, execution criticals, zero damage, armor + HP totals, separate armor notice and unchanged gameplay data.');

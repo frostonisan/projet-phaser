@@ -82,6 +82,58 @@ Le scénario verify-resilience-browser.mjs échouait aussi sur « Friendly swap 
 a harmful displacement ». Ces échecs de référence sont conservés dans les rapports ;
 les assertions concernées ne sont pas affaiblies pour valider ce lot.
 
+## Troisième lot : PV, armure, application et affichage
+
+La résolution des impacts utilise maintenant quatre modules spécialisés :
+
+| Responsabilité | Module propriétaire |
+| --- | --- |
+| Consommation des couches d'armure, réserves précises des équipements et total d'armure | docs/js/combat/armorRules.js |
+| Passage de l'armure, réductions, PV perdus, soins et dégâts crédités | docs/js/combat/vitalRules.js |
+| Écriture des PV, consommation et sauvegarde de l'armure, comptabilisation des soins et journal de résolution | docs/js/combat/vitalApplication.js |
+| Barres, messages de dégâts et soins, animations d'impact et diagnostics visuels | docs/js/rendering/vitalFeedback.js |
+
+Les deux modules de règles ne dépendent ni du DOM, ni du stockage, ni du hasard.
+armorRules.js ne possède aucun import ; vitalRules.js utilise seulement damageRules.js.
+Ils calculent un résultat sans modifier les données reçues. items/armor.js applique
+le résultat aux réserves courantes et conserve l'identité des pools consommables et sorts.
+L'ordre consommable → équipements équipés → sorts → armure naturelle → robustesse,
+les fractions d'armure renforcée et les arrondis par source restent identiques.
+
+entityAttributs.js conserve la coordination temporelle du combat et son API applyDamage.
+Les PV provisoires sont appliqués avant la tentative d'astralité ; la survie éventuelle
+à 1 PV est ensuite prise en compte dans les pertes et les statistiques. Le calcul des
+soins reste dans leur callback différé, afin d'utiliser les PV réellement présents
+au moment du soin. Les effets, scores, morts et vies supplémentaires conservent leur ordre.
+La journalisation persistante est séparée des diagnostics de présentation.
+
+updateHealthBar ne calcule plus de dégâts : son ancien argument incomingDamage n'était
+jamais utilisé avec une valeur non nulle. Elle affiche les ressources déjà appliquées.
+Le test navigateur vérifie qu'une application n'affiche rien avant l'appel du rendu,
+puis que des affichages répétés ne changent ni les PV, ni l'armure, ni le stockage.
+
+Validation du lot, conservée dans outputs/refactor-vitals/ :
+
+- Onze tests Node supplémentaires couvrent plafonnement des soins, overkill, crédit
+  critique, survie, ordre des armures, réserves fractionnaires et reports des altérations.
+- Comparaison avec le code précédent : 896 vérifications d'armure, 540 passages de
+  l'armure, 150 calculs de PV et 1 296 recalculs de défense donnent les mêmes résultats.
+- Les scénarios navigateur couvrent les statistiques, vies, astralité, robustesse,
+  ressources, messages et impacts simultanés. La pause et sa restauration sont vérifiées.
+  Les 40 scénarios de mort d’une cible après lancement passent dans le jeu et le simulateur.
+- La simulation passe ses scénarios de reproductibilité, annulation et export,
+  ainsi que deux lots de 20 combats.
+- Le contrôle habituel vérifie syntaxe, imports, ressources et 42 tests Node au total.
+
+Les audits Node verify-astrality.mjs et verify-robustness.mjs rencontrent le même défaut
+que les audits critique/résilience : leur simulation de gameState.js ne fournit pas
+refreshStageAccess. Le défaut est reproduit avec les sources du commit précédent
+2ee00e8 ; les scénarios navigateur correspondants passent sans modifier leurs assertions.
+
+Les effets de régénération, de vol de vie et de résurrection possèdent encore leurs
+propres chemins historiques. Ce lot isole les règles de la résolution des impacts ;
+il ne termine pas la séparation de tous les effets et du cycle de vie des entités.
+
 ## Temps et présentation
 
 combatClock.js reste l'horloge de combat ; combatTimeline.js ordonne les échéances et les
@@ -123,6 +175,10 @@ Après le deuxième lot : 116 modules, 917 dépendances locales et une composant
 cyclique de 71 modules. damageRules.js ajoute un troisième module sans dépendances.
 Les cycles historiques restent à réduire ; ce lot ne prétend pas les éliminer.
 
+Après le troisième lot : 120 modules, 930 dépendances et une composante cyclique
+de 73 modules. Les règles PV/armure sont hors de cette composante ; les adaptateurs
+d’application et d’affichage utilisent encore les modules historiques.
+
 ## Validation
 
 Les rapports locaux sont placés dans outputs/refactor-combat/ et ignorés par Git.
@@ -143,7 +199,7 @@ La vérification habituelle inclut désormais les tests des règles de vol :
 
 Les tests sans navigateur s'exécutent avec :
 
-    node --test scripts/verify-flight-rules.test.mjs scripts/verify-damage-rules.test.mjs
+    node --test scripts/verify-flight-rules.test.mjs scripts/verify-damage-rules.test.mjs scripts/verify-vital-rules.test.mjs
 
 Ils couvrent notamment la mort provisoire du lanceur, la perte définitive du guidage,
 le retour d'une cible à sa case initiale et la conservation de la part physique d'une
@@ -151,8 +207,8 @@ attaque hybride.
 
 ## Lots suivants, avant Phaser
 
-1. Poursuivre la séparation dans entityAttributs.js : calcul de la résolution
-   des PV/armure, application au combat, puis présentation du résultat.
+1. Étendre les mêmes frontières aux effets de soin, régénération, vol de vie et
+   résurrection, en conservant leurs échéances et leur comptabilisation.
 2. Extraire les mises à jour de barres et d'effets encore présentes dans les phases
    d'attaque ; préciser le contrat entre l'exécution et la présentation.
 3. Donner au plateau un état logique indépendant du DOM. Centraliser les conversions
@@ -163,5 +219,5 @@ attaque hybride.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-damagesCalcul.js, entityControl.js et le plateau DOM. Ces deux premiers lots ne constituent
+damagesCalcul.js, entityControl.js et le plateau DOM. Ces trois premiers lots ne constituent
 pas une séparation complète du moteur de jeu.
