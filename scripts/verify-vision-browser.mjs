@@ -26,9 +26,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   const checks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js');
-    const F = await import('/js/combat/attacks.js'), State = await import('/js/gameState.js');
-    const G = await import('/js/GameStorage.js'), Focus = await import('/js/sbireFocus.js');
+    const E = await import("/js/entities/runtime.js"), D = await import("/js/combat/statistics.js");
+    const F = await import('/js/combat/attacks.js'), State = await import("/js/app/state.js");
+    const G = await import("/js/storage/gameStorage.js"), Focus = await import("/js/combat/minionTargeting.js");
     const P = await import('/js/items/permanentItems.js'), I = await import('/js/items/itemEffectMecanics.js');
     const results = [];
     const check = (ok, label) => { if (!ok) throw Error(label); results.push(label); };
@@ -144,7 +144,7 @@ try {
   });
   console.log(`Vision combat: ${checks.length} checks passed.`);
   const expected = await page.evaluate(async () => {
-    const UI=await import("/js/ui/codex/index.js"), E=await import('/js/entites.js'), S=await import('/js/entite/statSystem.js');
+    const UI=await import("/js/ui/codex/index.js"), E=await import("/js/entities/runtime.js"), S=await import("/js/entities/statSystem.js");
     const e={id:989141,name:'Vision',type:'sbire',side:'A',awakening:1,level:{current:1,max:250},attacks:['autoAttack'],stuff:{},stats:{},
       baseStats:{HP:100,vision:10,agility:10,precision:7,precisionPlus:5}};
     E.recomputeEntityStats(e,{equippedItems:[],persistEquipment:false,skipReverseArchetype:true});

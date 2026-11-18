@@ -26,14 +26,14 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   const report = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js');
+    const E = await import("/js/entities/runtime.js");
+    const D = await import("/js/combat/statistics.js");
     const F = await import('/js/combat/attacks.js');
-    const A = await import('/js/attackResolution.js');
-    const R = await import('/js/entityAttributs.js');
-    const C = await import('/js/entityUpdatesStorage.js');
-    const State = await import('/js/gameState.js');
-    const G = await import('/js/GameStorage.js');
+    const A = await import("/js/combat/attackResolution.js");
+    const R = await import("/js/combat/vitals.js");
+    const C = await import("/js/storage/entityStorage.js");
+    const State = await import("/js/app/state.js");
+    const G = await import("/js/storage/gameStorage.js");
     const P = await import('/js/items/permanentItems.js');
     const I = await import('/js/items/itemEffectMecanics.js');
     const checks = [];
@@ -133,8 +133,8 @@ try {
   });
   console.log(`Adresse combat and crystal checks: ${report.length} passed.`);
   const expectedParts = await page.evaluate(async () => {
-    const UI = await import("/js/ui/codex/index.js"), E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const U = await import('/js/UpgradeEntity.js'); U.setPlayerExperience(1000000);
+    const UI = await import("/js/ui/codex/index.js"), E = await import("/js/entities/runtime.js"), S = await import("/js/entities/statSystem.js");
+    const U = await import("/js/entities/progression.js"); U.setPlayerExperience(1000000);
     const entity = { id: 988141, name: 'Adresse', type: 'sbire', side: 'A', awakening: 1, level: { current: 1, max: 250 }, attacks: ['autoAttack'],
       stuff: {}, stats: {}, baseStats: { HP: 100, agility: 10, adresse: 10, dodge: 2, dodgePlus: 3 } };
     E.recomputeEntityStats(entity, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });

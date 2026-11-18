@@ -294,8 +294,8 @@ for (const limit of [0, 1, 30, 150, 300]) {
 // Import side effects are excluded; formula bodies and the source-pooling
 // engine are read verbatim from the files, rather than recreated as expectations.
 const [balanceSource, entitySource, damageSource, ruleSource, systemSource] = await Promise.all([
-  'docs/js/data/balanceData.js', 'docs/js/entites.js', 'docs/js/damagesCalcul.js',
-  'docs/js/entite/entityRules.js', 'docs/js/entite/statSystem.js',
+  'docs/js/data/balanceData.js', "docs/js/entities/runtime.js", "docs/js/combat/statistics.js",
+  "docs/js/entities/rules.js", "docs/js/entities/statSystem.js",
 ].map(file => readFile(resolve(file), 'utf8')));
 const unexport = source => source.replace(/^export default[^\n]+/gm, '').replace(/\bexport (?=(?:const|let|var|function)\b)/g, '');
 const functionBody = (source, name) => {

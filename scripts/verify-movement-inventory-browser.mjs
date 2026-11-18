@@ -27,16 +27,16 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const report = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
-    const S = await import('/js/GameStorage.js');
-    const State = await import('/js/gameState.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const State = await import("/js/app/state.js");
     const M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js');
-    const D = await import('/js/damagesCalcul.js');
-    const G = await import('/js/game.js');
-    const { saveEntityMovementState } = await import('/js/entityUpdatesStorage.js');
-    const { createMovementCounter } = await import('/js/createEntity.js');
+    const D = await import("/js/combat/statistics.js");
+    const G = await import("/js/app/stages.js");
+    const { saveEntityMovementState } = await import("/js/storage/entityStorage.js");
+    const { createMovementCounter } = await import("/js/rendering/entities.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const checks = [];
     const check = (condition, label) => { if (!condition) throw new Error(label); checks.push(label); };
@@ -252,7 +252,7 @@ try {
       equal(hpA.stats.HP.current,lifeBefore,'Swap never clamps HP through an intermediate unequipped state');
       equal(hpB.stats.HP.current,lifeBefore,'Other owner also retains HP during swap');
       check(M.validateBattleInventoryState().ok,'HP swap keeps registry consistent');
-      const { createEntiteInDOM } = await import('/js/createEntity.js');
+      const { createEntiteInDOM } = await import("/js/rendering/entities.js");
       const battleView = createEntiteInDOM(a);
       const battleSprite = battleView.element.querySelector('[data-dropable="true"]');
       check(battleSprite?.dataset.entityId === String(a.id), 'Real battle sprite exposes its entity ID');

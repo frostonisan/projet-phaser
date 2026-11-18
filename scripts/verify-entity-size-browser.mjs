@@ -12,9 +12,9 @@ await mkdir(output,{recursive:true});
 // Run the identical operations against the live engine and its isolated simulator.
 // Instrument only the test HTTP response, never the production runtime.
 async function spatialAudit() {
-  const P=await import('/js/board.js'), E=await import('/js/entites.js');
+  const P=await import("/js/board/controller.js"), E=await import("/js/entities/runtime.js");
   const M=P, T=await import('/js/combat/attacks.js');
-  const O=await import('/js/createBattleElements.js');
+  const O=await import("/js/rendering/boardElements.js");
   const [a,b,c,d]=E.entites, grid=document.getElementById('hexGrid'), checks=[];
   const check=(ok,label)=>{if(!ok)throw Error(label);checks.push(label);};
   const cell=(r,c)=>grid.querySelector(`[data-row="${r}"][data-col="${c}"]`);
@@ -42,8 +42,8 @@ async function spatialAudit() {
     check(plan.valid&&P.commitEntityPlacements(plan),'Atomic fixture placements');invariant();
   };
   reset();
-  const FX=await import('/js/attackEffectMecanics.js'), A=await import('/js/entityAttributs.js');
-  const Rules=await import('/js/entite/entityRules.js'), Clock=await import('/js/combatClock.js');
+  const FX=await import("/js/combat/effects.js"), A=await import("/js/combat/vitals.js");
+  const Rules=await import("/js/entities/rules.js"), Clock=await import("/js/combat/clock.js");
   const applied=(target,size,key='size-effect')=>A.applyEffect(target,'gigantisme',d,{attackId:key,effets:['gigantisme'],
     effectOverrides:{gigantisme:{effectSize:size,effectDuration:10}}});
   const originalRandom=Math.random;Math.random=()=>.999999;
@@ -114,12 +114,12 @@ async function spatialAudit() {
     const beforeDistance=P.groupedHexDistance(cell(2,1),cell(4,6));
     check(M.pullEntityToward(a,c,5),'Grab moves a six-cell entity');
     check(P.groupedHexDistance(document.getElementById(`Box_Entite_${a.id}`).closest('.hex'),cell(4,6))<beforeDistance,'Grab approaches attacker with the whole footprint');invariant();
-    (await import('/js/damagesCalcul.js')).ensureMovementState(a,{reset:true});
+    (await import("/js/combat/statistics.js")).ensureMovementState(a,{reset:true});
     a.stats.shift.current=10;
     check(M.moveEntityRandomly(a,()=>0),'Random movement accepts a full six-cell destination');invariant();
     reset([6,1,3,2],[[2,1],[6,12],[4,6],[0,9]]);
     const oldBase={...a.baseStats};a.baseStats.resilience=150;a.baseStats.strength=50;E.recomputeEntityStats(a);Math.random=()=>0;
-    const chance=(await import('/js/damagesCalcul.js')).calculateResilienceTotalCancelBonus(a);
+    const chance=(await import("/js/combat/statistics.js")).calculateResilienceTotalCancelBonus(a);
     const resisted=state();check(!M.swapEntitiesFromEffect(d,a,c)&&state()===resisted,'One resisted participant cancels the whole different-size swap: '+chance);
     a.baseStats=oldBase;E.recomputeEntityStats(a);
   } finally {Math.random=random;}
@@ -134,7 +134,7 @@ async function spatialAudit() {
   check(performance.now()-start<250,'Crowded-board refusal stays bounded');blockers.forEach(node=>{const hex=node.parentElement;node.remove();P.refreshHexOccupancy?.(hex);});
   reset([6,1,3,2],[[2,1],[6,12],[4,6],[0,9]]);
   const freed=P.entityFootprint(a)[1];
-  check((await import('/js/entitySpawnEngine.js')).makeRoomForSummon(freed),'Summoning on a non-anchor member displaces its entity');
+  check((await import("/js/entities/spawn.js")).makeRoomForSummon(freed),'Summoning on a non-anchor member displaces its entity');
   check(!P.entityFootprint(a).includes(freed)&&!O.isHexOccupied(freed.dataset.position),'Summon displacement actually frees the requested cell');invariant();
   const members=P.entityFootprint(a);P.releaseEntityFootprint(a);
   check(members.every(h=>!O.isHexOccupied(h.dataset.position)),'Release clears every occupied member, even while the sprite remains');
@@ -152,7 +152,7 @@ const server=createServer(async(req,res)=>{
     let content;
     try { content=baseline?await readFile(resolve(baseline,rel)):await readFile(file); }
     catch {content=await readFile(file);}
-    if(rel.replaceAll('\\','/')==='js/combatSimulationRuntime.js') content=content.toString().replace('F.initFightEntites();',`F.initFightEntites();\nif(input.footprintAudit) journal.push({type:'footprint-audit',...await (${spatialAudit.toString()})()});`);
+    if(rel.replaceAll('\\','/')==="js/debug/simulationRuntime.js") content=content.toString().replace('F.initFightEntites();',`F.initFightEntites();\nif(input.footprintAudit) journal.push({type:'footprint-audit',...await (${spatialAudit.toString()})()});`);
     res.setHeader('Content-Type',({'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream');res.end(content);
   } catch {res.writeHead(404).end();}
 });
@@ -162,9 +162,9 @@ try {
   const page=await browser.newPage({viewport:{width:1536,height:960}});page.on('pageerror',e=>errors.push(e.stack||e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),C=await import('/js/createEntity.js'),S=await import('/js/GameStorage.js'),G=await import('/js/gameState.js');
+    const E=await import("/js/entities/runtime.js"),C=await import("/js/rendering/entities.js"),S=await import("/js/storage/gameStorage.js"),G=await import("/js/app/state.js");
     S.setAdminMode(true);window.levelRunning='admin';window.currentStageId='size-audit';S.setCurrentLevel('size-audit');
-    (await import('/js/sessionStorage.js')).beginAdminSession();
+    (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     S.saveToLocalStorage('GameStages',{stages:[{id:'size-audit',level_type:'admin'}]});S.saveToLocalStorage('selectedArmyA',[]);S.saveToLocalStorage('ArmyB',{armies:{}});S.saveToLocalStorage('equippedItems',[]);
     document.body.innerHTML='<div id="game-windows"><div id="game-container"><div class="Game-UI"></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div></div>';
     (await import("/js/ui/application.js")).GameUi();
@@ -178,7 +178,7 @@ try {
       hex.innerHTML='<div class="socle gueux" style="opacity:.5"></div>';grid.append(hex);
     }
     E.entites.length=0;
-    const template=(await import('/js/entite/entitesNest.js')).entitesNest.find(e=>e.class==='mouche-asticoteuse');
+    const template=(await import("/js/data/entityTemplates.js")).entitesNest.find(e=>e.class==='mouche-asticoteuse');
     for(let i=0;i<4;i++) {
       const entity=E.enrichEntityStats({...structuredClone(template),reverseArchetype:null,id:998600+i,name:`Taille ${i+1}`,side:i<2?'A':'B',type:'sbire',role:'gueux',level:1,awakening:1,stats:{},modifierStats:{},stuff:{},sizeInCells:1,
         baseStats:{HP:10000,physicalDamage:1,speed:500,shift:10,weight:40},
@@ -186,7 +186,7 @@ try {
       entity.statut=['alive'];entity.isDEAD=false;E.entites.push(entity);const created=C.createEntiteInDOM(entity);await created.spriteReady;
     }
     G.configureBattleActionManager({createStartButton:c=>c,createFleeButton:c=>c,createQuitButton:c=>c});
-    window.E=E;window.P=await import('/js/board.js');window.Sim=await import('/js/combatSimulation.js');
+    window.E=E;window.P=await import("/js/board/controller.js");window.Sim=await import("/js/debug/simulation.js");
   });
   const live=await page.evaluate(spatialAudit);console.log(`Live spatial checks: ${live.checks.length}`);
   const performanceChecks=await page.evaluate(async()=>{
@@ -227,7 +227,7 @@ try {
     return runs;
   });
   const registryChecks=baseline?[]:await page.evaluate(async()=>{
-    const O=await import('/js/createBattleElements.js'),checks=[];
+    const O=await import("/js/rendering/boardElements.js"),checks=[];
     const check=(ok,label)=>{if(!ok)throw Error(label);checks.push(label);};
     const [a,b,c]=E.entites,grid=document.getElementById('hexGrid'),cell=(r,col)=>grid.querySelector(`[data-row="${r}"][data-col="${col}"]`);
     const before=P.entityFootprint(a),destination=cell(6,10);
@@ -240,7 +240,7 @@ try {
     const decoration=O.createBattleElementInDOM({id:'registry-decoration',position:destination.dataset.position,blocking:false});
     check(decoration&&!O.isHexOccupied(destination.dataset.position),'Nonblocking decorations do not reserve cells');O.removeBattleElementFromDOM(decoration);
     const ground=document.createElement('div');ground.id='registry-ground';destination.append(ground);
-    const summons=await import('/js/summonsMecanics.js');
+    const summons=await import("/js/combat/summons.js");
     summons.consommationSummon({summonDuration:60,summonEffet:[]},destination,ground.id,()=>{}, {adminSpawn:true,infinite:true});
     check(!P.planEntityPlacements([{entity:a,hex:destination,size:1}]).valid,'Ground consumable registration blocks placement immediately');
     const pickup=P.planEntityPlacements([{entity:a,hex:destination,size:1}],{allowGroundConsumables:true});
@@ -281,12 +281,12 @@ try {
     const cell=(r,c)=>document.querySelector(`#hexGrid [data-row="${r}"][data-col="${c}"]`),[a,b,c,d]=E.entites;
     const relocate=spec=>check(P.commitEntityPlacements(P.planEntityPlacements(spec.map(([entity,r,col,size])=>({entity,hex:cell(r,col),size})))),'Test placement succeeds');
     relocate([[a,2,1,6],[b,4,3,1],[c,4,6,3],[d,0,9,2]]);
-    const D=await import('/js/dragndrop.js');D.restoreEntityDragAndDrop();
+    const D=await import("/js/board/interaction.js");D.restoreEntityDragAndDrop();
     function drop(entity,hex){const dataTransfer=new DataTransfer();dataTransfer.setData('text',`Box_Entite_${entity.id}`);hex.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer}));}
     const ap=a.position,bp=b.position;drop(a,cell(4,3));check(a.position===bp&&b.position===ap,'Native drop swaps 6 ↔ 1 allied entities');
     drop(b,P.entityFootprint(a)[2]);check(a.position===ap&&b.position===bp,'Native drop on a non-anchor cell resolves the full occupant');
     const before=a.position;drop(a,cell(6,12));check(a.position===before,'Native drop cannot clip a large entity at the edge');
-    const spawner=await import('/js/entitySpawnEngine.js'),template=(await import('/js/entite/entitesNest.js')).entitesNest.find(e=>e.class==='mouche-asticoteuse');
+    const spawner=await import("/js/entities/spawn.js"),template=(await import("/js/data/entityTemplates.js")).entitesNest.find(e=>e.class==='mouche-asticoteuse');
     const count=E.entites.length,positions=E.entites.map(e=>e.position).join();let refused=false;
     try{await spawner.createEntityIngame({...structuredClone(template),sizeInCells:6},{side:'B',position:cell(6,12).dataset.position});}catch{refused=true;}
     check(refused&&E.entites.length===count&&positions===E.entites.map(e=>e.position).join(),'Invalid large spawn leaves all entities unchanged');
@@ -294,14 +294,14 @@ try {
     check(P.entityFootprint(spawned).length===3,'Spawn pipeline places the complete three-cell entity');
     E.RemoveEntite(spawned);
     const oldNodes=[...document.querySelectorAll('#hexGrid .hex')],oldPositions=E.entites.map(e=>e.position).join();
-    const B=await import('/js/board.js');
+    const B=await import("/js/board/controller.js");
     const resized=B.createHexGrid({rows:1,cols:2,totalHexagons:2,hexWidth:70,hexHeight:80,staggeredRowHeight:60,scale:1});
     check(resized===false&&oldNodes.every(n=>n.isConnected)&&oldPositions===E.entites.map(e=>e.position).join(),'Terrain shrink rejected if complete groups cannot fit');
     relocate([[a,2,1,1],[b,2,2,1],[c,4,6,3],[d,0,9,2]]);
     return checks;
   });
   // Live admin change, using the real select and event handler.
-  await page.evaluate(async()=>{(await import('/js/admin.js')).initializeAdminLevel(E.entitesNestUp);});
+  await page.evaluate(async()=>{(await import("/js/debug/admin.js")).initializeAdminLevel(E.entitesNestUp);});
   await page.locator('#Box_Entite_998600').dispatchEvent('click',{detail:1});
   const select=page.locator('[data-admin-entity-field="sizeInCells"]');await select.waitFor({state:'visible'});
   await select.selectOption('6');
@@ -322,7 +322,7 @@ try {
     const plan=P.planEntityPlacements(E.entites.map((entity,i)=>({entity,size:sizes[i],hex:document.querySelector(`#hexGrid [data-row="${cells[i][0]}"][data-col="${cells[i][1]}"]`)})));
     if(!P.commitEntityPlacements(plan))throw Error('Live combat placement');
     window.__liveHits=[];window.addEventListener('combatLogEntry',ev=>{if(ev.detail.type==='damage_resolution')__liveHits.push(ev.detail);});
-    (await import('/js/fight.js')).initFightEntites();(await import('/js/gameState.js')).startGame();
+    (await import("/js/combat/loop.js")).initFightEntites();(await import("/js/app/state.js")).startGame();
     const grown=P.setEntitySizeInCells(E.entites[0],6);if(!grown.valid)throw Error('Live combat growth');
   });
   await page.waitForFunction(()=>window.__liveHits.length>=4,{},{timeout:12000});
@@ -333,25 +333,25 @@ try {
   // a multi-cell entity and a blocking object; no registry save format is added.
   await page.waitForTimeout(650);
   await page.evaluate(async()=>{
-    const O=await import('/js/createBattleElements.js');
+    const O=await import("/js/rendering/boardElements.js");
     O.createBattleElementInDOM({id:'registry-persist-object',position:document.querySelector('[data-row="6"][data-col="10"]').dataset.position,blocking:true});
-    await (await import('/js/combatPause.js')).pauseCombat();
+    await (await import("/js/combat/pause.js")).pauseCombat();
   });
   await page.waitForFunction(()=>!document.querySelector('#combat-pause-control')?.disabled);
   const readPausedOccupancy=()=>page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),P=await import('/js/board.js'),O=await import('/js/createBattleElements.js');
-    return {paused:(await import('/js/combatClock.js')).isCombatPaused(),entities:E.entites.map(entity=>({
+    const E=await import("/js/entities/runtime.js"),P=await import("/js/board/controller.js"),O=await import("/js/rendering/boardElements.js");
+    return {paused:(await import("/js/combat/clock.js")).isCombatPaused(),entities:E.entites.map(entity=>({
       id:entity.id,position:entity.position,size:entity.sizeInCells,role:entity.role,
       members:P.entityFootprint(entity).map(hex=>[hex.dataset.position,P.getFootprintOccupant(hex)?.id])
     })),object:O.isHexOccupied(document.querySelector('[data-row="6"][data-col="10"]').dataset.position)};
   });
   const pausedOccupancy=await readPausedOccupancy();assert.equal(pausedOccupancy.paused,true);assert.equal(pausedOccupancy.object,true);
   await page.reload();
-  await page.evaluate(async()=>await(await import('/js/combatPause.js')).restorePausedCombat());
+  await page.evaluate(async()=>await(await import("/js/combat/pause.js")).restorePausedCombat());
   assert.deepEqual(await readPausedOccupancy(),pausedOccupancy,'F5 rebuilds every occupied cell and object without changing the paused scene');
   await page.evaluate(async()=>{
     window.__resumedHits=0;window.addEventListener('combatLogEntry',event=>{if(event.detail.type==='damage_resolution')__resumedHits++;});
-    await(await import('/js/combatPause.js')).resumeCombat();
+    await(await import("/js/combat/pause.js")).resumeCombat();
   });
   await page.waitForFunction(()=>window.__resumedHits>=2,{},{timeout:12000});
   assert.deepEqual(errors,[]);

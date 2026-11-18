@@ -24,8 +24,8 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js');
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js");
     const { loadResource } = await import('/js/data/loaderList.js');
     const gif = await loadResource('/media/assets/effects/ambidextry.gif');
     const bytes = new Uint8Array(await gif.blob.arrayBuffer());
@@ -33,13 +33,13 @@ async function fixture(config = {}) {
     if (marker < 0 || bytes[marker + 13] || bytes[marker + 14]) throw Error('GIF should loop while combat time is paused');
 
     const U = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
-    const store = await import('/js/sessionStorage.js');
+    const store = await import("/js/storage/sessionStorage.js");
     store.beginAdminSession(); window.currentStageId = 'pause-test';
     store.gameStorage.setItem('GameStages', JSON.stringify({stages:[{id:'pause-test',level_type:'admin'}]}));
     store.gameStorage.setItem('currentLevel','pause-test');
@@ -64,10 +64,10 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
+    window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
-    window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard();
+    window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
+    window.Sim = await import("/js/debug/simulation.js"); window.snapshot = Sim.captureSimulationBoard();
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {
       const { type, data } = event.detail;
@@ -79,14 +79,14 @@ async function fixture(config = {}) {
 
 
 const ready = page => page.waitForFunction(async () => {
-  window.P = await import('/js/combatPause.js'); window.Clock = await import('/js/combatClock.js');
+  window.P = await import("/js/combat/pause.js"); window.Clock = await import("/js/combat/clock.js");
   await P.restorePausedCombat(); // F5 also rebinds ground effects asynchronously.
   return Clock.isCombatPaused() && !P.isCombatCheckpointBusy() && sessionStorage.getItem('DarkPitPausedCombat:available') === '1';
 });
 async function attach(page) {
   await page.evaluate(async () => {
-    window.E = await import('/js/entites.js'); window.G = await import('/js/gameState.js');
-    window.M = await import('/js/items/itemManager.js'); window.R = await import('/js/attackResolution.js');
+    window.E = await import("/js/entities/runtime.js"); window.G = await import("/js/app/state.js");
+    window.M = await import('/js/items/itemManager.js'); window.R = await import("/js/combat/attackResolution.js");
     window.dropEntity = position => {
       const transfer = new DataTransfer(); transfer.setData('text', 'Box_Entite_999820');
       document.querySelector(`.hex[data-position="${position}"]`).dispatchEvent(new DragEvent('drop', {dataTransfer:transfer,bubbles:true,cancelable:true}));
@@ -99,7 +99,7 @@ async function attach(page) {
 try {
   const page=await fixture({speed:50000}); await attach(page);
   await page.evaluate(async()=>{
-    const S=await import('/js/GameStorage.js');
+    const S=await import("/js/storage/gameStorage.js");
     const actor=E.entites[0]; actor.baseStats.shift=10;actor.baseStats.charge=3;
     E.recomputeEntityStats(actor,{skipReverseArchetype:true}); actor.stats.HP.current=400;
     actor.attacks.push({...structuredClone(actor.attacks[0]),functionName:'second-test',attackId:'second-test',attackKey:'second-test',displayName:'Seconde attaque'});
@@ -115,11 +115,11 @@ try {
       hex.style.cssText=`position:absolute;left:${position==='3'?180:360}px;top:280px;width:160px;height:180px`;
       hex.innerHTML='<div class="socle gueux"></div>';document.querySelector('#hexGrid').append(hex);
     }
-    const drag=await import('/js/dragndrop.js');drag.restoreEntityDragAndDrop();
+    const drag=await import("/js/board/interaction.js");drag.restoreEntityDragAndDrop();
     document.querySelector('.entitylootContainer')?.remove();
     S.setAdminMode(false);window.levelRunning='scripted';
     S.saveToLocalStorage('GameStages',{stages:[{id:'pause-test',level_type:'scripted'}]});
-    const {summons}=await import('/js/data/summons.js');const ground=await import('/js/summonsMecanics.js');
+    const {summons}=await import('/js/data/summons.js');const ground=await import("/js/combat/summons.js");
     G.startGame();
     (await import('/js/items/resourceStocks.js')).addMovementCharges(actor,20);
     window.moveCost=1+E.getMovementWeightMalus(actor).shiftCostModifier;
@@ -185,7 +185,7 @@ try {
     const definitions=R.readAttackDefinitionsForEntity(E.entites[0],(await import('/js/data/attackList.js')).attackDetails);
     const key=R.attackSelectionKey(definitions[1]);R.setAttackPriority(E.entites[0],definitions,key,1);
     R.setAttackEnabled(E.entites[0],definitions,key,false);
-    (await import('/js/entityUpdatesStorage.js')).saveEntityAttackSelection(E.entites[0]);
+    (await import("/js/storage/entityStorage.js")).saveEntityAttackSelection(E.entites[0]);
     return {move,heal};
   });
   assert.equal(result.move.ok,true);assert.equal(result.heal.ok,true);await ready(page);
@@ -205,7 +205,7 @@ try {
   await page.waitForFunction(()=>!Clock.isCombatInteractionBlocked());
   assert.deepEqual(await page.evaluate(()=>P.getCombatPauseReasons()),{tactical:true,absolute:false});
   const queued=await page.evaluate(async()=>{
-    const order=await import('/js/BattleOrder.js');const phase=JSON.stringify(E.entites[0]._phaseTimer);
+    const order=await import("/js/combat/orders.js");const phase=JSON.stringify(E.entites[0]._phaseTimer);
     await order.launchOrderCycleForSide('A','runaway');
     return {same:phase===JSON.stringify(E.entites[0]._phaseTimer),order:Clock.captureCombatState().orders.pendingPlayerOrder};
   });

@@ -31,27 +31,26 @@ export async function installEntityTestEnvironment(initialEntries = []) {
   const unexpected = names => names.map(name =>
     `export function ${name}() { throw new Error('Unexpected browser/combat API: ${name}'); }`).join('\n');
   const stubs = new Map(Object.entries({
-    'admin.js': unexpected(['selectAdminEntitiesForSideB']),
-    'ArmyAFactory.js': unexpected(['generateArmyA']),
-    'ArmyBFactory.js': unexpected(['selectRandomEntitiesForSideB', 'selectScriptedEntitiesForSideB']),
+    "debug/admin.js": unexpected(['selectAdminEntitiesForSideB']),
+    "entities/armies.js": unexpected(['generateArmyA', 'selectRandomEntitiesForSideB', 'selectScriptedEntitiesForSideB']),
     "app/startup.js": unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
       'ResetXp', 'ResetGameDay', 'detectPageReload', 'createUmbraBlock', 'syncStatCurseMarker', 'bindHelperEntity', 'closeOpenHelpers']),
     "ui/application.js": unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
       'ResetXp', 'ResetGameDay', 'detectPageReload']),
     "ui/statistics/components.js": unexpected(['createUmbraBlock', 'syncStatCurseMarker']),
     "ui/statistics/helpers.js": unexpected(['bindHelperEntity', 'closeOpenHelpers']),
-    'entityUpdatesStorage.js': noops(['recordEntityProgression']) + '\n' + unexpected([
+    "storage/entityStorage.js": noops(['recordEntityProgression']) + '\n' + unexpected([
       'saveEntityextraLifeToStorage', 'resetStoredArmorCurrentToMax', 'endEntityBattleRole', 'countCompletedArchetypes']),
-    'entityAttributs.js': noops(['updateBonusLifeCounters', 'updateCurrentAttackDisplay', 'updateArmorCounter'])
+    "combat/vitals.js": noops(['updateBonusLifeCounters', 'updateCurrentAttackDisplay', 'updateArmorCounter'])
       + '\n' + unexpected(['applyDamage', 'getAttackEffectHandler']),
-    'attackEffectMecanics.js': noops(['getAstralityRuntime', 'isAstralReturnActive'])
+    "combat/effects.js": noops(['getAstralityRuntime', 'isAstralReturnActive'])
       + '\nexport const astralCooldownRemaining = () => 0;\n'
       + unexpected(['EffectMessage', 'showHealingFeedback', 'startAstralCooldown']),
-    'entitesAnimation.js': unexpected(['animationProjectile', 'animateDodge', 'animateIndestructibility', 'animateEsoterism',
+    "rendering/animations.js": unexpected(['animationProjectile', 'animateDodge', 'animateIndestructibility', 'animateEsoterism',
       'animateAstrality', 'animateAmbidextry', 'animationMelee', 'animateMysticism', 'animateOccultism', 'damageImpact']),
-    'summonsMecanics.js': unexpected(['inheritSummonEssences']),
-    'battleLogs.js': 'export const battleLogs = [];',
-    'gameState.js': 'export const requireSafeMenuAccess = () => true;' + unexpected(['StopGame']),
+    "combat/summons.js": unexpected(['inheritSummonEssences']),
+    "combat/journal.js": 'export const battleLogs = [];',
+    "app/state.js": 'export const requireSafeMenuAccess = () => true;' + unexpected(['StopGame']),
     "ui/display.js": String.raw`
       export const isRegenKey = key => /^\d{3}$/.test(key);
       export const toNonNegInt = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
@@ -63,6 +62,6 @@ export async function installEntityTestEnvironment(initialEntries = []) {
     return nextLoad(url, context);
   } });
   // Bootstrap the shared cyclic graph through the same entry as the reset suite.
-  await import('../docs/js/entites.js');
+  await import("../docs/js/entities/runtime.js");
   return { storage, get writes() { return writes; } };
 }

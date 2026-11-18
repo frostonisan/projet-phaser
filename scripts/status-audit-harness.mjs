@@ -13,7 +13,7 @@ export async function createStatusAudit({ output, install, before = false }) {
   for (const name of await readdir(root, { recursive: true })) {
     if (!/\.(js|html|css)$/.test(name)) continue;
     const relativeName = name.replaceAll('\\', '/');
-    const backup = before && ['js/entityControl.js', 'js/attackEffectMecanics.js'].includes(relativeName);
+    const backup = before && ["js/combat/control.js", "js/combat/effects.js"].includes(relativeName);
     const bytes = await readFile(backup ? resolve('outputs/status-sleep-audit/before/docs', name) : resolve(root, name));
     sources.set(resolve(root, name), bytes);
     hashes[relativeName] = createHash('sha256').update(bytes).digest('hex');
@@ -26,7 +26,7 @@ export async function createStatusAudit({ output, install, before = false }) {
     if (rel === '..' || rel.startsWith('..' + sep)) return res.writeHead(403).end();
     try {
       let data = sources.get(file) || await readFile(file);
-      if (path === '/js/combatSimulationRuntime.js') {
+      if (path === "/js/debug/simulationRuntime.js") {
         assert.ok(data.toString().includes('  G.startGame();'));
         data = data.toString().replace('  G.startGame();', `  G.startGame();\n  if (input.validationCase) await (await import('/__status-audit.js')).install(input.validationCase);`)
           .replace('return { seed: input.seed, durationMs: time,', 'return { audit: window.__statusAudit || null, seed: input.seed, durationMs: time,');
@@ -48,9 +48,9 @@ export async function createStatusAudit({ output, install, before = false }) {
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
     await page.evaluate(async config => {
-      const U = await import("/js/ui/application.js"), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
-      const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js'), F = await import('/js/fight.js');
-      const Clock = await import('/js/combatClock.js'), Timeline = await import('/js/combatTimeline.js'), Sim = await import('/js/combatSimulation.js');
+      const U = await import("/js/ui/application.js"), E = await import("/js/entities/runtime.js"), Create = await import("/js/rendering/entities.js");
+      const S = await import("/js/storage/gameStorage.js"), G = await import("/js/app/state.js"), F = await import("/js/combat/loop.js");
+      const Clock = await import("/js/combat/clock.js"), Timeline = await import("/js/combat/timeline.js"), Sim = await import("/js/debug/simulation.js");
       const { balanceData } = await import('/js/data/balanceData.js'); balanceData.brokenSpell.chance.basePercent = 0;
       U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
       G.configureBattleActionManager({ createStartButton: e => e, createFleeButton: e => e, createQuitButton: e => e });
@@ -63,7 +63,7 @@ export async function createStatusAudit({ output, install, before = false }) {
         hex.style.cssText = `position:absolute;left:${col * 75 + row % 2 * 37}px;top:${row * 90}px;width:70px;height:80px`;
         hex.innerHTML = '<div class="socle"></div>'; grid.append(hex);
       }
-      const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+      const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
       for (const [i, actor] of config.actors.entries()) {
         const side = actor.side, row = Math.floor(i / 2), col = side === 'A' ? 1 : 12;
         const hex = grid.querySelector(`[data-row="${row}"][data-col="${col}"]`);

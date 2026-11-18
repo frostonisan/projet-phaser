@@ -65,8 +65,8 @@ try {
   };
 
   report.storage = await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const Session = await import('/js/sessionStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const Session = await import("/js/storage/sessionStorage.js");
     const check = window.__check, key = 'performance-saved-action';
     window.__perf.writes.length = 0;
     const state = { action: 0, nested: { charges: 100 } };
@@ -102,8 +102,8 @@ try {
   await collect();
 
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const { persistEquippedResourceStocks } = await import('/js/entityUpdatesStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const { persistEquippedResourceStocks } = await import("/js/storage/entityStorage.js");
     const check = window.__check;
     const item = { equippedId: 'perf-item', equippedTo: 777, resourceStocks: { shift: { current: 5, preciseCurrent: 5, max: 5 } } };
     const other = { equippedId: 'other-item', equippedTo: 778, resourceStocks: { shift: { current: 0, preciseCurrent: 0, max: 5 } } };
@@ -204,9 +204,9 @@ try {
   await collect();
 
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
-    const { createHeadUpInDom, createEntiteScanInDOM } = await import('/js/createEntity.js');
+    const E = await import("/js/entities/runtime.js");
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
+    const { createHeadUpInDom, createEntiteScanInDOM } = await import("/js/rendering/entities.js");
     const check = window.__check;
     const entity = E.enrichEntityStats({ ...structuredClone(entitesNest.find(value => value.serial === 900013)),
       id: 977771, side: 'B', level: 1, stats: {}, baseStats: { HP: 50 }, stuff: {} });

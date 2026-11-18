@@ -1,5 +1,5 @@
-import { clockNow, isCombatInteractionBlocked, trackCombatAction, notifyCombatAction } from '../combatClock.js';
-import { gameStorage as localStorage } from '../sessionStorage.js';
+import { clockNow, isCombatInteractionBlocked, trackCombatAction, notifyCombatAction } from "../combat/clock.js";
+import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import {
   appendItemHelperHeader,
   buildImprovementHelperFooter,
@@ -14,7 +14,7 @@ import { ItemDetails } from '../data/itemList.js';
 import { summons } from '../data/summons.js';
 import { createIngameItem, calculateItemPower } from './items.js';
 import { createUmbraCrystal } from './permanentItems.js';
-import { hexCoordonne } from '../board.js';
+import { hexCoordonne } from "../board/controller.js";
 import {
   loadFromLocalStorage,
   saveToLocalStorage,
@@ -25,7 +25,7 @@ import {
   getCurrentLevel,
   loadPlayerInfo,
   savePlayerInfo,
-} from "../GameStorage.js";
+} from "../storage/gameStorage.js";
 import {
   entites,
   entitesNestUp,
@@ -35,15 +35,15 @@ import {
   getWeaponOrfevrePreviewActivePercent,
   getWeaponOrfevreStuffActivePercent,
   getEquipmentSlotKeys,
-} from "../entites.js";
-import { addEntityToArmyA, canRecruitEntity } from '../ArmyAFactory.js';
+} from "../entities/runtime.js";
+import { addEntityToArmyA, canRecruitEntity } from "../entities/armies.js";
 import { createEntityCodex } from "../ui/codex/index.js";
 import { generateEffectDescription } from '../data/helpers.js';
 import { createEntityPowerValue, cachedDisplayPower, schedulePowerRefresh } from "../ui/statistics/components.js";
 import { refreshStatHelper } from "../ui/statistics/helpers.js";
 import { itemApplyEffect, validateConsumableUse, hasImplementedConsumableEffects } from './itemEffectMecanics.js';
 import { itemEffects } from './itemEffects.js';
-import { EquipedEntityItems, recordEntityConsumable } from '../entityUpdatesStorage.js';
+import { EquipedEntityItems, recordEntityConsumable } from "../storage/entityStorage.js";
 import { stuffInteraction } from './equipement.js';
 import { glitterStuff } from '../biome/meteo.js';
 import { stats } from '../data/statsData.js';
@@ -54,14 +54,14 @@ import {
   endDragHelperCleanup,
   isDragDropActive,
 } from "../ui/drag.js";
-import { getDisplayStatKey, normalizeStatKey, isNonLordCombatant, isLord } from "../entite/entityRules.js";
+import { getDisplayStatKey, normalizeStatKey, isNonLordCombatant, isLord } from "../entities/rules.js";
 import { showGamePopupMessage } from "../ui/display.js";
-import { getStageAccess, requireSafeMenuAccess, gameStarted } from '../gameState.js';
-import { placeGroundItem, clearGroundItems, releaseGroundItem, spawnConsumableSummon, setAdminGroundSummonsInfinite } from '../summonsMecanics.js';
+import { getStageAccess, requireSafeMenuAccess, gameStarted } from "../app/state.js";
+import { placeGroundItem, clearGroundItems, releaseGroundItem, spawnConsumableSummon, setAdminGroundSummonsInfinite } from "../combat/summons.js";
 import { ensureStuffArmorReserve } from './armor.js';
 import { getStuffResourceStocks, stripStuffResourceModifiers, getEffectiveMovementStock } from './resourceStocks.js';
 import { getScoredItemQuality, isUmbraRestricted, getPowerBreakdownLines } from '../procedural/proc-bareme.js';
-import { isAdminMode, spendPlayerExperience, creditPlayerExperience, saveCurrentGameData } from '../GameStorage.js';
+import { isAdminMode, spendPlayerExperience, creditPlayerExperience, saveCurrentGameData } from "../storage/gameStorage.js";
 
 let activeShop = null;
 
@@ -3067,4 +3067,4 @@ export function sanitizeItemId() {
 
     console.groupEnd();
 }
-import { applyCombatProfileView } from '../load-entity.js';
+import { applyCombatProfileView } from "../board/deployment.js";

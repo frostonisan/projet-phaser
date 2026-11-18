@@ -23,9 +23,9 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await import("/js/ui/codex/index.js"), D = await import('/js/damagesCalcul.js');
-    const S = await import('/js/GameStorage.js'), R = await import('/js/attackResolution.js'), G = await import('/js/gameState.js');
-    const U = await import('/js/UpgradeEntity.js');
+    const E = await import("/js/entities/runtime.js"), UI = await import("/js/ui/codex/index.js"), D = await import("/js/combat/statistics.js");
+    const S = await import("/js/storage/gameStorage.js"), R = await import("/js/combat/attackResolution.js"), G = await import("/js/app/state.js");
+    const U = await import("/js/entities/progression.js");
     window.levelRunning = 'worldmap'; G.setGameOver(false);
     const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
     const sample = E.entitesNestUp.find(entity => /mouche astic/i.test(entity.name));

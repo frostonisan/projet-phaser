@@ -1,10 +1,10 @@
 // Presentation of resolved vital outcomes; never changes HP, armor, scores or persistence.
-import { PopUpDamages, updateTotalHealCounter } from '../dom.js';
-import { updateHealthBar, updateHPCounters } from '../UpgradeEntity.js';
-import { showHealingFeedback } from '../attackEffectMecanics.js';
-import { damageImpact, damageArmorImpact, shakeImpact, brokenMagicImpact, applyEntityTint, releaseEntityTint } from '../entitesAnimation.js';
-import { syncEntityAuras } from '../entitesAura.js';
-import { setTimeout } from '../combatClock.js';
+import { PopUpDamages, updateTotalHealCounter } from "./hud.js";
+import { updateHealthBar, updateHPCounters } from "../entities/progression.js";
+import { showHealingFeedback } from "../combat/effects.js";
+import { damageImpact, damageArmorImpact, shakeImpact, brokenMagicImpact, applyEntityTint, releaseEntityTint } from "./animations.js";
+import { syncEntityAuras } from "./auras.js";
+import { setTimeout } from "../combat/clock.js";
 
 export function presentEntityVitals(entity) {
   updateHealthBar(entity.stats.HP.current, entity.stats.HP.max,

@@ -7,9 +7,9 @@ import { dismissStarterForFixture } from './browser-test-fixture.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require('C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs'), baseline = resolve('outputs/performance-lots-3-5/before/docs');
-const hasBaseline = await access(resolve(baseline, 'js/dom.js')).then(() => true, () => false);
+const hasBaseline = await access(resolve(baseline, "js/rendering/hud.js")).then(() => true, () => false);
 const output = resolve('outputs/performance-lots-3-5/hud');
-const compared = new Set(['dom.js', 'attackResolution.js', 'entitesAnimation.js', 'entityUpdatesStorage.js', 'combatSimulation.js']);
+const compared = new Set(["rendering/hud.js", "combat/attackResolution.js", "rendering/animations.js", "storage/entityStorage.js", "debug/simulation.js"]);
 // A real, previously validated battle report supplies the journal fixture.
 // Repetition below benchmarks report rendering only, never extra game trials.
 const reportFixture = await readFile('outputs/combat-simulation/report.json', 'utf8').then(JSON.parse, () => ({
@@ -46,9 +46,9 @@ try {
     await dismissStarterForFixture(page);
     results[before ? 'before' : 'after'] = await page.evaluate(async () => {
       await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
-      const D = await import('/js/dom.js'), A = await import('/js/attackResolution.js');
-      const V = await import('/js/entitesAnimation.js'), T = await import('/js/entityUpdatesStorage.js');
-      const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+      const D = await import("/js/rendering/hud.js"), A = await import("/js/combat/attackResolution.js");
+      const V = await import("/js/rendering/animations.js"), T = await import("/js/storage/entityStorage.js");
+      const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
       S.setAdminMode(true);
       const { attackDetails } = await import('/js/data/attackList.js');
       const attack = { ...structuredClone(attackDetails[0]), displayName: 'Test <b>vivant</b>', preparationTime: 1000, executionTime: 600, recoveryTime: 800, attackRange: ['range'] };
@@ -119,7 +119,7 @@ try {
       return { views, micro: { elapsedMs, mutations, lookups }, layoutReads, pulses, copies: { clones, notifications, isolated: !second.combatDetails.procs.test && !entity.combatDetails?.procs?.test } };
     });
     const render = await page.evaluate(async fixture => {
-      const Sim = await import('/js/combatSimulation.js');
+      const Sim = await import("/js/debug/simulation.js");
       const started = performance.now();
       const html = Sim.simulationReportHtml(fixture, { standalone: true });
       const generatedMs = performance.now() - started;

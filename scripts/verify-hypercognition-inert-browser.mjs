@@ -24,17 +24,17 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const model = await import('/js/attackResolution.js');
-    const calc = await import('/js/damagesCalcul.js'), calcDisplay = await import("/js/ui/statistics/details.js");
-    const ledger = await import('/js/essenceInventory.js');
-    const essences = await import('/js/essenceur.js');
+    const model = await import("/js/combat/attackResolution.js");
+    const calc = await import("/js/combat/statistics.js"), calcDisplay = await import("/js/ui/statistics/details.js");
+    const ledger = await import("/js/items/essenceInventory.js");
+    const essences = await import("/js/items/essences.js");
     const ui = await Promise.all([import("/js/ui/attacks.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const { buildStatHoverCard } = await import('/js/data/helpers.js');
-    const { applyDamage, calculateDefensiveHpOutcome } = await import('/js/entityAttributs.js');
-    const { calculateResistances } = await import("/js/entite/entityRules.js");
-    const { createAttackStatView } = await import("/js/damagesCalcul.js");
-    const { getEntityCombatDetails } = await import('/js/entityUpdatesStorage.js');
-    const { entites, enrichEntityStats, recomputeEntityStats } = await import('/js/entites.js');
+    const { applyDamage, calculateDefensiveHpOutcome } = await import("/js/combat/vitals.js");
+    const { calculateResistances } = await import("/js/entities/rules.js");
+    const { createAttackStatView } = await import("/js/combat/statistics.js");
+    const { getEntityCombatDetails } = await import("/js/storage/entityStorage.js");
+    const { entites, enrichEntityStats, recomputeEntityStats } = await import("/js/entities/runtime.js");
     const { balanceData } = await import('/js/data/balanceData.js');
     const reports = [];
     const check = (ok, text) => { if (!ok) throw Error(text); reports.push(text); };
@@ -361,9 +361,9 @@ try {
   await page.locator('#hypercognition-helper-preview').screenshot({ path: 'outputs/hypercognition-tests/hypercognition-helper.png' });
   await page.locator('#hypercognition-helper-preview').evaluate(element => element.remove());
   reports.push(...await page.evaluate(async () => {
-    const { setAdminMode } = await import('/js/GameStorage.js');
+    const { setAdminMode } = await import("/js/storage/gameStorage.js");
     const { refreshCodexUmbraPanel } = await import("/js/ui/codex/stats.js");
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     const reports = [];
     const check = (ok, text) => { if (!ok) throw Error(text); reports.push(text); };
     const panel = document.querySelector('#hyper-attack-preview');
@@ -447,9 +447,9 @@ try {
   await page.locator('.attack-nature-signature.inerte').first().locator('..').screenshot({ path: 'outputs/hypercognition-tests/inert-energy-loss.png' });
   reports.push(...await page.evaluate(async () => {
     const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
-    const { entites, enrichEntityStats, recomputeEntityStats } = await import('/js/entites.js');
-    const { getAttackNatureRules, getAttackPowerRatios } = await import('/js/attackResolution.js');
-    const { syncEntityEssenceRewards } = await import('/js/essenceInventory.js');
+    const { entites, enrichEntityStats, recomputeEntityStats } = await import("/js/entities/runtime.js");
+    const { getAttackNatureRules, getAttackPowerRatios } = await import("/js/combat/attackResolution.js");
+    const { syncEntityEssenceRewards } = await import("/js/items/essenceInventory.js");
     const reports = [];
     const check = (ok, text) => { if (!ok) throw Error(text); reports.push(text); };
     const settled = async predicate => {
@@ -522,8 +522,8 @@ try {
   await page.screenshot({ path: 'outputs/hypercognition-tests/socket-empty-desktop.png' });
   reports.push(...await page.evaluate(async () => {
     const { createInventory } = await import("/js/ui/inventory.js");
-    const { syncEntityEssenceRewards } = await import('/js/essenceInventory.js');
-    const { recomputeEntityStats } = await import('/js/entites.js');
+    const { syncEntityEssenceRewards } = await import("/js/items/essenceInventory.js");
+    const { recomputeEntityStats } = await import("/js/entities/runtime.js");
     const entity = window.selectedArmyA[0];
     entity.baseStats.hypercognition = 100;
     recomputeEntityStats(entity, { persistEquipment: false, skipReverseArchetype: true });

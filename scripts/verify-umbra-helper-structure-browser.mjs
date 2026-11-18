@@ -21,8 +21,8 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const setup = async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), S = await import("/js/storage/gameStorage.js");
     const { stats } = await import('/js/data/statsData.js');
     const umbras = stats.filter(stat => stat.nature === 'umbra');
     const entity = { id: 996711, name: 'Structure des Umbras', type: 'sbire', side: 'A', awakening: 3,

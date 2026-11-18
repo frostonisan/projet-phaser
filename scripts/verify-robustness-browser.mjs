@@ -26,9 +26,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
-    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import('/js/UpgradeEntity.js');
-    const State = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js");
+    const State = await import("/js/app/state.js");
     window.levelRunning = 'worldmap'; G.setAdminMode(true); State.refreshStageAccess();
     const entity = { id: 986742, name: 'Robustesse', type: 'sbire', side: 'A', awakening: 3,
       level: { current: 30, max: 250 }, baseStats: { HP: 100, strength: 50, intelligence: 50, agility: 50,
@@ -56,8 +56,8 @@ try {
     };
   });
   checks.push(...await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),A=await import('/js/items/armor.js'),G=await import('/js/GameStorage.js');
-    const Updates=await import('/js/entityUpdatesStorage.js');
+    const E=await import("/js/entities/runtime.js"),A=await import('/js/items/armor.js'),G=await import("/js/storage/gameStorage.js");
+    const Updates=await import("/js/storage/entityStorage.js");
     const e=audit.entity,dead=structuredClone(e);dead.id++;dead.stats.HP.current=0;
     A.destroyEntityArmor(dead);A.consumeEntityArmor(e,80);
     const gear={serial:'i42',itemId:'i42-solar',equippedId:'e-solar',equippedTo:e.id,itemType:['stuff'],

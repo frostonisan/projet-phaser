@@ -1,8 +1,8 @@
 // Commit resource changes at the orchestrator's chosen time; presentation stays separate.
-import { battleLogs } from '../battleLogs.js';
+import { battleLogs } from "./journal.js";
 import { consumeEntityArmor } from '../items/armor.js';
 import { saveEntityArmorState, saveEntityHPToStorage, recordEntityHealingDone,
-  recordEntityHealingReceived } from '../entityUpdatesStorage.js';
+  recordEntityHealingReceived } from "../storage/entityStorage.js";
 
 export function applyHpChange(entity, outcome) {
   entity.stats.HP.current = outcome.hpAfter;

@@ -24,20 +24,20 @@ const server = createServer(async (req, res) => {
     if (baseline && baselineFiles.has(name)) {
       data = await readFile(resolve(baselineDirectory, name), 'utf8');
     }
-    if (file.endsWith('sbireFight.js')) data = data.replace('    clearForcedInvisibleTargetAccuracy(attacker);', `
+    if (file.endsWith("combat/minionTurn.js")) data = data.replace('    clearForcedInvisibleTargetAccuracy(attacker);', `
       if (attacker.__lostTargetOnce) { delete attacker.__lostTargetOnce; attacker.__lateTarget = () => resolve(defendingEntites[0]); return; }
       if (attacker.__throwTargetOnce) { delete attacker.__throwTargetOnce; throw Error('Injected target failure'); }
       clearForcedInvisibleTargetAccuracy(attacker);`);
-    if (file.endsWith('entityAttributs.js')) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
+    if (file.endsWith("combat/vitals.js")) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
       if (attacker.__stallPhaseOnce) { delete attacker.__stallPhaseOnce; await new Promise(resolve => { attacker.__releasePhase = resolve; }); }
       else await combatDelay(Math.max(0, state.nextAt - combatNow()));`);
     if (file.endsWith('attackExecution.js')) data = data.replace('    if (!canPrepare()) return false;', `
       if (attacker.__throwPreparationOnce) { delete attacker.__throwPreparationOnce; throw Error('Injected preparation failure'); }
       if (!canPrepare()) return false;`);
-    if (file.endsWith('fight.js')) data = data.replace('wait.lastTick = now;', `
+    if (file.endsWith("combat/loop.js")) data = data.replace('wait.lastTick = now;', `
       if (attacker.__throwCooldownOnce) { delete attacker.__throwCooldownOnce; throw Error('Injected cooldown failure'); }
       wait.lastTick = now;`);
-    if (!baseline && file.endsWith('fight.js')) data = data
+    if (!baseline && file.endsWith("combat/loop.js")) data = data
       .replace('continuityChecks.set(entity, timer);', 'continuityChecks.set(entity, timer); (window.__checksArmed ||= []).push(entity.id);')
       .replace('continuityChecks.delete(entity);', 'continuityChecks.delete(entity); (window.__checksRun ||= []).push(entity.id);')
       .replace('try { verifyCombatTurnStarts(); }', 'try { window.__startupChecks = (window.__startupChecks || 0) + 1; verifyCombatTurnStarts(); }');
@@ -54,24 +54,24 @@ async function fixture(count = 3) {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
   await page.evaluate(async count => {
-    window.S = await import('/js/GameStorage.js'); window.E = await import('/js/entites.js');
-    window.Admin = await import('/js/admin.js'); window.G = await import('/js/gameState.js');
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js'); window.Effects = await import('/js/attackEffectMecanics.js');
+    window.S = await import("/js/storage/gameStorage.js"); window.E = await import("/js/entities/runtime.js");
+    window.Admin = await import("/js/debug/admin.js"); window.G = await import("/js/app/state.js");
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js"); window.Effects = await import("/js/combat/effects.js");
     window.pauseEvents = [];
     for (const type of ['combatPaused', 'combatResumed']) window.addEventListener(type, () => pauseEvents.push({ type, at: Date.now(), reasons: P.getCombatPauseReasons(), stack: new Error().stack }));
     document.addEventListener('visibilitychange', () => pauseEvents.push({ visibility: document.visibilityState }));
-    window.Damage = await import('/js/entityAttributs.js'); window.C = await import('/js/createEntity.js');
-    window.Loot = await import('/js/loot.js');
+    window.Damage = await import("/js/combat/vitals.js"); window.C = await import("/js/rendering/entities.js");
+    window.Loot = await import("/js/items/loot.js");
     S.setAdminMode(true); window.levelRunning = 'admin'; window.currentStageId = 'resurrection-test';
-    S.setCurrentLevel('resurrection-test'); (await import('/js/sessionStorage.js')).beginAdminSession();
+    S.setCurrentLevel('resurrection-test'); (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'resurrection-test', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} });
     S.saveToLocalStorage('equippedItems', []); E.entites.length = 0;
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"><div id="score"></div></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
     const grid = document.getElementById('hexGrid');
     grid.style.cssText = 'position:fixed;left:140px;top:200px;display:flex;gap:40px;transform:none';
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     for (let i = 0; i < count; i++) {
       const side = i === 1 || i === 3 ? 'B' : 'A';
       const hex = document.createElement('div'); hex.id = `hex_${i + 1}`; hex.className = `hex Side${side} occupied`;
@@ -91,15 +91,15 @@ async function fixture(count = 3) {
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
     window.actor = E.entites[0]; window.enemy = E.entites[1];
-    window.R = await import('/js/attackResolution.js'); window.F = await import('/js/fight.js');
-    window.T = await import('/js/combatTimeline.js'); window.recoveries = [];
+    window.R = await import("/js/combat/attackResolution.js"); window.F = await import("/js/combat/loop.js");
+    window.T = await import("/js/combat/timeline.js"); window.recoveries = [];
     const warn = console.warn; console.warn = (...args) => { if (args[0] === '[CombatRecovery]') recoveries.push(args[1]); warn(...args); };
     window.editAttack = patch => R.updateEntityAttackDefinition(actor, actor.attackDetails[0], patch);
     window.applied = [];
     window.effect = (kind, duration) => Effects[kind](actor, {effectName: kind, effectDuration: duration, effectSlowPercent: 50, effectMinInterval: 0.2, effectMaxInterval: 0.2, effectPriorityWeight: 1, effectActivationWeight: 1}, enemy);
     window.attacksDone = 0;
     document.addEventListener('entityTurnCompleted', ({ detail }) => { if (detail.entityId === actor.id) attacksDone++; });
-    (await import('/js/game.js')).configureBattleSystemsOnce();
+    (await import("/js/app/stages.js")).configureBattleSystemsOnce();
     Admin.initializeAdminLevel(E.entitesNestUp);
     window.kill = entity => {
       entity.stats.HP.current = 0; Damage.LifeandDeath(entity);
@@ -120,9 +120,9 @@ async function advanceAttack(page, before = null) {
 try {
   const preserved = await fixture();
   await preserved.evaluate(async () => {
-    window.Control = await import('/js/entityControl.js');
-    window.Move = await import('/js/board.js');
-    window.Drag = await import('/js/dragndrop.js');
+    window.Control = await import("/js/combat/control.js");
+    window.Move = await import("/js/board/controller.js");
+    window.Drag = await import("/js/board/interaction.js");
     editAttack({ preparationTime: 8000, executionTime: 100, recoveryTime: 100, cooldown: 40000 });
     const hex = document.createElement('div'); hex.id = 'hex_4'; hex.className = 'hex SideA';
     Object.assign(hex.dataset, { position: hex.id, row: '0', col: '3' });
@@ -236,14 +236,14 @@ try {
   await page.waitForTimeout(500);
   assert.ok(await page.evaluate(async () => {
     Admin.applyAdminLiveEntityDraft(actor, expiredDraft);
-    return !(await import('/js/entityControl.js')).isEntityActionPaused(actor);
+    return !(await import("/js/combat/control.js")).isEntityActionPaused(actor);
   }));
   checks.push('An old admin draft cannot reapply an expired control');
 
   await page.waitForFunction(() => actor._combatAction?.stage === 'preparation');
   const beforeChange = await page.evaluate(async () => {
     window.previousAction = actor._combatAction;
-    const I = await import('/js/essenceInventory.js');
+    const I = await import("/js/items/essenceInventory.js");
     const item = I.createLinkedEssenceItem(actor.id, 'blue', { origin: 'admin-test' });
     actor.attackEssenceInventory.linkedItems.push(item);
     const slots = [{ ...actor.attackDetails[0].essenceSlots[0], color: 'blue', active: true,
@@ -355,8 +355,8 @@ try {
 
   const interactions = await fixture();
   await interactions.evaluate(async () => {
-    window.Move = await import('/js/board.js');
-    await import('/js/dragndrop.js');
+    window.Move = await import("/js/board/controller.js");
+    await import("/js/board/interaction.js");
     editAttack({ preparationTime: 500, recoveryTime: 100 });
     window.hit = () => Damage.applyDamage(actor, 5, enemy, {
       ...enemy.attackDetails[0], launchContextId: 'continuity-hit', forceDamageSources: { physical: 5 },
@@ -417,7 +417,7 @@ try {
     Object.assign(hex.dataset, { position: hex.id, row: '0', col: '3' });
     hex.innerHTML = '<div class="socle"></div>'; document.getElementById('hexGrid').append(hex);
     Move.invalidateFootprintGeometry(document.getElementById('hexGrid'));
-    (await import('/js/dragndrop.js')).restoreEntityDragAndDrop();
+    (await import("/js/board/interaction.js")).restoreEntityDragAndDrop();
     const transfer = new DataTransfer(); transfer.setData('text', `Box_Entite_${actor.id}`);
     hex.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
     return actor.position === 'hex_4';
@@ -447,7 +447,7 @@ try {
   if (baselineDirectory) {
   const simulation = await fixture(2);
   await simulation.evaluate(async () => {
-    window.Sim = await import('/js/combatSimulation.js');
+    window.Sim = await import("/js/debug/simulation.js");
     for (const e of E.entites) {
       Object.assign(e.baseStats, { HP: 160, speed: 500, physicalDamage: 18, magicalDamage: 18,
         astrality: 10, strength: 10, intelligence: 10, agility: 10 });

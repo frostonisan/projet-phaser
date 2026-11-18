@@ -59,9 +59,9 @@ try {
   };
   const setup = async (state, preview, view) => page.evaluate(async ({ keys, state, preview, view }) => {
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
-    const E = await import('/js/entites.js');
-    const U = await import('/js/UpgradeEntity.js');
-    const S = await import('/js/entite/statSystem.js');
+    const E = await import("/js/entities/runtime.js");
+    const U = await import("/js/entities/progression.js");
+    const S = await import("/js/entities/statSystem.js");
     UI.closeOpenHelpers();
     document.getElementById('color-audit')?.remove();
     const entity = { id: 987149, name: 'Execution color audit', type: 'sbire', side: 'A', awakening: 1,
@@ -99,12 +99,12 @@ try {
   const helper = page.locator('[data-umbra-pinned="true"]');
   const detail = page.locator('[data-umbra-detail]');
   checks.push(...await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const S = await import('/js/entite/statSystem.js');
+    const E = await import("/js/entities/runtime.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const S = await import("/js/entities/statSystem.js");
     const H = await import('/js/data/helpers.js');
-    const U = await import('/js/UpgradeEntity.js');
-    const {getDisplayStatKey}=await import('/js/entite/entityRules.js');
+    const U = await import("/js/entities/progression.js");
+    const {getDisplayStatKey}=await import("/js/entities/rules.js");
     const passed = [];
     const expect = (ok, label) => { if (!ok) throw new Error(label); passed.push(label); };
     for (const [key, origin] of Object.entries(S.STAT_SYSTEM_ORIGINS)) {
@@ -252,8 +252,8 @@ try {
     [null, 'normal'],
   ]) {
     const expected = await page.evaluate(async delta => {
-      const U = await import('/js/UpgradeEntity.js');
-      const S = await import('/js/entite/statSystem.js');
+      const U = await import("/js/entities/progression.js");
+      const S = await import("/js/entities/statSystem.js");
       const { entity, committed } = window.__executionColorAudit;
       if (delta) entity.modifierStats.preview = { statLeveled: delta };
       else delete entity.modifierStats.preview;

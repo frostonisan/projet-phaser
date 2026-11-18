@@ -24,9 +24,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
-    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js'), S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const U = await import("/js/ui/application.js"), E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js"), S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
     const grid = document.createElement('div'); grid.id = 'hexGrid'; grid.style.cssText = 'position:absolute;top:150px;left:400px;width:700px;height:500px';
@@ -44,7 +44,7 @@ try {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.Sim = await import('/js/combatSimulation.js');
+    window.Sim = await import("/js/debug/simulation.js");
     // Regression: real players already have an acquired army in storage.
     // This exercises Application startup's import-time acquisition registration, unlike
     // a board fixture whose saved army is empty.
@@ -97,7 +97,7 @@ try {
     assert.equal(army.damage.min, Math.min(...sums)); assert.equal(army.damage.max, Math.max(...sums));
   }
   const checks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const first = await Sim.simulateTrial(snapshot, { seed: report.trials[0].seed, durationMs: 5000, trace: true });
     const timeout = await Sim.simulateTrial(snapshot, { seed: 5, durationMs: 50, trace: true });
     const afterFirstDeath = await Sim.simulateTrial(snapshot, {
@@ -229,7 +229,7 @@ try {
     const restored = JSON.parse(doc.getElementById('simulation-data').textContent);
     const outcomes = [...doc.querySelectorAll('details')].find(d =>
       d.querySelector('summary')?.textContent === 'Résultat de chaque combat');
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     return { mixed, allSkipped, cancelledAfterSkip, broken, progress, html,
       exportedSkips: restored.skippedTrials, outcomeRuns: [...outcomes.querySelectorAll('tbody tr')].map(r => Number(r.cells[0].textContent)),
       frames: document.querySelectorAll('iframe[title="Calcul isolé"]').length,
@@ -405,7 +405,7 @@ try {
   }
   console.log(`PASS: ${randomBatchCount} unchanged fight attempts, distinct random seeds/procs, entity and army averages, full camp victories, deadline continuation, cancellation, reproducibility, isolated board/storage and report export.`);
   const book = await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js'), B = await import('/js/battleLogs.js');
+    const S = await import("/js/storage/gameStorage.js"), B = await import("/js/combat/journal.js");
     const key = 'BattleLog_report_readability_fixture';
     const entries = [
       { type: 'battle_start', time: '00:00', message: 'Début' },

@@ -37,15 +37,15 @@ try {
         if (window.__dragAudit.length > 20) window.__dragAudit.shift();
       });
     }, true);
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts)), State = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts)), State = await import("/js/app/state.js");
     const M = await import('/js/items/itemManager.js'), Gear = await import('/js/items/equipement.js');
-    const R = await import('/js/items/resourceStocks.js'), U = await import('/js/entityUpdatesStorage.js');
-    const C = await import('/js/createEntity.js'), AttackUI = await import("/js/ui/attacks.js");
-    const Role = await import('/js/role-rule.js'), Lord = await import('/js/lordFight.js');
+    const R = await import('/js/items/resourceStocks.js'), U = await import("/js/storage/entityStorage.js");
+    const C = await import("/js/rendering/entities.js"), AttackUI = await import("/js/ui/attacks.js");
+    const Role = await import("/js/combat/roles.js"), Lord = await import("/js/combat/lordTurn.js");
     const Popup = await import("/js/ui/display.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
     const template = entitesNest.find(entity => entity.serial === 900013);
     const checks = [], expected = new Map();
     let actor, donor, enemy, sourceId, incoming, previous, targetNode, label;
@@ -252,7 +252,7 @@ try {
         check(M.moveBattleItem(incoming.itemId, 0), 'Prepare real battle pouch');
         for (let index = 1; index < 4; index++) check(M.moveBattleItem(acquire('MovementCharge').itemId, index), 'Fill real battle pouch');
         UI.initializeArmyConfig();
-        const MapUI = await import('/js/newgame.js');
+        const MapUI = await import("/js/app/worldMap.js");
         MapUI.rebuildWorldMapLevelButtons();
         const stageId = document.querySelector('.level-button.scripted').dataset.storageid;
         S.saveToLocalStorage('ArmyB', { armies: { [`ArmyB_${stageId}`]: { entities: [enemy], ArmyB_id: `ArmyB_${stageId}` } } });
@@ -384,17 +384,17 @@ try {
   }, null, { timeout: 30000 });
   await page.locator('#startButton').click();
   await page.waitForFunction(async () => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     return entites.every(entity => entity.turnCount >= 1 && entity.currentPhase);
   });
   // Freeze the fixture's action timers, not access rules, so drag assertions cannot race a turn refill.
   await page.evaluate(async () => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     for (const entity of entites) entity.battleStopped = true;
-    const State = await import('/js/gameState.js'); State.stopAllIntervals();
+    const State = await import("/js/app/state.js"); State.stopAllIntervals();
   });
   for (const [index, target] of ['#DragSprite_996101', '#portrait-container_996101', '#ScanEntity_996101 .entite-details-image', '.combat-attack-control-portrait'].entries()) {
-    if (index === 1) await page.evaluate(async () => (await import('/js/createEntity.js')).createHeadUpInDom(996101));
+    if (index === 1) await page.evaluate(async () => (await import("/js/rendering/entities.js")).createHeadUpInDom(996101));
     if (index === 2) await page.evaluate(async () => (await import("/js/ui/display.js")).toggleScanEntity('ScanEntity_996101', false));
     if (index === 3) await page.evaluate(async () => {
       (await import("/js/ui/display.js")).toggleScanEntity('ScanEntity_996101', false);

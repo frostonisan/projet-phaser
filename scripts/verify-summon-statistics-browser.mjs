@@ -21,16 +21,16 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const { entites, enrichEntityStats, removedEntities } = await import('/js/entites.js');
-    const { applyDamage, LifeandDeath, calculateDefensiveHpOutcome } = await import('/js/entityAttributs.js');
-    const { summonEntite, consommationSummon } = await import('/js/summonsMecanics.js');
+    const { entites, enrichEntityStats, removedEntities } = await import("/js/entities/runtime.js");
+    const { applyDamage, LifeandDeath, calculateDefensiveHpOutcome } = await import("/js/combat/vitals.js");
+    const { summonEntite, consommationSummon } = await import("/js/combat/summons.js");
     const { summons } = await import('/js/data/summons.js');
     const { balanceData } = await import('/js/data/balanceData.js');
     const { grantEntityExternalArmor } = await import('/js/items/armor.js');
-    const { getEntityCombatDetails, recordSummonCreated } = await import('/js/entityUpdatesStorage.js');
-    const { resetLevelBattleStats, getLevelCombatDetails } = await import('/js/dom.js');
-    const { rebuildBoardOccupancy } = await import('/js/board.js');
-    const { saveToLocalStorage, loadFromLocalStorage } = await import('/js/GameStorage.js');
+    const { getEntityCombatDetails, recordSummonCreated } = await import("/js/storage/entityStorage.js");
+    const { resetLevelBattleStats, getLevelCombatDetails } = await import("/js/rendering/hud.js");
+    const { rebuildBoardOccupancy } = await import("/js/board/controller.js");
+    const { saveToLocalStorage, loadFromLocalStorage } = await import("/js/storage/gameStorage.js");
     const { createCodexEntityScan, createCodexCombatRecord, createCodexInvocationsRecord } = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts));
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); };

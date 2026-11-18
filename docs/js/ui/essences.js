@@ -1,14 +1,14 @@
 // Essence menu and attack-card editing connected to the existing transactions.
 import { cachedResourceUrl } from '../data/loaderList.js';
 import { attackDetails } from '../data/attackList.js';
-import { isAdminMode, loadFromLocalStorage, saveToLocalStorage } from '../GameStorage.js';
-import { enrichEntityStats } from '../entites.js';
+import { isAdminMode, loadFromLocalStorage, saveToLocalStorage } from "../storage/gameStorage.js";
+import { enrichEntityStats } from "../entities/runtime.js";
 import {
   ATTACK_ESSENCE_MAX_SLOTS,
   readAttackDefinitionKey,
   ensureEntityAttackInstances,
   updateEntityAttackDefinition,
-} from '../attackResolution.js';
+} from "../combat/attackResolution.js";
 import {
   buildAttackEssenceSocketPatch,
   calculateEntityLinkedEssenceAvailability,
@@ -22,9 +22,9 @@ import {
   getEssenceItemDefinition,
   previewAttackEssenceEquipTransaction,
   syncEntityLinkedEssenceInventory,
-} from '../essenceur.js';
-import { createLinkedEssenceItem } from '../essenceInventory.js';
-import { getStageAccess, requireSafeMenuAccess } from '../gameState.js';
+} from "../items/essences.js";
+import { createLinkedEssenceItem } from "../items/essenceInventory.js";
+import { getStageAccess, requireSafeMenuAccess } from "../app/state.js";
 import { cssEscape } from "./statistics/helpers.js";
 import {
   toggleWindowInMenuMap,

@@ -1,11 +1,11 @@
-import { removeCombatVisualAfter } from '../combatClock.js';
-import { setTimeout } from '../combatClock.js';
-import { updateHealthBar } from '../UpgradeEntity.js';
-import { applyItemHPChange } from '../entityUpdatesStorage.js';
+import { removeCombatVisualAfter } from "../combat/clock.js";
+import { setTimeout } from "../combat/clock.js";
+import { updateHealthBar } from "../entities/progression.js";
+import { applyItemHPChange } from "../storage/entityStorage.js";
 import { itemEffects } from './itemEffects.js';
-import { showHealingFeedback, toggleEffectClass } from '../attackEffectMecanics.js';
-import { itemSaveEntityHPToStorage, saveEntireEntityToStorage } from '../entityUpdatesStorage.js';
-import { calculateResistances } from '../entites.js';
+import { showHealingFeedback, toggleEffectClass } from "../combat/effects.js";
+import { itemSaveEntityHPToStorage, saveEntireEntityToStorage } from "../storage/entityStorage.js";
+import { calculateResistances } from "../entities/runtime.js";
 
 export function calculateItemDamages(target, effect, item) {
     if (!target || !target.stats.HP) {

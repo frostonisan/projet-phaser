@@ -1,13 +1,13 @@
-import { clockNow, setInterval, clearInterval, isCombatPaused } from "../../combatClock.js";
-import { getStatSystemResult } from "../../entite/statSystem.js";
+import { clockNow, setInterval, clearInterval, isCombatPaused } from "../../combat/clock.js";
+import { getStatSystemResult } from "../../entities/statSystem.js";
 import { STAT_EFFECT_HELPERS, buildStatCurseHelper, buildEntityRateHelper } from "../../data/helpers.js";
 import { cachedResourceUrl } from "../../data/loaderList.js";
-import { getSafe, getDisplayStatKey, normalizeStatKey } from "../../entite/entityRules.js";
+import { getSafe, getDisplayStatKey, normalizeStatKey } from "../../entities/rules.js";
 import {
   calculatePhysicalPenPercent, calculateMagicalPenPercent, getBloodThirstyPercent,
   calculateEsoterismPercent, calculateTranscendenceExtraLife, getMovementWeightMalus,
   getStatMalusSources, entites,
-} from "../../entites.js";
+} from "../../entities/runtime.js";
 import {
   getStatContributions, calculateResistanceReductionPercent, calculateMagicalTotal,
   getFinalAttackPreparationReduc, getFinalAttackExecutionReduc, getFinalAttackCooldownReduc,
@@ -37,7 +37,7 @@ import {
   calculateChargeEquipmentSlots, calculateWeaponMasteryTotalChargeBonus,
   calculateWeaponMasteryTrophyChance, getMarathonChance, getTrailerChance, calculateEntityPower,
   calculateEntityRates, calculateAttackPower, calculateArmyPower, getPowerConfigurationSignature,
-} from "../../damagesCalcul.js";
+} from "../../combat/statistics.js";
 import { isDisplayableStatContribution, calculateStatsDisplay, getStatImprovement } from "./details.js";
 import { stats } from "../../data/statsData.js";
 import {
@@ -47,8 +47,8 @@ import {
 } from "./helpers.js";
 import { attackDetails } from "../../data/attackList.js";
 import { getPowerBreakdownLines, roundPower, readOwnedPowerAttacks } from "../../procedural/proc-bareme.js";
-import { isAdminMode, loadFromLocalStorage, loadEquippedItems } from "../../GameStorage.js";
-import { attackSelectionKey } from "../../attackResolution.js";
+import { isAdminMode, loadFromLocalStorage, loadEquippedItems } from "../../storage/gameStorage.js";
+import { attackSelectionKey } from "../../combat/attackResolution.js";
 import { EFFECT_VISUALS } from "../../data/effectVisuals.js";
 
 // Presentation des statistiques : composants, puissance, Umbra et effets actifs.

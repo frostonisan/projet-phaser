@@ -10,8 +10,8 @@ const {
   isLord,
   isNonLordCombatant,
   analyzeEntityCombatProfile,
-} = await import("../docs/js/entite/entityRules.js");
-const { entitesNest } = await import('../docs/js/entite/entitesNest.js');
+} = await import("../docs/js/entities/rules.js");
+const { entitesNest } = await import("../docs/js/data/entityTemplates.js");
 const { attackDetails } = await import('../docs/js/data/attackList.js');
 
 const byName = new Map(attackDetails.map(attack => [attack.functionName, attack]));

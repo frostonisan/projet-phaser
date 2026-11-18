@@ -28,8 +28,8 @@ try {
   await dismissStarterForFixture(page);
   const expectedParts = await page.evaluate(async () => {
     const UI = await import("/js/ui/codex/index.js");
-    const E = await import('/js/entites.js');
-    const S = await import('/js/entite/statSystem.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/entities/statSystem.js");
     const entity = { id: 987141, name: 'Intégrité et arrondis', type: 'sbire', side: 'A', awakening: 1,
       level: { current: 1, max: 250 }, attacks: ['autoAttack'], stuff: {}, stats: {},
       baseStats: { HP: 100, strength: 10, intelligence: 10, agility: 10, vigueur: 10, esprit: 10,
@@ -89,8 +89,8 @@ try {
     }
   }
   const impacts = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const { applyDamage } = await import('/js/entityAttributs.js');
+    const E = await import("/js/entities/runtime.js");
+    const { applyDamage } = await import("/js/combat/vitals.js");
     const actor = (id, side, values = {}) => E.enrichEntityStats({ id, name: `Intégrité ${id}`, side,
       type: 'sbire', level: 1, attacks: ['autoAttack'], baseStats: { HP: 1000, ...values }, stuff: {} });
     const previousRandom = Math.random;

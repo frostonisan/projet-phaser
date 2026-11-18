@@ -28,11 +28,11 @@ try {
   const check = (value, label) => { assert.ok(value, label); checks.push(label); };
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const original = await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
-    const N = await import('/js/newgame.js');
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
+    const N = await import("/js/app/worldMap.js");
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
     window.levelRunning = 'worldmap'; S.setAdminMode(true);
     const template = entitesNest.find(entity => entity.serial === 900013);
     const actor = E.enrichEntityStats({ ...structuredClone(template), id: 981970, name: 'Saved army', side: 'A', level: 1,
@@ -63,15 +63,15 @@ try {
     const hud = document.querySelector('.hud-ingame');
     return !document.querySelector('.loading-screen') && document.getElementById('startButton') && hud?.style.opacity === '1' && hud.style.transition === '';
   }, null, { timeout: 30000 });
-  check(await page.evaluate(async () => (await import('/js/sessionStorage.js')).isAdminSessionActive()), 'Real map entry activates the in-memory admin session');
+  check(await page.evaluate(async () => (await import("/js/storage/sessionStorage.js")).isAdminSessionActive()), 'Real map entry activates the in-memory admin session');
   check(await page.evaluate(snapshot => window.__adminPersistentSnapshot() === snapshot && window.__adminNativeWrites.length === 0, original.snapshot), 'Entering admin performs zero localStorage writes');
 
   for (let round = 0; round < 2; round++) {
     await page.evaluate(async () => {
-      const E = await import('/js/entites.js');
-      const S = await import('/js/GameStorage.js');
-      const C = await import('/js/createEntity.js');
-      const { entitesNest } = await import('/js/entite/entitesNest.js');
+      const E = await import("/js/entities/runtime.js");
+      const S = await import("/js/storage/gameStorage.js");
+      const C = await import("/js/rendering/entities.js");
+      const { entitesNest } = await import("/js/data/entityTemplates.js");
       document.querySelectorAll('#hexGrid .entite-box').forEach(node => node.remove());
       document.querySelectorAll('#hexGrid .hex').forEach(hex => hex.classList.remove('occupied'));
       E.entites.length = 0;
@@ -92,11 +92,11 @@ try {
         const created = C.createEntiteInDOM(actor);
         document.querySelector(`[data-position="${actor.position}"].hex`).appendChild(created.element);
         await created.spriteReady;
-        (await import('/js/entitesAura.js')).syncEntityAuras(actor);
+        (await import("/js/rendering/auras.js")).syncEntityAuras(actor);
       }
-      (await import('/js/fight.js')).initFightEntites();
+      (await import("/js/combat/loop.js")).initFightEntites();
       window.__adminCombatActors = actors;
-      const G = await import('/js/gameState.js');
+      const G = await import("/js/app/state.js");
       G.manageBattleActions({ mode: G.BATTLE_ACTION_MODE.START });
     });
     await page.locator('#startButton').click();
@@ -124,17 +124,17 @@ try {
     check(await page.locator('[data-ground-summon]').count() === 3, 'Combat contains a timed item, infinite crystal and infinite native summon');
     await page.screenshot({ path: resolve(output, `combat-${round + 1}-before-reset.png`) });
     if (round === 1) await page.evaluate(async () => {
-      (await import('/js/gameState.js')).setOrderSide('A');
-      (await import('/js/events.js')).attackSurprise('B');
+      (await import("/js/app/state.js")).setOrderSide('A');
+      (await import("/js/events/runtime.js")).attackSurprise('B');
     });
     await page.getByRole('button', { name: 'Reset niveau', exact: true }).click();
     await page.waitForFunction(() => document.getElementById('admin-event-launch-status').textContent.includes('réinitialisé'));
     await page.waitForTimeout(1200);
     const stopped = await page.evaluate(async ids => {
-      const E = await import('/js/entites.js'), G = await import('/js/gameState.js'), M = await import('/js/items/itemManager.js');
+      const E = await import("/js/entities/runtime.js"), G = await import("/js/app/state.js"), M = await import('/js/items/itemManager.js');
       const save = M.getBattleInventoryState();
       return !G.gameStarted && !E.entites.length && !G.activeIntervals.length && G.getOrderSide() === null
-        && (await import('/js/events.js')).getSurprisedSide() === null
+        && (await import("/js/events/runtime.js")).getSurprisedSide() === null
         && !save.battleGroundItems.length && !save.adminGroundSummons.length && ids.every(id => !M.getIngameItemById(id))
         && !document.querySelector('#hexGrid .entite-box, [data-ground-summon], .ground-loot-remnant, #hexGrid .ground-item-glitter')
         && window.__adminCombatActors.every(actor => actor.turnCount === 0 && actor.speedTimer === 0
@@ -144,25 +144,25 @@ try {
     check(stopped, `Combat ${round + 1}: reset removes entities, auras, items and timers, clears order/surprise and restores Start`);
     check(await page.evaluate(snapshot => window.__adminPersistentSnapshot() === snapshot && window.__adminNativeWrites.length === 0, original.snapshot), 'Combat, gains and reset perform zero persistent writes');
   }
-  await page.evaluate(async () => (await import('/js/game.js')).QuitCurrentLevel());
-  await page.waitForFunction(async () => window.levelRunning === 'worldmap' && !window.__QUIT_LEVEL_LOCK__ && !(await import('/js/sessionStorage.js')).isAdminSessionActive());
+  await page.evaluate(async () => (await import("/js/app/stages.js")).QuitCurrentLevel());
+  await page.waitForFunction(async () => window.levelRunning === 'worldmap' && !window.__QUIT_LEVEL_LOCK__ && !(await import("/js/storage/sessionStorage.js")).isAdminSessionActive());
   check(await page.evaluate(snapshot => window.__adminPersistentSnapshot() === snapshot && window.__adminNativeWrites.length === 0, original.snapshot), 'Leaving admin restores the map with the persistent save byte-for-byte unchanged');
   check(await page.evaluate(async original => {
-    const S = await import('/js/GameStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
     return JSON.stringify(S.loadFromLocalStorage('selectedArmyA')) === JSON.stringify(original.army) && localStorage.getItem('gameDay') === original.day;
   }, original), 'Normal army and day remain unchanged after admin experiments');
   await page.locator('.level-button.admin').first().click({ force: true });
   await page.locator('.loading-h2.loaded').waitFor({ timeout: 45000 });
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
     S.saveToLocalStorage('admin-reload-probe', { temporary: true });
   });
   await page.reload({ waitUntil: 'load' });
-  check(await page.evaluate(async () => !(await import('/js/sessionStorage.js')).isAdminSessionActive()
-    && (await import('/js/GameStorage.js')).loadFromLocalStorage('admin-reload-probe') === null
+  check(await page.evaluate(async () => !(await import("/js/storage/sessionStorage.js")).isAdminSessionActive()
+    && (await import("/js/storage/gameStorage.js")).loadFromLocalStorage('admin-reload-probe') === null
     && !document.querySelector('[data-ground-summon]')), 'Reload discards admin state instead of restoring it');
   check(await page.evaluate(async () => {
-    const S = await import('/js/sessionStorage.js');
+    const S = await import("/js/storage/sessionStorage.js");
     const snapshot = () => JSON.stringify(Object.entries(window.localStorage).sort());
     const before = snapshot();
     S.beginAdminSession();

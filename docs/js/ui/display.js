@@ -1,13 +1,13 @@
-import { removeCombatVisualAfter } from "../combatClock.js";
-import { showEffectPopup, formatEffectPopup } from "../combatPopups.js";
+import { removeCombatVisualAfter } from "../combat/clock.js";
+import { showEffectPopup, formatEffectPopup } from "../rendering/popups.js";
 import { HelpText, HELPER_PICTOGRAM_NAMES } from "../data/helpers.js";
-import { getDisplayStatKey, normalizeStatKey } from "../entite/entityRules.js";
-import { calculateStatSources } from "../entite/statSystem.js";
+import { getDisplayStatKey, normalizeStatKey } from "../entities/rules.js";
+import { calculateStatSources } from "../entities/statSystem.js";
 import { stats as STATS_DATA } from "../data/statsData.js";
 import { playCachedGif } from "../data/loaderList.js";
-import { createEntiteScanInDOM, createHeadUpInDom } from "../createEntity.js";
-import { renderCurrentBattleLog } from "../battleLogs.js";
-import { getVisibleHexes, setVisibleHexes } from "../GameStorage.js";
+import { createEntiteScanInDOM, createHeadUpInDom } from "../rendering/entities.js";
+import { renderCurrentBattleLog } from "../combat/journal.js";
+import { getVisibleHexes, setVisibleHexes } from "../storage/gameStorage.js";
 import { hideCombatAttackControlPanel, isCombatAttackControlPanelOpenFor, showCombatAttackControlPanel } from "./attacks.js";
 
 export function getOrCreateGameContainer() {

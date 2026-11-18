@@ -24,8 +24,8 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js');
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js");
     const { loadResource } = await import('/js/data/loaderList.js');
     const gif = await loadResource('/media/assets/effects/ambidextry.gif');
     const bytes = new Uint8Array(await gif.blob.arrayBuffer());
@@ -33,13 +33,13 @@ async function fixture(config = {}) {
     if (marker < 0 || bytes[marker + 13] || bytes[marker + 14]) throw Error('GIF should loop while combat time is paused');
 
     const U = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
-    const store = await import('/js/sessionStorage.js');
+    const store = await import("/js/storage/sessionStorage.js");
     store.beginAdminSession(); window.currentStageId = 'pause-test';
     store.gameStorage.setItem('GameStages', JSON.stringify({stages:[{id:'pause-test',level_type:'admin'}]}));
     store.gameStorage.setItem('currentLevel','pause-test');
@@ -64,10 +64,10 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
+    window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
-    window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard();
+    window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
+    window.Sim = await import("/js/debug/simulation.js"); window.snapshot = Sim.captureSimulationBoard();
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {
       const { type, data } = event.detail;
@@ -79,8 +79,8 @@ async function fixture(config = {}) {
 
 async function normalWorld(page) {
   await page.evaluate(async()=>{
-    const store=await import('/js/sessionStorage.js');store.endAdminSession();
-    const S=await import('/js/GameStorage.js');S.setAdminMode(false);
+    const store=await import("/js/storage/sessionStorage.js");store.endAdminSession();
+    const S=await import("/js/storage/gameStorage.js");S.setAdminMode(false);
     window.levelRunning='scripted';window.currentStageId='pause-test';
     const write=(key,value)=>store.gameStorage.setItem(key,JSON.stringify(value));
     store.gameStorage.setItem('currentLevel','pause-test');
@@ -96,9 +96,9 @@ async function normalWorld(page) {
 }
 const paused=page=>page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre'&&!document.querySelector('#combat-pause-control').disabled);
 const state=page=>page.evaluate(async()=>{
-  const s=(await import('/js/sessionStorage.js')).gameStorage;
+  const s=(await import("/js/storage/sessionStorage.js")).gameStorage;
   return {stages:s.getItem('GameStages'),army:s.getItem('ArmyB'),selected:s.getItem('selectedArmyA'),
-    started:(await import('/js/gameState.js')).gameStarted,available:sessionStorage.getItem('DarkPitPausedCombat:available'),
+    started:(await import("/js/app/state.js")).gameStarted,available:sessionStorage.getItem('DarkPitPausedCombat:available'),
     winner:!!document.querySelector('.overlay-victory')};
 });
 const cases=[];
@@ -111,9 +111,9 @@ try {
     assert.equal(await page.locator('.entitylootContainer').count(),0,'no starter selection during combat');
     for(const key of ['stages','army','selected'])assert.equal(after[key],before[key],key);
     await page.evaluate(async()=>{
-      await (await import('/js/combatPause.js')).resumeCombat();
-      const E=await import('/js/entites.js');E.entites[1].stats.HP.current=0;E.entites[1].isDEAD=true;
-      (await import('/js/gameState.js')).checkGameOver();
+      await (await import("/js/combat/pause.js")).resumeCombat();
+      const E=await import("/js/entities/runtime.js");E.entites[1].stats.HP.current=0;E.entites[1].isDEAD=true;
+      (await import("/js/app/state.js")).checkGameOver();
     });
     const end=await state(page);assert.equal(end.winner,false);
     assert.deepEqual(JSON.parse(end.stages).stages.map(s=>s.statut),['finished','unstarted']);
@@ -122,7 +122,7 @@ try {
   await check('empty stages do not mean world victory',async()=>{
     const page=await fixture({speed:10000});await normalWorld(page);
     await page.evaluate(async()=>{
-      (await import('/js/sessionStorage.js')).gameStorage.setItem('GameStages','{"stages":[]}');
+      (await import("/js/storage/sessionStorage.js")).gameStorage.setItem('GameStages','{"stages":[]}');
       E.entites[1].stats.HP.current=0;E.entites[1].isDEAD=true;G.checkGameOver();
     });
     assert.equal((await state(page)).winner,false);await page.close();
@@ -130,7 +130,7 @@ try {
   await check('missing stages do not mean world victory',async()=>{
     const page=await fixture({speed:10000});await normalWorld(page);
     await page.evaluate(async()=>{
-      (await import('/js/sessionStorage.js')).gameStorage.removeItem('GameStages');
+      (await import("/js/storage/sessionStorage.js")).gameStorage.removeItem('GameStages');
       E.entites[1].stats.HP.current=0;E.entites[1].isDEAD=true;G.checkGameOver();
     });
     assert.equal((await state(page)).winner,false);await page.close();
@@ -138,7 +138,7 @@ try {
   await check('a test outside the world cannot declare global victory',async()=>{
     const page=await fixture({speed:10000});await normalWorld(page);
     await page.evaluate(async()=>{
-      (await import('/js/sessionStorage.js')).gameStorage.setItem('GameStages',JSON.stringify({stages:[{id:'another-stage',statut:'finished'}]}));
+      (await import("/js/storage/sessionStorage.js")).gameStorage.setItem('GameStages',JSON.stringify({stages:[{id:'another-stage',statut:'finished'}]}));
       E.entites[1].stats.HP.current=0;E.entites[1].isDEAD=true;G.checkGameOver();
     });
     assert.equal((await state(page)).winner,false);await page.close();
@@ -151,7 +151,7 @@ try {
   await check('finishing the real last stage still declares global victory',async()=>{
     const page=await fixture({speed:10000});await normalWorld(page);
     await page.evaluate(async()=>{
-      const s=(await import('/js/sessionStorage.js')).gameStorage;
+      const s=(await import("/js/storage/sessionStorage.js")).gameStorage;
       const world=JSON.parse(s.getItem('GameStages'));world.stages[1].statut='finished';
       s.setItem('GameStages',JSON.stringify(world));
       E.entites[1].stats.HP.current=0;E.entites[1].isDEAD=true;G.checkGameOver();
@@ -173,11 +173,11 @@ try {
   await check('resetting a paused game cannot restore the old combat',async()=>{
     const page=await fixture({speed:10000});await normalWorld(page);
     await page.evaluate(()=>P.pauseCombat());await paused(page);
-    await page.evaluate(async()=>{window.selectedArmyA=[];(await import('/js/GameStorage.js')).resetFullGame();});
+    await page.evaluate(async()=>{window.selectedArmyA=[];(await import("/js/storage/gameStorage.js")).resetFullGame();});
     const reset=await state(page);
     assert.equal(reset.available,null,'reset must invalidate pause');
     assert.equal(reset.started,false,'reset must stop combat');
-    await page.reload();await page.evaluate(async()=>await (await import('/js/combatPause.js')).restorePausedCombat());
+    await page.reload();await page.evaluate(async()=>await (await import("/js/combat/pause.js")).restorePausedCombat());
     assert.equal((await state(page)).started,false);
     assert.equal(await page.locator('#Box_Entite_999820').count(),0);
     await page.close();

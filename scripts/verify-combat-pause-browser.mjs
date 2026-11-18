@@ -24,8 +24,8 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js');
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js");
     const { loadResource } = await import('/js/data/loaderList.js');
     const gif = await loadResource('/media/assets/effects/ambidextry.gif');
     const bytes = new Uint8Array(await gif.blob.arrayBuffer());
@@ -33,13 +33,13 @@ async function fixture(config = {}) {
     if (marker < 0 || bytes[marker + 13] || bytes[marker + 14]) throw Error('GIF should loop while combat time is paused');
 
     const U = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
-    const store = await import('/js/sessionStorage.js');
+    const store = await import("/js/storage/sessionStorage.js");
     store.beginAdminSession(); window.currentStageId = 'pause-test';
     store.gameStorage.setItem('GameStages', JSON.stringify({stages:[{id:'pause-test',level_type:'admin'}]}));
     store.gameStorage.setItem('currentLevel','pause-test');
@@ -64,10 +64,10 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
+    window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
-    window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard();
+    window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
+    window.Sim = await import("/js/debug/simulation.js"); window.snapshot = Sim.captureSimulationBoard();
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {
       const { type, data } = event.detail;
@@ -83,7 +83,7 @@ try {
   const page = await fixture({ A: { range: mode }, B: { range: mode } });
   await page.evaluate(async () => {
     G.startGame();
-    const {poison} = await import('/js/attackEffectMecanics.js');
+    const {poison} = await import("/js/combat/effects.js");
     poison(E.entites[0], { effectDot: 9, effectDuration: 4, type: ['alteration'] }, E.entites[1]);
   });
   await page.waitForSelector(mode === 'range' ? '.projectile-parent' : 'canvas[id^=meleeClone_]');
@@ -91,8 +91,8 @@ try {
   await page.keyboard.press('Space');
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
   const read = () => page.evaluate(async () => {
-    const { entites } = await import('/js/entites.js');
-    const clock = await import('/js/combatClock.js');
+    const { entites } = await import("/js/entities/runtime.js");
+    const clock = await import("/js/combat/clock.js");
     return { paused: clock.isCombatPaused(), now: clock.clockNow(),
       e: entites.map(e => ({ id:e.id,hp:e.stats.HP.current,turn:e.turnCount,prep:e.preparationTime,speed:e.speedTimer,action:e._combatAction,cooldowns:e.attackSelection?.readyAt })),
       projectiles:[...document.querySelectorAll('.projectile-parent')].map(el=>({id:el.id,transform:el.style.transform})),
@@ -122,18 +122,18 @@ try {
   compare(await read(),before,'reload does not restart timers');
   await page.screenshot({path:resolve(output,'restored-paused.png')});
   await page.keyboard.press('Space');
-  await page.waitForFunction(async () => !(await import('/js/combatClock.js')).isCombatPaused());
+  await page.waitForFunction(async () => !(await import("/js/combat/clock.js")).isCombatPaused());
   await page.waitForTimeout(2400);
   const after = await read();
   assert.ok(after.e.every((e,i)=>e.hp<before.e[i].hp),'both saved impacts apply after resume');
   assert.ok(after.e.every((e,i)=>before.e[i].hp-e.hp<100),'no duplicate impact');
-  await page.evaluate(async () => (await import('/js/combatPause.js')).pauseCombat());
+  await page.evaluate(async () => (await import("/js/combat/pause.js")).pauseCombat());
   const pausedAgain = await read();
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
   compare(await read(),pausedAgain,'second pause/reload retains elapsed combat time');
-  await page.evaluate(async () => (await import('/js/gameState.js')).StopGame({preserveScene:true}));
-  assert.equal(await page.evaluate(async () => (await import('/js/combatClock.js')).isCombatPaused()),false);
+  await page.evaluate(async () => (await import("/js/app/state.js")).StopGame({preserveScene:true}));
+  assert.equal(await page.evaluate(async () => (await import("/js/combat/clock.js")).isCombatPaused()),false);
   await page.close();
   console.log('PASS pause/restoration: '+mode);
   }
@@ -150,16 +150,16 @@ try {
       await page.evaluate(()=>document.getElementById('pause-text-test').remove());
     }
     await page.evaluate(async () => {
-      const U=await import("/js/ui/display.js"), An=await import('/js/entitesAnimation.js');
+      const U=await import("/js/ui/display.js"), An=await import("/js/rendering/animations.js");
       U.EffectMessage(E.entites[0], 'Test pause');
       An.animateEsoterism(E.entites[0].id);
-      const {entityBattleBooste}=await import('/js/entite/entityRules.js');
+      const {entityBattleBooste}=await import("/js/entities/rules.js");
       entityBattleBooste(E.entites[0],{stat:'strength',value:7,durationMs:1200,source:'pause-test'});
     });
     await page.waitForTimeout(90);
     await page.evaluate(()=>P.pauseCombat());
     const read=()=>page.evaluate(async()=>{
-      const {entites}=await import('/js/entites.js');
+      const {entites}=await import("/js/entities/runtime.js");
       return entites.map(e=>({hp:e.stats.HP.current,speed:e.speedTimer,prep:e.preparationTime,recovery:e.recoveryTime,turn:e.turnCount,
         action:e._combatAction,boosts:Object.values(e.battleBoosts||{}).flat().map(b=>({id:b.id,value:b.value,expiresAt:b.expiresAt})),
         filter:document.getElementById(`spriteCanvas_${e.id}`).style.filter,
@@ -172,7 +172,7 @@ try {
     await page.keyboard.press('Space');
     await page.waitForTimeout(2300);
     assert.ok((await read()).every(e=>!e.boosts.some(b=>b.value===7)),'restored boost expires');
-    await page.evaluate(async()=>(await import('/js/gameState.js')).StopGame({preserveScene:true}));
+    await page.evaluate(async()=>(await import("/js/app/state.js")).StopGame({preserveScene:true}));
     await page.close();console.log('PASS phase: '+phase+' with popup, canvas tint and timed boost');
   }
   }
@@ -182,7 +182,7 @@ try {
     await page.waitForFunction(()=>E.entites[1].orderPhase==='orderDecision');
     await page.waitForTimeout(200); await page.evaluate(()=>P.pauseCombat());
     const read=()=>page.evaluate(async()=>{
-      const {entites}=await import('/js/entites.js');
+      const {entites}=await import("/js/entities/runtime.js");
       return entites.map(e=>({id:e.id,phase:e.orderPhase,timer:e._phaseTimer,hp:e.stats.HP.current,stats:e.combatStats}));
     });
     const before=await read();await page.reload();
@@ -190,10 +190,10 @@ try {
     assert.deepEqual(await read(),before,'flee phase restores without a new order or roll');
     await page.waitForTimeout(2300); assert.deepEqual(await read(),before);
     await page.keyboard.press('Space');
-    await page.evaluate(async()=>{window.RestoredState=await import('/js/gameState.js');});
+    await page.evaluate(async()=>{window.RestoredState=await import("/js/app/state.js");});
     await page.waitForFunction(()=>RestoredState.battleOutcome==='victory',null,{timeout:20000});
     await writeFile(resolve(output,'flee-reload-log.txt'),page.testLog.join('\n'));
-    const fleeResult=await page.evaluate(async()=>({message:document.querySelector('#gameOverMessage')?.textContent,paused:(await import('/js/combatClock.js')).isCombatPaused(),outcome:(await import('/js/gameState.js')).battleOutcome,started:(await import('/js/gameState.js')).gameStarted,entities:(await import('/js/entites.js')).entites.map(e=>({id:e.id,side:e.side,hasFled:e.hasFled,isDEAD:e.isDEAD,hp:e.stats.HP.current,phase:e.orderPhase}))}));
+    const fleeResult=await page.evaluate(async()=>({message:document.querySelector('#gameOverMessage')?.textContent,paused:(await import("/js/combat/clock.js")).isCombatPaused(),outcome:(await import("/js/app/state.js")).battleOutcome,started:(await import("/js/app/state.js")).gameStarted,entities:(await import("/js/entities/runtime.js")).entites.map(e=>({id:e.id,side:e.side,hasFled:e.hasFled,isDEAD:e.isDEAD,hp:e.stats.HP.current,phase:e.orderPhase}))}));
     assert.equal(fleeResult.entities.filter(e=>e.side==='B'&&!e.hasFled&&!e.isDEAD).length,0,JSON.stringify(fleeResult));
     await page.close();console.log('PASS flee: F5 during decision, paused remaining time, normal victory after resume');
   }
@@ -204,10 +204,10 @@ try {
       document.getElementById('hexGrid').append(hex);
       const {summons}=await import('/js/data/summons.js');
       const template=summons.find(s=>s.summonType==='consommable');
-      const {spawnConsumableSummon}=await import('/js/summonsMecanics.js');
+      const {spawnConsumableSummon}=await import("/js/combat/summons.js");
       G.startGame();
       window.groundId=spawnConsumableSummon(hex,{...template,summonDuration:2},{attacker:E.entites[0]}).summonId;
-      (await import('/js/entitesAnimation.js')).animateDodge(E.entites[0].id);
+      (await import("/js/rendering/animations.js")).animateDodge(E.entites[0].id);
     });
     await page.waitForTimeout(40);await page.evaluate(()=>P.pauseCombat());
     const id=await page.evaluate(()=>groundId), base=await page.evaluate(()=>baseStorage);
@@ -222,7 +222,7 @@ try {
     await page.waitForTimeout(2300);
     assert.equal(await page.locator('[id="'+id+'"]').count(),0,'saved remaining ground lifetime expires after resume');
     assert.equal(await page.locator('#imgContainer_999820').evaluate(el=>el.style.transform),'','dodge returns to original position');
-    await page.evaluate(async()=>(await import('/js/gameState.js')).StopGame({preserveScene:true}));
+    await page.evaluate(async()=>(await import("/js/app/state.js")).StopGame({preserveScene:true}));
     assert.equal(await page.evaluate(()=>sessionStorage.getItem('DarkPitPausedCombat:available')),null);
     await page.reload();
     assert.equal(await page.locator('#combat-pause-control').count(),0,'stop clears saved battle');
@@ -231,37 +231,37 @@ try {
   {
     const page=await fixture({A:{range:'range'},B:{range:'range'}});
     await page.evaluate(async()=>{
-      (await import('/js/sessionStorage.js')).endAdminSession();
-      (await import('/js/GameStorage.js')).setAdminMode(false);
+      (await import("/js/storage/sessionStorage.js")).endAdminSession();
+      (await import("/js/storage/gameStorage.js")).setAdminMode(false);
       window.levelRunning='scripted'; F.initFightEntites(); G.startGame();
     });
     await page.waitForSelector('.projectile-parent');await page.evaluate(()=>P.pauseCombat());
     const before=await page.evaluate(()=>E.entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction})));
     await page.reload();
     await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
-    assert.deepEqual(await page.evaluate(async()=>(await import('/js/entites.js')).entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction}))),before,'normal battle restored');
-    assert.equal(await page.evaluate(async()=>(await import('/js/sessionStorage.js')).isAdminSessionActive()),false,'normal restored game stays outside admin');
+    assert.deepEqual(await page.evaluate(async()=>(await import("/js/entities/runtime.js")).entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction}))),before,'normal battle restored');
+    assert.equal(await page.evaluate(async()=>(await import("/js/storage/sessionStorage.js")).isAdminSessionActive()),false,'normal restored game stays outside admin');
     await page.keyboard.press('Space');await page.waitForTimeout(2400);
-    assert.ok(await page.evaluate(async()=>(await import('/js/entites.js')).entites.every(e=>e.stats.HP.current<1000)),'normal restored impacts complete');
+    assert.ok(await page.evaluate(async()=>(await import("/js/entities/runtime.js")).entites.every(e=>e.stats.HP.current<1000)),'normal restored impacts complete');
     await page.close();console.log('PASS ordinary combat F5 outside admin');
   }
   {
     const page=await fixture({speed:10000});
     await page.evaluate(async()=>{
-      const C=await import('/js/createEntity.js');
+      const C=await import("/js/rendering/entities.js");
       const third=structuredClone(E.entites[1]);third.id=999822;third.position='3';
       const hex=document.createElement('div');hex.className='hex SideB occupied';hex.dataset.position='3';hex.id='survivor-hex';
       document.getElementById('hexGrid').append(hex);E.entites.push(third);
       const created=C.createEntiteInDOM(third);hex.append(created.element);await created.spriteReady;
       G.startGame();
-      (await import('/js/attackEffectMecanics.js')).poison(E.entites[0],{effectDot:40,effectDuration:4,type:['alteration']},E.entites[1]);
-      const caster=E.entites[1];caster.hasFled=true;(await import('/js/BattleOrder.js')).fledEntities.push(caster);E.RemoveEntite(caster,'runaway');
+      (await import("/js/combat/effects.js")).poison(E.entites[0],{effectDot:40,effectDuration:4,type:['alteration']},E.entites[1]);
+      const caster=E.entites[1];caster.hasFled=true;(await import("/js/combat/orders.js")).fledEntities.push(caster);E.RemoveEntite(caster,'runaway');
     });
     await page.evaluate(()=>P.pauseCombat());await page.reload();
     await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
-    assert.deepEqual(await page.evaluate(async()=>(await import('/js/BattleOrder.js')).fledEntities.map(e=>e.id)),[999821]);
+    assert.deepEqual(await page.evaluate(async()=>(await import("/js/combat/orders.js")).fledEntities.map(e=>e.id)),[999821]);
     await page.keyboard.press('Space');await page.waitForTimeout(2500);
-    assert.ok(await page.evaluate(async()=>(await import('/js/entites.js')).entites.find(e=>e.side==='A').stats.HP.current<1000),'poison persists after its caster left');
+    assert.ok(await page.evaluate(async()=>(await import("/js/entities/runtime.js")).entites.find(e=>e.side==='A').stats.HP.current<1000),'poison persists after its caster left');
     assert.equal(await page.locator('#Box_Entite_999821').count(),0,'saved departure visual finishes');
     await page.close();console.log('PASS departed caster: poison continues and partial retreat is retained');
   }

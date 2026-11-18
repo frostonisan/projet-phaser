@@ -25,11 +25,11 @@ try{
   });
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
-    const Fx=await import('/js/attackEffectMecanics.js'),G=await import('/js/GameStorage.js'),U=await import('/js/UpgradeEntity.js');
-    const Summon=await import('/js/summonsMecanics.js'),SummonData=await import('/js/data/summons.js');
-    const Storage=await import('/js/entityUpdatesStorage.js');
+    const E=await import("/js/entities/runtime.js"),D=await import("/js/combat/statistics.js"),A=await import("/js/combat/vitals.js");
+    const UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import("/js/app/state.js");
+    const Fx=await import("/js/combat/effects.js"),G=await import("/js/storage/gameStorage.js"),U=await import("/js/entities/progression.js");
+    const Summon=await import("/js/combat/summons.js"),SummonData=await import('/js/data/summons.js');
+    const Storage=await import("/js/storage/entityStorage.js");
     const checks=[],ok=(v,label)=>{if(!v)throw Error(label);checks.push(label);},eq=(a,b,label)=>ok(Math.abs(a-b)<1e-7,`${label}: ${a} != ${b}`);
     window.levelRunning='worldmap';State.setGameOver(false);
     let id=989950;
@@ -67,7 +67,7 @@ try{
         eq(result.cost,expected?1:1+result.weight.shiftCostModifier,'Resisted weight keeps normal movement cost');
         eq(target.stats.shift.current,10-result.cost,'Movement charges reflect actual cost');
       }
-      const Drag=await import('/js/dragndrop.js');
+      const Drag=await import("/js/board/interaction.js");
       State.restoreRunningBattle();
       try{
         for(const [resilienceTotal,hindranceResistance,expected] of [[99,99,'resilienceCancel'],[0,99,'hindranceResistance'],[0,0,null]]){

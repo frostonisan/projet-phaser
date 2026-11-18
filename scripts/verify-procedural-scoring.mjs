@@ -26,15 +26,15 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const result = await page.evaluate(async () => {
     const P = await import('/js/procedural/proc-bareme.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     const U = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
-    const R = await import('/js/entite/reverseArchetype.js');
+    const R = await import("/js/entities/archetypes.js");
     const I = await import('/js/items/items.js');
     const { attackDetails } = await import('/js/data/attackList.js');
     const { stats } = await import('/js/data/statsData.js');
-    const Rules = await import('/js/entite/entityRules.js');
+    const Rules = await import("/js/entities/rules.js");
     const Gear = await import('/js/items/armor.js');
     const Manager = await import('/js/items/itemManager.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
@@ -126,8 +126,8 @@ try {
     } finally { Math.random = random; }
     check(JSON.stringify(E.entitesNestUp) === catalogBefore && JSON.stringify({ ...localStorage }) === catalogSaved, 'Full catalog evaluation is read-only');
     const { attackEffects } = await import('/js/data/attackEffects.js');
-    const { getAttackEffectHandler } = await import('/js/entityAttributs.js');
-    const { inheritSummonEssences } = await import('/js/summonsMecanics.js');
+    const { getAttackEffectHandler } = await import("/js/combat/vitals.js");
+    const { inheritSummonEssences } = await import("/js/combat/summons.js");
     const tacticalBefore = JSON.stringify([attackDetails, attackEffects, projected]);
     for (const attack of attackDetails) {
       const power = D.calculateAttackPower(attack, projected);
@@ -309,7 +309,7 @@ try {
     const graphForward = D.calculateStatGraphValue({ armor: { current: 10, max: 500 }, robustness: 1 }, stats);
     const graphReverse = D.calculateStatGraphValue({ robustness: 1, armor: { current: 10, max: 500 } }, stats);
     check(JSON.stringify(graphForward) === JSON.stringify(graphReverse), 'Graph scoring is independent of key order');
-    const Upgrade = await import('/js/UpgradeEntity.js');
+    const Upgrade = await import("/js/entities/progression.js");
     const levelFixture = { id: 99109, name: 'Frozen XP test', type: 'sbire', side: 'A', level: 1,
       archetypeFrozen: true, baseStats: { HP: 100, will: 20, strength: 1, agility: 1, intelligence: 1 },
       attacks: ['autoAttack'] };
@@ -372,7 +372,7 @@ try {
     check(report.entities[1].includedInTotal === false && report.entities[1].countedThroughSummoner === projected.id, 'Export explains summon exclusion');
     check(report.entities[0].name === projected.name && report.entities[0].calculation.length > 0 && report.entities[0].power.rates, 'Export includes identity, calculation and rates');
     check(JSON.stringify(exportArmy) === exportBefore && JSON.stringify({ ...localStorage }) === exportSaved, 'Export is read-only');
-    const Admin = await import('/js/admin.js');
+    const Admin = await import("/js/debug/admin.js");
     Admin.AdminButtons();
     const buttons = ['A', 'B'].map(side => document.getElementById(`PowerArmy${side}`));
     check(buttons.every(Boolean), 'Both army power download buttons exist');
@@ -412,8 +412,8 @@ try {
     assert.ok(report.entities[0].calculation.length > 0);
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     S.saveToLocalStorage('selectedArmyA', [E.entites[0]]);
     S.saveToLocalStorage('ArmyB', { armies: { 'custom-army': { entities: [E.entites[1]] } } });
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'power-test', ArmyB_id: 'custom-army' }] });
@@ -427,7 +427,7 @@ try {
     assert.equal(report.power.score, await page.evaluate(side => window.powerExportExpected[side], side), 'Export falls back to the selected stored army');
   }
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
     S.saveToLocalStorage('ArmyB', { armies: {} });
   });
   const emptyDownload = page.waitForEvent('download');
@@ -446,12 +446,12 @@ try {
   tilesPage.on('pageerror', error => errors.push(error.message));
   await tilesPage.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const tileChecks = await tilesPage.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
     const U = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const I = await import('/js/items/items.js');
-    const D = await import('/js/damagesCalcul.js');
-    const { entitesNestUp } = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js");
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const checks = [];
     const check = (condition, label) => { if (!condition) throw new Error(label); checks.push(label); };
@@ -538,12 +538,12 @@ try {
   await livePage.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   await livePage.bringToFront();
   const liveChecks = await livePage.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
+    const S = await import("/js/storage/gameStorage.js");
     const U = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const I = await import('/js/items/items.js');
-    const D = await import('/js/damagesCalcul.js');
-    const E = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js");
+    const E = await import("/js/entities/runtime.js");
     const Armor = await import('/js/items/armor.js');
     const P = await import('/js/procedural/proc-bareme.js');
     const { attackDetails } = await import('/js/data/attackList.js');

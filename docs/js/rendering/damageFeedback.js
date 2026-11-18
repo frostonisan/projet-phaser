@@ -1,8 +1,8 @@
 // Damage feedback consumes resolved results. It owns messages, diagnostic text and VFX.
-import { removeCombatVisualAfter, setTimeout, requestAnimationFrame } from '../combatClock.js';
+import { removeCombatVisualAfter, setTimeout, requestAnimationFrame } from "../combat/clock.js";
 import { playCachedGif } from '../data/loaderList.js';
-import { EffectMessage } from '../attackEffectMecanics.js';
-import { animateDodge, animateIndestructibility, animateEsoterism, animateAmbidextry, damageImpact } from '../entitesAnimation.js';
+import { EffectMessage } from "../combat/effects.js";
+import { animateDodge, animateIndestructibility, animateEsoterism, animateAmbidextry, damageImpact } from "./animations.js";
 const round1 = value => Math.round((Number(value) || 0) * 10) / 10;
 
 export function AmbidextryVFX(target) {

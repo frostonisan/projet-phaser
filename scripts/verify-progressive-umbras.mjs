@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const S = await import('../docs/js/entite/statSystem.js');
-const E = await import('../docs/js/entites.js');
-const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
-const R = await import('../docs/js/entite/entityRules.js');
-const U = await import('../docs/js/UpgradeEntity.js');
+const S = await import("../docs/js/entities/statSystem.js");
+const E = await import("../docs/js/entities/runtime.js");
+const D = await import("../docs/js/combat/statistics.js"), DDisplay = await import("../docs/js/ui/statistics/details.js");
+const R = await import("../docs/js/entities/rules.js");
+const U = await import("../docs/js/entities/progression.js");
 const H = await import('../docs/js/data/helpers.js');
 const { balanceData: B } = await import('../docs/js/data/balanceData.js');
 let count = 0;

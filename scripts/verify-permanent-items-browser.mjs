@@ -30,16 +30,16 @@ try {
     const P = await import('/js/items/permanentItems.js');
     const M = await import('/js/items/itemManager.js');
     const I = await import('/js/items/itemEffectMecanics.js');
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
-    const State = await import('/js/gameState.js');
-    const U = await import('/js/UpgradeEntity.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const State = await import("/js/app/state.js");
+    const U = await import("/js/entities/progression.js");
     const R = await import('/js/items/resourceStocks.js');
-    const G = await import('/js/game.js');
+    const G = await import("/js/app/stages.js");
     const UI = await import("/js/ui/application.js");
-    const System = await import('/js/entite/statSystem.js');
-    const Ground = await import('/js/summonsMecanics.js');
-    const Loot = await import('/js/loot.js');
+    const System = await import("/js/entities/statSystem.js");
+    const Ground = await import("/js/combat/summons.js");
+    const Loot = await import("/js/items/loot.js");
     const { PERMANENT_CRYSTAL_LEVELS } = await import('/js/data/permanentCrystalData.js');
     const { collectLevelResources } = await import('/js/data/loaderList.js');
     const checks = [];
@@ -308,7 +308,7 @@ try {
   await page.screenshot({ path: resolve(output, 'crystal-helper.png') });
   const visual = await page.evaluate(async () => {
     const P = await import('/js/items/permanentItems.js');
-    const Ground = await import('/js/summonsMecanics.js');
+    const Ground = await import("/js/combat/summons.js");
     const entries = ['strength', 'adresse', 'magicalPenPlus', 'magicalPen'].map((statKey, index) => {
       const item = P.createUmbraCrystal({ statKey, random: () => .5 });
       Ground.placeGroundItem(document.getElementById(`hex_${index + 1}`), item, { infinite: true, consume: () => ({ ok: false }) });
@@ -469,8 +469,8 @@ try {
   report.checks.push('Click pinning and the existing stat sub-helper still work on the crystal frame');
   await page.reload({ waitUntil: 'load' });
   const reloaded = await page.evaluate(async id => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
     const entity = S.loadFromLocalStorage('selectedArmyA', []).find(entity => entity.id === id);
     E.recomputeEntityStats(entity);
     return entity?.baseStats;

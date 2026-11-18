@@ -23,13 +23,13 @@ await page.exposeFunction('captureMultiAttack', name => page.screenshot({ path: 
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const { entites, enrichEntityStats } = await import('/js/entites.js');
+    const { entites, enrichEntityStats } = await import("/js/entities/runtime.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { setEntityAttackDefinitions, readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
-    const selection = await import("/js/attackResolution.js");
-    const { selectAttackDecision, runAttackCooldownWait, entiteTurn } = await import('/js/fight.js');
+    const { setEntityAttackDefinitions, readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
+    const selection = await import("/js/combat/attackResolution.js");
+    const { selectAttackDecision, runAttackCooldownWait, entiteTurn } = await import("/js/combat/loop.js");
     const { MultiAttackDisplay } = await import("/js/ui/attacks.js");
-    const { setGameOver, setOrderSide } = await import('/js/gameState.js');
+    const { setGameOver, setOrderSide } = await import("/js/app/state.js");
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -184,13 +184,13 @@ try {
     'Attack thumbnails are visible and fit the mobile viewport');
   const cycles = await page.evaluate(async () => {
     const { actor, enemy, ally, corpse, host } = window.multiFixture;
-    const { entites } = await import('/js/entites.js');
-    const { entiteTurn, selectAttackDecision, runAttackCooldownWait } = await import('/js/fight.js');
+    const { entites } = await import("/js/entities/runtime.js");
+    const { entiteTurn, selectAttackDecision, runAttackCooldownWait } = await import("/js/combat/loop.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { setEntityAttackDefinitions, readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
-    const { getHexes } = await import('/js/board.js');
-    const selection = await import("/js/attackResolution.js");
-    const { setGameOver, setOrderSide } = await import('/js/gameState.js');
+    const { setEntityAttackDefinitions, readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
+    const { getHexes } = await import("/js/board/controller.js");
+    const selection = await import("/js/combat/attackResolution.js");
+    const { setGameOver, setOrderSide } = await import("/js/app/state.js");
     const reports = [];
     const check = (ok, message) => { if (!ok) throw Error(message); reports.push(message); };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -364,12 +364,12 @@ try {
   console.log(cycles.join('\n'));
   const surprises = await page.evaluate(async () => {
     const { actor, enemy } = window.multiFixture;
-    const { entites } = await import('/js/entites.js');
-    const { entiteTurn, wakeSurprisedArmy } = await import('/js/fight.js');
-    const { attackSurprise, getSurprisedSide } = await import('/js/events.js');
-    const { setEntityAttackDefinitions } = await import('/js/attackResolution.js');
+    const { entites } = await import("/js/entities/runtime.js");
+    const { entiteTurn, wakeSurprisedArmy } = await import("/js/combat/loop.js");
+    const { attackSurprise, getSurprisedSide } = await import("/js/events/runtime.js");
+    const { setEntityAttackDefinitions } = await import("/js/combat/attackResolution.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { setGameOver, setOrderSide } = await import('/js/gameState.js');
+    const { setGameOver, setOrderSide } = await import("/js/app/state.js");
     const reports = [];
     const check = (ok, message) => { if (!ok) throw Error(message); reports.push(message); };
     const sleep = ms => new Promise(done => setTimeout(done, ms));
@@ -425,10 +425,10 @@ try {
   });
   console.log(surprises.join('\n'));
   const surfaces = await page.evaluate(async () => {
-    const { entites, entitesNestUp } = await import('/js/entites.js');
+    const { entites, entitesNestUp } = await import("/js/entities/runtime.js");
     const { createCodexEntityScan, EntityNewGameStarter, createEntityAttackDisplay, createAttackLightDescription, AttackDetailInfos } = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
-    const { readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
-    const { createEntiteScanInDOM } = await import('/js/createEntity.js');
+    const { readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
+    const { createEntiteScanInDOM } = await import("/js/rendering/entities.js");
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); };
     const forbidden = '.attack-active-spark, .attack-active-orbit, .attack-umbra-panel, .attack-submenu-infos, .attack-mastery, .attack-essence-sockets, .attack-priority-control, .attack-activation-control, .timers-detail';
@@ -571,7 +571,7 @@ try {
   console.log(surfaces.join('\n'));
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
-    const { entitesNestUp } = await import('/js/entites.js');
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     const { EntityNewGameStarter } = await import("/js/ui/application.js");
     document.querySelectorAll('#multi-fixture, .entitylootContainer, #black-overlay, .stat-hover').forEach(node => node.remove());
     const fixture = document.createElement('div');
@@ -607,7 +607,7 @@ try {
   assert.equal(await page.locator('#starter-visual-fixture .entitylootContainer').count(), 0, 'Real pointer click validates selected starter');
   await page.evaluate(async () => {
     const { EntityNewGameStarter } = await import("/js/ui/application.js");
-    const { entitesNestUp } = await import('/js/entites.js');
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     EntityNewGameStarter([entitesNestUp.find(e => e.serial === 11).id], 'starter-visual-fixture');
   });
   await page.locator('#starter-visual-fixture .entity-loot').dblclick();

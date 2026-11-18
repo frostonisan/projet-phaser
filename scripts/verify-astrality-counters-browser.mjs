@@ -24,16 +24,16 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js');
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js");
     const U = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
-    const store = await import('/js/sessionStorage.js');
+    const store = await import("/js/storage/sessionStorage.js");
     store.beginAdminSession(); window.currentStageId = 'pause-test';
     store.gameStorage.setItem('GameStages', JSON.stringify({stages:[{id:'pause-test',level_type:'admin'}]}));
     store.gameStorage.setItem('currentLevel','pause-test');
@@ -58,10 +58,10 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
+    window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
-    window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard();
+    window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
+    window.Sim = await import("/js/debug/simulation.js"); window.snapshot = Sim.captureSimulationBoard();
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {
       const { type, data } = event.detail;
@@ -74,8 +74,8 @@ async function fixture(config = {}) {
 try{
  const page=await fixture();
  const checks=await page.evaluate(async()=>{
-  const A=await import('/js/attackEffectMecanics.js'),D=await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"),Damage=await import('/js/entityAttributs.js');
-  const Armor=await import('/js/items/armor.js'),Control=await import('/js/entityControl.js');
+  const A=await import("/js/combat/effects.js"),D=await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"),Damage=await import("/js/combat/vitals.js");
+  const Armor=await import('/js/items/armor.js'),Control=await import("/js/combat/control.js");
   const results=[],ok=(v,msg)=>{if(!v)throw Error(msg);results.push(msg)};
   const subject=E.entites[0],enemy=E.entites[1];
   const reset=(entity,stats={})=>{

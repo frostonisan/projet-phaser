@@ -25,11 +25,11 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js'), E = await import('/js/entites.js'), A = await import('/js/admin.js');
+    const S = await import("/js/storage/gameStorage.js"), E = await import("/js/entities/runtime.js"), A = await import("/js/debug/admin.js");
     S.setAdminMode(true);
     window.levelRunning = 'admin'; window.currentStageId = 'admin-critical';
     S.setCurrentLevel('admin-critical');
-    (await import('/js/sessionStorage.js')).beginAdminSession();
+    (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     window.__persistent = JSON.stringify(Object.entries(localStorage).sort());
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'admin-critical', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} });
@@ -40,11 +40,11 @@ try {
     Object.assign(hex.dataset, { position: hex.id, row: 0, col: 0 });
     hex.appendChild(Object.assign(document.createElement('div'), { className: 'socle' }));
     document.getElementById('hexGrid').append(hex);
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 1);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 1);
     const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991801, side: 'A', position: hex.id,
       level: 1, stats: {}, stuff: {}, modifierStats: {},
       baseStats: { HP: 100, speed: 10000, will: 20, strength: 0, agility: 30, intelligence: 0 } });
-    await (await import('/js/entitySpawnEngine.js')).spawnEntiteIngame(actor);
+    await (await import("/js/entities/spawn.js")).spawnEntiteIngame(actor);
     window.__actor = E.entites[0];
     A.initializeAdminLevel(E.entitesNestUp);
   });
@@ -82,8 +82,8 @@ try {
   await page.evaluate(() => { window.__openTab('Stats'); window.__codex.querySelector('[data-mode="umbra"]').click(); });
   equal((await value.first().innerText()).trim(), '30', 'Stats shows the same Umbra');
   const boundaries = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), P = await import('/js/procedural/proc-bareme.js');
-    const S = await import('/js/entite/statSystem.js');
+    const E = await import("/js/entities/runtime.js"), P = await import('/js/procedural/proc-bareme.js');
+    const S = await import("/js/entities/statSystem.js");
     const copy = structuredClone(window.__actor);
     copy.baseStats.brutality = 30;
     E.recomputeEntityStats(copy);

@@ -1,6 +1,6 @@
 // Stat helper ownership, positioning, focus, nested details and live refresh.
-import { gameStorage as localStorage } from "../../sessionStorage.js";
-import { getStatSystemResult, STAT_SYSTEM_ORIGINS } from "../../entite/statSystem.js";
+import { gameStorage as localStorage } from "../../storage/sessionStorage.js";
+import { getStatSystemResult, STAT_SYSTEM_ORIGINS } from "../../entities/statSystem.js";
 import {
   buildAttackPurityHelper,
   buildHypercognitionBonusHelper,
@@ -18,11 +18,11 @@ import {
   umbraDescription,
   buildStatSourcesHelper,
 } from "../../data/helpers.js";
-import { getSafe, normalizeStatKey, getDisplayStatKey } from "../../entite/entityRules.js";
-import { entites } from "../../entites.js";
-import { createAttackStatView, getStatContributions } from "../../damagesCalcul.js";
+import { getSafe, normalizeStatKey, getDisplayStatKey } from "../../entities/rules.js";
+import { entites } from "../../entities/runtime.js";
+import { createAttackStatView, getStatContributions } from "../../combat/statistics.js";
 import { getStatisticSourceTotals, calculateStatsDisplay, isDisplayableStatContribution } from "./details.js";
-import { ComputeStatPreview } from "../../UpgradeEntity.js";
+import { ComputeStatPreview } from "../../entities/progression.js";
 import { stats } from "../../data/statsData.js";
 import { EFFECT_VISUALS } from "../../data/effectVisuals.js";
 import { cachedResourceUrl } from "../../data/loaderList.js";
@@ -32,7 +32,7 @@ import {
   DRAG_HELPER_CLEANUP_EVENT,
   isDragDropActive,
 } from "../drag.js";
-import { getStageAccess } from "../../gameState.js";
+import { getStageAccess } from "../../app/state.js";
 
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 

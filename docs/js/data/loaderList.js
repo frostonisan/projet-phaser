@@ -1,6 +1,6 @@
-import { readAttackDefinitionsForEntity } from '../attackResolution.js';
+import { readAttackDefinitionsForEntity } from "../combat/attackResolution.js";
 import { attackDetails } from './attackList.js';
-import { entitesNest } from '../entite/entitesNest.js';
+import { entitesNest } from "./entityTemplates.js";
 import { eventList } from './eventList.js';
 import { levelBiome } from '../biome/level.js';
 import { summons } from './summons.js';

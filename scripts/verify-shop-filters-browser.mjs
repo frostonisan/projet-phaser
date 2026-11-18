@@ -31,10 +31,10 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const counts = await page.evaluate(async () => {
     const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
-    const S = await import('/js/GameStorage.js');
-    const State = await import('/js/gameState.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const State = await import("/js/app/state.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
-    const { entitesNestUp } = await import('/js/entites.js');
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     window.levelRunning = 'worldmap';
     State.refreshStageAccess();
     S.setAdminMode(true);
@@ -139,23 +139,23 @@ try {
   check(recruitedLord.name === 'Torche Noire' && recruitedLord.type === 'lord' && recruitedLord.side === 'A', 'Admin double-click recruits a Lord without converting its type');
   check(await visible.count() === 0, 'Lord also has only one purchasable copy');
   check(await page.evaluate(async () => {
-    const { canRecruitEntity } = await import('/js/ArmyAFactory.js');
-    const { entitesNestUp } = await import('/js/entites.js');
+    const { canRecruitEntity } = await import("/js/entities/armies.js");
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     const lord = entitesNestUp.find(entity => entity.type === 'lord');
     return !canRecruitEntity(lord, { source: 'loot' }) && !canRecruitEntity(lord)
       && JSON.stringify(entitesNestUp) === window.__shopCatalogueBefore;
   }), 'Admin Lord exception stays limited to shop acquisition and never mutates the catalogue');
   await search.fill('');
   await category('all');
-  await page.evaluate(async () => (await import('/js/GameStorage.js')).setAdminMode(false));
+  await page.evaluate(async () => (await import("/js/storage/gameStorage.js")).setAdminMode(false));
   const normal = await ids();
   check(normal.length <= 8 && normal.length > 0, 'Normal shop keeps its limited offer selection');
   check(await entityOffers.count() >= 1 && await entityOffers.count() <= 2, 'Normal shop still rolls one or two entities');
   check(await entityOffers.evaluateAll(nodes => nodes.every(node => node._shopEntity.type === 'sbire')), 'Normal shop never offers Lords');
   check(await page.evaluate(async () => {
     const { BuyItems } = await import('/js/items/itemManager.js');
-    const { addEntityToArmyA } = await import('/js/ArmyAFactory.js');
-    const { entitesNestUp } = await import('/js/entites.js');
+    const { addEntityToArmyA } = await import("/js/entities/armies.js");
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     const lord = entitesNestUp.find(entity => entity.type === 'lord');
     const before = localStorage.getItem('selectedArmyA');
     if (BuyItems(lord) !== false) return false;
@@ -170,7 +170,7 @@ try {
   check(await visible.locator('[data-shop-price]').evaluateAll(nodes => nodes.every(node => !node.hidden)), 'Normal offers keep their prices');
   await category('consumable');
   await search.fill('souffle de marche');
-  await page.evaluate(async () => (await import('/js/GameStorage.js')).setAdminMode(true));
+  await page.evaluate(async () => (await import("/js/storage/gameStorage.js")).setAdminMode(true));
   check(await search.inputValue() === 'souffle de marche' && await visible.count() === 4, 'Admin refresh preserves active filters');
 
   for (const viewport of [{ width: 1400, height: 950 }, { width: 390, height: 844 }]) {

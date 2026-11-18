@@ -27,10 +27,10 @@ try{
   });
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await import("/js/ui/attacks.js"),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
-    const Fx=await import('/js/attackEffectMecanics.js'),R=await import('/js/attackResolution.js'),C=await import('/js/combatClock.js');
-    const Control=await import('/js/entityControl.js'),Move=await import('/js/board.js'),Rules=await import('/js/entite/entityRules.js');
+    const E=await import("/js/entities/runtime.js"),D=await import("/js/combat/statistics.js"),A=await import("/js/combat/vitals.js");
+    const UI=await import("/js/ui/attacks.js"),F=await import('/js/combat/attacks.js'),State=await import("/js/app/state.js");
+    const Fx=await import("/js/combat/effects.js"),R=await import("/js/combat/attackResolution.js"),C=await import("/js/combat/clock.js");
+    const Control=await import("/js/combat/control.js"),Move=await import("/js/board/controller.js"),Rules=await import("/js/entities/rules.js");
     const Data=await import('/js/data/attackEffects.js'),catalog=(await import('/js/data/attackList.js')).attackDetails;
     const T=await import('/js/procedural/proc-bareme.js');
     const Loader=await import('/js/data/loaderList.js');

@@ -1,5 +1,5 @@
-import { animationProjectile, animationMelee, getMeleeFlightVisual } from '../entitesAnimation.js';
-import { normArr } from '../attackResolution.js';
+import { animationProjectile, animationMelee, getMeleeFlightVisual } from "./animations.js";
+import { normArr } from "../combat/attackResolution.js";
 import { attackEffects } from '../data/attackEffects.js';
 
 function getProjectileEffectClasses(attack = {}) {

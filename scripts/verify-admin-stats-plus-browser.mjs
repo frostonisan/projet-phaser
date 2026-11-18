@@ -26,11 +26,11 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
   const choices = await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js'), E = await import('/js/entites.js'), A = await import('/js/admin.js');
+    const S = await import("/js/storage/gameStorage.js"), E = await import("/js/entities/runtime.js"), A = await import("/js/debug/admin.js");
     S.setAdminMode(true);
     window.levelRunning = 'admin'; window.currentStageId = 'admin-stats-plus';
     S.setCurrentLevel('admin-stats-plus');
-    (await import('/js/sessionStorage.js')).beginAdminSession();
+    (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     window.__persistent = JSON.stringify(Object.entries(localStorage).sort());
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'admin-stats-plus', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} });
@@ -39,7 +39,7 @@ try {
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
     const grid = document.getElementById('hexGrid');
     grid.style.cssText = 'position:fixed;left:520px;top:180px;display:flex;gap:30px;transform:none;';
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     for (let i = 1; i <= 2; i++) {
       const hex = document.createElement('div'); hex.id = `hex_${i}`;
       Object.assign(hex.dataset, { position: hex.id, row: 0, col: i - 1 });
@@ -50,12 +50,12 @@ try {
         level: 1, awakening: 1, attacks: ['shot-p-r'], stats: {}, stuff: {},
         modifierStats: { durable: { adminLevel: { physicalDamage: 3 } } },
         baseStats: { HP: 100, speed: 10000, strength: 10, agility: 5, intelligence: 3, physicalDamage: 20 } });
-      await (await import('/js/entitySpawnEngine.js')).spawnEntiteIngame(actor);
+      await (await import("/js/entities/spawn.js")).spawnEntiteIngame(actor);
     }
     window.__actor = E.entites[0]; window.__other = E.entites[1];
     window.__otherBefore = JSON.stringify(window.__other);
     A.initializeAdminLevel(E.entitesNestUp);
-    const { STAT_SYSTEM_ORIGINS } = await import('/js/entite/statSystem.js');
+    const { STAT_SYSTEM_ORIGINS } = await import("/js/entities/statSystem.js");
     const { stats } = await import('/js/data/statsData.js');
     const uniquePassives = new Set(stats.filter(stat => stat.uniquePassive).map(stat => stat.key));
     const choices = (await import('/js/items/permanentItems.js')).getPermanentStatChoices().filter(entry => entry.key.endsWith('Plus'));
@@ -111,7 +111,7 @@ try {
   equal((await read()).modifier, 11, 'Fixed stat stepper adds one raw point even while ratios are active');
   await row('physicalDamage').getByRole('button', { name: 'Retirer 1 Puissance physique', exact: true }).click();
   const parity = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const draft = window.__adminActiveLiveEntityDraft;
     const crystal = structuredClone(draft);
     for (const [key, value] of Object.entries(crystal.modifierStats.durable.adminLevel)) {
@@ -208,10 +208,10 @@ try {
   for (const entry of codexRows) check(entry.visible && entry.total >= 8, `${entry.key}: validated resistance appears in the Codex (${entry.text})`);
   const cachedCodexChecks = await page.evaluate(async keys => {
     const UI = await import("/js/ui/codex/index.js");
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
-    const A = await import('/js/admin.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const A = await import("/js/debug/admin.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     document.querySelectorAll('.codex-entity-scan').forEach(node => node.remove());
     S.saveToLocalStorage('selectedArmyA', []);
     const results = [];

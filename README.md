@@ -36,8 +36,26 @@ et du rendu. Phaser sera integre apres validation de ces frontieres.
 Le decoupage en cours, les responsabilites et les prochains lots sont decrits dans [ARCHITECTURE.md](ARCHITECTURE.md).
 
 
-Le démarrage se trouve dans `docs/js/app/startup.js` (ancien `GameInit.js`).
-Les écrans sont regroupés dans `docs/js/ui/`, avec deux sous-dossiers :
-`codex/` pour les fiches d'entités et `statistics/` pour leur présentation.
-Ce périmètre comporte 14 fichiers, contre 17 auparavant ; le plan détaillé figure
-ci-dessus dans ARCHITECTURE.md.
+Le démarrage se trouve dans [app/startup.js](docs/js/app/startup.js).
+Les 52 fichiers auparavant isolés à la racine de `docs/js/` sont maintenant classés.
+Le projet compte 117 modules au lieu de 120.
+
+| Dossier | Ce qu'on y trouve |
+| --- | --- |
+| [app](docs/js/app/) | Démarrage, niveaux, carte du monde et état du jeu |
+| [entities](docs/js/entities/) | Personnages, armées, progression et règles de statistiques |
+| [combat](docs/js/combat/) | Attaques, dégâts, effets, tours, horloge et pause |
+| [board](docs/js/board/) | Plateau, occupation des cases, placement et déploiement |
+| [rendering](docs/js/rendering/) | Éléments visibles, animations, compteurs et sons |
+| [ui](docs/js/ui/) | Menus, inventaire, Codex, dialogues et infobulles |
+| [storage](docs/js/storage/) | Sauvegardes et stockage du simulateur |
+| [events](docs/js/events/) | Événements scénarisés et leur déroulement |
+| [items](docs/js/items/) | Objets, équipements, butin et essences |
+| [data](docs/js/data/) | Définitions, catalogues, textes et réglages |
+| [biome](docs/js/biome/) | Terrains et météo |
+| [procedural](docs/js/procedural/) | Barèmes de puissance et génération |
+| [debug](docs/js/debug/) | Administration, simulation et réglage des effets |
+
+Un module doit être importé depuis son dossier propriétaire. Les anciens chemins ne
+contiennent pas de fichiers relais. Les gros modules encore à séparer sont recensés
+dans [ARCHITECTURE.md](ARCHITECTURE.md).

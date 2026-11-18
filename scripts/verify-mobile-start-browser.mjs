@@ -47,7 +47,7 @@ try {
     const cancelledImages = [];
     const consoleErrors = [];
     if (targetUrl && substituteScale) {
-      await page.route(url => url.origin === new URL(targetUrl).origin && url.pathname === '/js/admin.js', async route => {
+      await page.route(url => url.origin === new URL(targetUrl).origin && url.pathname === "/js/debug/admin.js", async route => {
         const response = await route.fetch();
         const source = await response.text();
         assert.ok(source.includes('const windowWidth = window.innerWidth;')

@@ -1,10 +1,10 @@
-import { combatData, combatReference, combatTarget } from '../combatClock.js';
-import { hasPendingCombatDeath } from '../combatTimeline.js';
-import { getAttackResolutionFlags } from '../attackResolution.js';
-import { createAttackStatView, getRangePenaltyDetails } from '../damagesCalcul.js';
-import { getControlState, getCombatSide } from '../entityControl.js';
-import { getEntityManualMovementVersion, recordEntityCombatAmount } from '../entityUpdatesStorage.js';
-import { entites } from '../entites.js';
+import { combatData, combatReference, combatTarget } from "./clock.js";
+import { hasPendingCombatDeath } from "./timeline.js";
+import { getAttackResolutionFlags } from "./attackResolution.js";
+import { createAttackStatView, getRangePenaltyDetails } from "./statistics.js";
+import { getControlState, getCombatSide } from "./control.js";
+import { getEntityManualMovementVersion, recordEntityCombatAmount } from "../storage/entityStorage.js";
+import { entites } from "../entities/runtime.js";
 import { isHexTarget, getEntityHex, getHexEntity } from '../board/targets.js';
 import { isAttackEntityAlive } from './targeting.js';
 import { cloneCombatSnapshot } from './snapshot.js';

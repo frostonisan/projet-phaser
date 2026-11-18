@@ -41,7 +41,7 @@ for (const name of comparedModules) {
 }
 let checksOn = true;
 const fingerprints = {};
-for (const name of new Set(['fight.js', 'entityAttributs.js', 'entityControl.js', 'attackResolution.js', 'combatTimeline.js', 'entites.js', 'dom.js', 'combat/attacks.js', 'combat/attackExecution.js', 'combat/attackFlight.js', 'combat/flightRules.js', 'combat/targeting.js', 'combat/snapshot.js', 'board/targets.js', 'rendering/attackTransport.js', ...comparedModules])) {
+for (const name of new Set(["combat/loop.js", "combat/vitals.js", "combat/control.js", "combat/attackResolution.js", "combat/timeline.js", "entities/runtime.js", "rendering/hud.js", 'combat/attacks.js', 'combat/attackExecution.js', 'combat/attackFlight.js', 'combat/flightRules.js', 'combat/targeting.js', 'combat/snapshot.js', 'board/targets.js', 'rendering/attackTransport.js', ...comparedModules])) {
   fingerprints[name] = createHash('sha256').update(sourceFiles.get(resolve(root, 'js', name))).digest('hex');
 }
 const replace = (source, from, to) => {
@@ -193,13 +193,13 @@ async function fixture(count) {
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
   await page.evaluate(async ({ count, scenario }) => {
     const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
-    window.E = await import('/js/entites.js'); window.G = await import('/js/gameState.js');
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js'); window.Timeline = await import('/js/combatTimeline.js');
-    window.Sim = await import('/js/combatSimulation.js');
-    const C = await import('/js/createEntity.js'), S = await import('/js/GameStorage.js');
+    window.E = await import("/js/entities/runtime.js"); window.G = await import("/js/app/state.js");
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js"); window.Timeline = await import("/js/combat/timeline.js");
+    window.Sim = await import("/js/debug/simulation.js");
+    const C = await import("/js/rendering/entities.js"), S = await import("/js/storage/gameStorage.js");
     S.setAdminMode(true); window.levelRunning = 'admin'; window.currentStageId = 'load-test'; S.setCurrentLevel('load-test');
-    (await import('/js/sessionStorage.js')).beginAdminSession();
+    (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'load-test', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} }); S.saveToLocalStorage('equippedItems', []);
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"><div id="score"></div></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
@@ -221,7 +221,7 @@ async function fixture(count) {
       brulure: { effectDot: 2, effectStack: 3 }, grab: { effectDistance: 4, effectMovementRecoilPercent: 20 },
       confusion: { effectDuration: 1.8, effectMoveInterval: .6 }, charme: { effectDuration: .7 },
       insolence: { effectDuration: 1.2, effectMinInterval: .4, effectMaxInterval: .6 }, lourdeur: { effectDuration: 2 } };
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(entity => entity.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(entity => entity.serial === 900013);
     const renders = []; E.entites.length = 0;
     for (let i = 0; i < count; i++) {
       const side = i < count / 2 ? 'A' : 'B', n = i % (count / 2), support = n % 15 === 14;
@@ -247,8 +247,8 @@ async function fixture(count) {
     await Promise.all(renders);
     // The load fixture builds its own cells/entities instead of the normal
     // placement pipeline. Publish that initial board before starting combat.
-    (await import('/js/board.js')).syncEntityFootprints(grid);
-    (await import('/js/game.js')).configureBattleSystemsOnce();
+    (await import("/js/board/controller.js")).syncEntityFootprints(grid);
+    (await import("/js/app/stages.js")).configureBattleSystemsOnce();
     window.snapshot = Sim.captureSimulationBoard();
     window.captureFrames = () => {
       window.frameGaps = []; window.longTasks = []; let previous = performance.now(); window.sampling = true;

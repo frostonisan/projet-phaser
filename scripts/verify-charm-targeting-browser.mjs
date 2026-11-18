@@ -25,12 +25,12 @@ async function fixture(side, withOthers = true, expiry = false, group = false) {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async ({ side, withOthers, expiry, group }) => {
     const UI = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
-    const Storage = await import('/js/GameStorage.js');
-    const G = await import('/js/gameState.js'), F = await import('/js/fight.js');
-    const A = await import('/js/entityAttributs.js'), Fx = await import('/js/attackEffectMecanics.js');
-    const Control = await import('/js/entityControl.js'), Attacks = await import('/js/combat/attacks.js');
-    const D = await import('/js/damagesCalcul.js'), Sim = await import('/js/combatSimulation.js');
+    const E = await import("/js/entities/runtime.js"), Create = await import("/js/rendering/entities.js");
+    const Storage = await import("/js/storage/gameStorage.js");
+    const G = await import("/js/app/state.js"), F = await import("/js/combat/loop.js");
+    const A = await import("/js/combat/vitals.js"), Fx = await import("/js/combat/effects.js");
+    const Control = await import("/js/combat/control.js"), Attacks = await import('/js/combat/attacks.js');
+    const D = await import("/js/combat/statistics.js"), Sim = await import("/js/debug/simulation.js");
     const { balanceData } = await import('/js/data/balanceData.js');
     balanceData.brokenSpell.chance.basePercent = 0;
     UI.createGameContainer(); UI.GameUi(); Storage.setAdminMode(true); window.levelRunning = 'admin';
@@ -39,7 +39,7 @@ async function fixture(side, withOthers = true, expiry = false, group = false) {
     const grid = document.createElement('div'); grid.id = 'hexGrid'; grid.className = 'hex-grid';
     grid.style.cssText = 'position:absolute;top:100px;left:50px;width:1100px;height:300px';
     document.getElementById('game-container').append(grid); E.entites.length = 0;
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     const opposite = side === 'A' ? 'B' : 'A';
     const sides = group ? [side, opposite, opposite] : withOthers ? [side, opposite, opposite, side] : [side, opposite];
     for (const [i, camp] of sides.entries()) {

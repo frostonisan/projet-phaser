@@ -25,10 +25,10 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"), H = await import('/js/data/helpers.js');
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import('/js/UpgradeEntity.js');
-    const G = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/entities/statSystem.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"), H = await import('/js/data/helpers.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js");
+    const G = await import("/js/storage/gameStorage.js");
     const checks = [];
     const check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
     const equal = (a, b, label) => check(Math.abs(a - b) < 1e-6, `${label}: ${a} / ${b}`);

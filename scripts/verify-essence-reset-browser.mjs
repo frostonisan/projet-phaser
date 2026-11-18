@@ -25,12 +25,12 @@ try {
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: "load" });
   const resetChecks = await page.evaluate(async () =>
-    (await import('/js/entite/entityReset.browser.test.js')).runEntityResetBrowserChecks());
+    (await import("/js/entities/reset.browser.test.js")).runEntityResetBrowserChecks());
   const curseChecks = await page.evaluate(async () => {
-    const stats = await import('/js/entites.js');
+    const stats = await import("/js/entities/runtime.js");
     const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const { equip, unequip } = await import('/js/items/equipement.js');
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
     const target = structuredClone(entitesNest[0]);
     Object.assign(target, { id: 900010, side: 'A', level: { current: 1, max: 100 }, reverseArchetype: undefined,
       baseStats: { HP: 100, will: 20, charge: 3, strength: 3, agility: 0, intelligence: 0, physicalResistance: 2 } });
@@ -99,10 +99,10 @@ try {
   });
   console.log('Browser equipment and curse checks:', curseChecks);
   const debtChecks = await page.evaluate(async () => {
-    const stats = await import('/js/entites.js');
-    const { getSafe } = await import("/js/entite/entityRules.js");
+    const stats = await import("/js/entities/runtime.js");
+    const { getSafe } = await import("/js/entities/rules.js");
     const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
-    const levels = await import('/js/UpgradeEntity.js');
+    const levels = await import("/js/entities/progression.js");
     const { equip, unequip } = await import('/js/items/equipement.js');
     const check = (ok, message) => { if (!ok) throw new Error(message); };
     const results = [];
@@ -181,8 +181,8 @@ try {
   });
   console.log('Debt and Orfevre checks:', debtChecks);
   await page.evaluate(async () => {
-    const { enrichEntityStats, rescaleHPCurrent } = await import('/js/entites.js');
-    const { ComputeStatPreview } = await import('/js/UpgradeEntity.js');
+    const { enrichEntityStats, rescaleHPCurrent } = await import("/js/entities/runtime.js");
+    const { ComputeStatPreview } = await import("/js/entities/progression.js");
     const entity = { id: 900002, level: 1, baseStats: { HP: 100, vitality: 30, will: 20 }, attacks: [] };
     enrichEntityStats(entity);
     entity.stats.HP.current = Math.floor(entity.stats.HP.max / 2);
@@ -202,9 +202,9 @@ try {
     if (ComputeStatPreview(entity).HP.current !== 0) throw new Error('Preview resurrected entity');
   });
   const result = await page.evaluate(async () => {
-    const { enrichEntityStats } = await import("/js/entites.js");
-    const { createLevelUpForm } = await import("/js/UpgradeEntity.js");
-    const { syncEntityLinkedEssenceInventory } = await import("/js/essenceur.js");
+    const { enrichEntityStats } = await import("/js/entities/runtime.js");
+    const { createLevelUpForm } = await import("/js/entities/progression.js");
+    const { syncEntityLinkedEssenceInventory } = await import("/js/items/essences.js");
     const entity = {
       id: 900001, name: "Test Anima", side: "A", type: "sbire", class: "TestReset",
       level: { current: 30, max: 99 }, statut: ["alive"],
@@ -218,7 +218,7 @@ try {
       },
     };
     // Manual progression owns its history and XP; enrichment must not reverse-generate it.
-    entity.experience = (await import('/js/entites.js')).levelDetails.find(row => row.level === 30).totalExperience;
+    entity.experience = (await import("/js/entities/runtime.js")).levelDetails.find(row => row.level === 30).totalExperience;
     enrichEntityStats(entity);
     syncEntityLinkedEssenceInventory(entity);
     entity.stats.HP.current = Math.floor(entity.stats.HP.max / 2);
@@ -235,7 +235,7 @@ try {
   assert.ok(result.rewards > 0, JSON.stringify(result));
   assert.ok(result.neutral > 0, JSON.stringify(result));
   const beforeLevelUp = await page.evaluate(async () => ({
-    xp: (await import('/js/UpgradeEntity.js')).playerExperience,
+    xp: (await import("/js/entities/progression.js")).playerExperience,
     entityXP: window.__resetTestEntity.experience,
     essences: window.__resetTestEntity.attackEssenceInventory.linkedItems.length,
   }));
@@ -319,21 +319,21 @@ try {
   const expectedConfirmedHP = await page.evaluate(async () => {
     const entity = window.__resetTestEntity;
     entity.modifierStats.preview.statLeveled.vitality = 20;
-    const hp = (await import('/js/UpgradeEntity.js')).ComputeStatPreview(entity).HP;
+    const hp = (await import("/js/entities/progression.js")).ComputeStatPreview(entity).HP;
     if (hp.max <= entity.stats.HP.max) throw new Error('Confirmation must increase max HP');
     return hp;
   });
   await page.locator('#reset-test-host .confirm-button.yes.level').click();
   await assertContinuousEssences();
   const confirmed = await page.evaluate(async () => ({
-    xp: (await import('/js/UpgradeEntity.js')).playerExperience,
+    xp: (await import("/js/entities/progression.js")).playerExperience,
     saved: JSON.parse(localStorage.getItem('selectedArmyA')).find(entity => entity.id === 900001),
   }));
   assert.equal(confirmed.saved.level.current, 31);
   assert.deepEqual(confirmed.saved.stats.HP, expectedConfirmedHP, 'Confirmed HP must match the proportional preview without a second heal');
   assert.equal(confirmed.saved.experience, beforeLevelUp.entityXP + beforeLevelUp.xp - confirmed.xp);
   assert.equal(confirmed.saved.experience, await page.evaluate(async () =>
-    (await import('/js/entites.js')).levelDetails.find(row => row.level === 31).totalExperience));
+    (await import("/js/entities/runtime.js")).levelDetails.find(row => row.level === 31).totalExperience));
   assert.equal(confirmed.saved.attackEssenceInventory.linkedItems.length, beforeLevelUp.essences + 1,
     'Confirmation awards exactly one linked essence');
   const anima = await page.evaluate(async () => {
@@ -345,13 +345,13 @@ try {
     window.__animaId = item.itemId;
     const entity = JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001);
     window.__animaTarget = entity;
-    const preview = (await import("/js/UpgradeEntity.js")).previewEntityReset(entity);
+    const preview = (await import("/js/entities/progression.js")).previewEntityReset(entity);
     return { quality: item.itemQuality, refund: preview.refundXP, percent: preview.refundPercent };
   });
   assert.equal(anima.quality, 7);
   await page.locator('#reset-test-host .level-purify-button').waitFor({ state: 'visible' });
   await page.evaluate(async () => {
-    const api = await import('/js/UpgradeEntity.js');
+    const api = await import("/js/entities/progression.js");
     window.__actionTestXP = api.playerExperience;
     api.setPlayerExperience(1000000);
     document.getElementById('reset-test-host').replaceChildren(api.createLevelUpForm(window.__resetTestEntity));
@@ -381,7 +381,7 @@ try {
   await page.locator('#reset-test-host .confirm-button.clear').click();
   assert.equal(await page.locator('#reset-test-host .level-purify-button').isVisible(), true);
   await page.evaluate(async () => {
-    const api = await import('/js/UpgradeEntity.js');
+    const api = await import("/js/entities/progression.js");
     api.setPlayerExperience(window.__actionTestXP);
     document.getElementById('reset-test-host').replaceChildren(api.createLevelUpForm(window.__resetTestEntity));
   });
@@ -424,7 +424,7 @@ try {
   await page.waitForFunction(() => document.querySelector('#reset-test-host .level-current')?.textContent === '1');
   await page.locator('#reset-test-host .level-purify-button').waitFor({ state: 'hidden' });
   const afterAnima = await page.evaluate(async () => ({
-    xp: (await import('/js/UpgradeEntity.js')).playerExperience,
+    xp: (await import("/js/entities/progression.js")).playerExperience,
     saved: JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001),
     inInventory: JSON.parse(localStorage.getItem('PlayerSave')).Playerinventory.some(i => i.itemId === window.__animaId),
     unusedPotion: JSON.parse(localStorage.getItem('PlayerSave')).Playerinventory.some(i => i.itemId === window.__unusedPotionId),
@@ -437,7 +437,7 @@ try {
   assert.equal(afterAnima.unusedPotion, true);
   await page.evaluate(async () => {
     const { acquireItem, DropInventorytoCodex } = await import('/js/items/itemManager.js');
-    const { createLevelUpForm } = await import('/js/UpgradeEntity.js');
+    const { createLevelUpForm } = await import("/js/entities/progression.js");
     const item = acquireItem({ serial: 'i45' }, 'pure-entity-test');
     window.__pureAnimaId = item.itemId;
     const target = JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001);
@@ -510,7 +510,7 @@ try {
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001).level.current), 1);
   const purificationPlacement = await page.evaluate(async () => {
     const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
-    const { createLevelUpForm } = await import('/js/UpgradeEntity.js');
+    const { createLevelUpForm } = await import("/js/entities/progression.js");
     const army = JSON.parse(localStorage.getItem('selectedArmyA'));
     const entity = structuredClone(army.find(e => e.id === 900001));
     entity.id = 900030;
@@ -541,7 +541,7 @@ try {
     graph.classList.remove('stray');
     if (!getComputedStyle(graph).backgroundImage.includes('cadre-soul-entite.png')) throw new Error('Normal frame missing');
     window.__awakeningFrameStart = performance.now();
-    (await import('/js/UpgradeEntity.js')).playAwakeningExtasis({ id: 900030 });
+    (await import("/js/entities/progression.js")).playAwakeningExtasis({ id: 900030 });
     if (getComputedStyle(graph).backgroundImage !== 'none') throw new Error('Awakening frame appeared immediately');
     if (!document.querySelector('#soul-section-900030 .extasis.intro')) throw new Error('Frame delay blocked awakening GIF');
   });
@@ -583,7 +583,7 @@ try {
     const army = JSON.parse(await readFile(process.argv[2], 'utf8')).entities;
     const availableId = await page.evaluate(async army => {
       const { AttackDetailInfos } = await import("/js/ui/attacks.js");
-      const { calculateEntityLinkedEssenceAvailability, grantEssencesToInventory } = await import('/js/essenceur.js');
+      const { calculateEntityLinkedEssenceAvailability, grantEssencesToInventory } = await import("/js/items/essences.js");
       localStorage.setItem('selectedArmyA', JSON.stringify(army));
       window.selectedArmyA = army;
       window.__socketTestEntity = army[0];
@@ -601,7 +601,7 @@ try {
     assert.equal(await page.locator('.attack-essence-popup').count(), 1, 'Socket card stays open after equipping');
     const linkedResult = await page.evaluate(async () => {
       const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
-      return { audit: (await import('/js/essenceur.js')).validateEntityEssenceLedger(entity),
+      return { audit: (await import("/js/items/essences.js")).validateEntityEssenceLedger(entity),
         id: entity.attackDetails[0].essenceSlots[1].essenceId, count: entity.attackEssenceInventory.linkedItems.length,
         sockets: entity.attackDetails[0].essenceSlots.map(s => s.socketId) };
     });
@@ -621,7 +621,7 @@ try {
     assert.equal(await page.locator('.attack-essence-popup').count(), 1, 'Socket card stays open after clearing');
     const final = await page.evaluate(async () => {
       const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
-      const api = await import('/js/essenceur.js');
+      const api = await import("/js/items/essences.js");
       return { audit: api.validateEntityEssenceLedger(entity), available: api.calculateEntityLinkedEssenceAvailability(entity).availableItems.map(i => i.id),
         items: entity.attackEssenceInventory.linkedItems.length, sockets: entity.attackDetails[0].essenceSlots.map(s => s.socketId) };
     });

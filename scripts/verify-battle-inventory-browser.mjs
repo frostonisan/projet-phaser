@@ -26,15 +26,15 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
     const items = await import('/js/items/itemManager.js');
-    const store = await import('/js/GameStorage.js');
+    const store = await import("/js/storage/gameStorage.js");
     const init = await Promise.all([import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
-    const state = await import('/js/gameState.js');
-    const { entites, entitesNestUp } = await import('/js/entites.js');
+    const state = await import("/js/app/state.js");
+    const { entites, entitesNestUp } = await import("/js/entities/runtime.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
-    const { createUniversalEssenceHelperHTML, openAttackEssenceSocketPopup, commitAttackEssenceEquipTransaction } = await import('/js/essenceur.js');
-    const { createLifeBars, CreateATBEntity } = await import('/js/createEntity.js');
-    const { placeGroundItem } = await import('/js/summonsMecanics.js');
-    const { getEntityCombatDetails } = await import('/js/entityUpdatesStorage.js');
+    const { createUniversalEssenceHelperHTML, openAttackEssenceSocketPopup, commitAttackEssenceEquipTransaction } = await import("/js/items/essences.js");
+    const { createLifeBars, CreateATBEntity } = await import("/js/rendering/entities.js");
+    const { placeGroundItem } = await import("/js/combat/summons.js");
+    const { getEntityCombatDetails } = await import("/js/storage/entityStorage.js");
     const popup = await import("/js/ui/display.js");
     const reports = [];
     const check = (test, label) => { if (!test) throw new Error(label); reports.push(label); };
@@ -224,7 +224,7 @@ try {
     const effects = document.createElement('div'); effects.id = `effectsContainer_${actor.id}`; actorBox.append(effects);
     actor.position = 'hex_1';
     hexes[0].appendChild(actorBox);
-    (await import('/js/board.js')).syncEntityFootprints(board);
+    (await import("/js/board/controller.js")).syncEntityFootprints(board);
     const beforeGroundStats = getEntityCombatDetails(actor);
     hexes[0].dispatchEvent(new Event('hexOccupied'));
     hexes[0].dispatchEvent(new Event('hexOccupied'));
@@ -302,7 +302,7 @@ try {
       'Rejected resurrection attempts do not increase consumable counters');
     actor.isDEAD = true;
     actorBox.remove();
-    (await import('/js/board.js')).syncEntityFootprints(board);
+    (await import("/js/board/controller.js")).syncEntityFootprints(board);
     check((await items.useConsumableItem(feather.itemId, actor)).ok && !actor.isDEAD && actor.stats.HP.current === 5 && ownership(feather.itemId) === 0, 'Feather uses the common resurrection behavior and restores its specified HP');
     check(getEntityCombatDetails(actor).consumableHealingReceived === beforeFeatherStats.consumableHealingReceived + 5
       && getEntityCombatDetails(actor).healingReceived === beforeFeatherStats.healingReceived + 5,
@@ -420,7 +420,7 @@ try {
     check(items.recoverBattleItem(swapped.itemId, 0), 'The swapped ground object is itself recoverable');
 
     hexes[0].appendChild(actorBox);
-    (await import('/js/board.js')).syncEntityFootprints(board);
+    (await import("/js/board/controller.js")).syncEntityFootprints(board);
     let attempts = 0;
     placeGroundItem(hexes[0], { ...recovered, itemId: 'busy-probe' }, {
       expiresAt: Date.now() + 20000, consume: async () => (++attempts === 1 ? { ok: false, busy: true } : { ok: true }), settled: () => {}, moved: () => {},
@@ -441,13 +441,13 @@ try {
     items.dropBattleItemOnHex(recovered.itemId, hexes[1]);
     const directConcurrentUse = items.useConsumableItem(swapped.itemId, actor);
     hexes[1].appendChild(actorBox);
-    (await import('/js/board.js')).syncEntityFootprints(board);
+    (await import("/js/board/controller.js")).syncEntityFootprints(board);
     hexes[1].dispatchEvent(new Event('hexOccupied'));
     await directConcurrentUse;
     await wait(30);
     check(actor.stats.HP.current === 40 && ownership(recovered.itemId) === 0 && ownership(swapped.itemId) === 0, 'Real direct-use and ground-use contention consumes each item once after the target lock is released');
     actorBox.remove();
-    (await import('/js/board.js')).syncEntityFootprints(board);
+    (await import("/js/board/controller.js")).syncEntityFootprints(board);
     state.setGameOver(true); state.refreshStageAccess();
     check(document.querySelector('.battle-satchel--combat'), 'Finished battle keeps its revealed satchel even if ordinary menus return');
     state.StopGame(); state.resetBattleResolution(); state.refreshStageAccess();
@@ -478,7 +478,7 @@ try {
   if (!expandedFits) throw Error('Expanded admin satchel has unreachable slots');
   reports.push('Expanded admin capacity keeps the first and last slots reachable by scrolling');
   await page.evaluate(async () => {
-    const state = await import('/js/gameState.js');
+    const state = await import("/js/app/state.js");
     const init = await Promise.all([import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const panel = await import("/js/ui/attacks.js");
     init.closeStagePlayerMenus();
@@ -500,8 +500,8 @@ try {
   }
   const checkpoint = await page.evaluate(async () => {
     const items = await import('/js/items/itemManager.js');
-    const state = await import('/js/gameState.js');
-    const store = await import('/js/GameStorage.js');
+    const state = await import("/js/app/state.js");
+    const store = await import("/js/storage/gameStorage.js");
     state.StopGame();
     await Promise.resolve();
     state.startGame();
@@ -514,9 +514,9 @@ try {
   await page.reload({ waitUntil: 'load' });
   const reloaded = await page.evaluate(async checkpoint => {
     const items = await import('/js/items/itemManager.js');
-    const state = await import('/js/gameState.js');
-    const { entites } = await import('/js/entites.js');
-    const store = await import('/js/GameStorage.js');
+    const state = await import("/js/app/state.js");
+    const { entites } = await import("/js/entities/runtime.js");
+    const store = await import("/js/storage/gameStorage.js");
     store.loadItemsData();
     window.levelRunning = 'scripted';
     store.setCurrentLevel(checkpoint.stageId);

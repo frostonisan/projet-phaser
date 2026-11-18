@@ -16,10 +16,10 @@ const probes = {
   '/js/ui/statistics/details.js': [
     ['export function calculateStatsDisplay(statKey, entite, statValue, options = {}) {', 'displayStat', 'statKey'],
   ],
-  '/js/damagesCalcul.js': [
+  "/js/combat/statistics.js": [
     ['export function getStatContributions(entity, stat, { resolveLabels = true, includePreview = false, includePlus = false } = {}) {', 'statContributions'],
   ],
-  '/js/entites.js': [
+  "/js/entities/runtime.js": [
     ['export function getStatSystemInputs(entity, { preview = true, combat = true } = {}) {', 'statInputs'],
   ],
 };
@@ -50,9 +50,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const fixture = await page.evaluate(async () => {
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
-    const G = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const G = await import("/js/app/state.js");
     window.levelRunning = 'worldmap'; G.setGameOver(false);
     const template = E.entitesNestUp.find(e=>/mouche astic/i.test(e.name)) || E.entitesNestUp.find(e=>e.type==='sbire');
     const actor = structuredClone(template);
@@ -99,7 +99,7 @@ try {
   }
   const checks = await page.evaluate(async () => {
     const {UI,S,E,actor,actors}=window.__fixture;
-    const D=await import('/js/damagesCalcul.js'),System=await import('/js/entite/statSystem.js');
+    const D=await import("/js/combat/statistics.js"),System=await import("/js/entities/statSystem.js");
     const checks=[];
     const check=(ok,label)=>{if(!ok)throw Error(label);checks.push(label);};
     const click=(id,shiftKey=false)=>document.getElementById('CodexEntityList_'+id).querySelector('img').dispatchEvent(new MouseEvent('click',{bubbles:true,shiftKey}));

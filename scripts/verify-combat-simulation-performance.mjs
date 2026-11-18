@@ -8,7 +8,7 @@ const { chromium, firefox } = require('C:/Users/Utilisateur/.cache/codex-runtime
 const root = resolve('docs'), output = resolve('outputs/combat-simulation-performance');
 await mkdir(output, { recursive: true });
 const reportPath = process.env.SIM_REPORT || 'C:/Users/Utilisateur/Downloads/rapport-combat-1793829465785.html';
-const referencePath = process.env.SIM_REFERENCE || 'C:/Users/Utilisateur/Desktop/projet J/versions/DEV/version - 84/23 - simulateur de combat v2 concis/js/combatSimulationRuntime.js';
+const referencePath = process.env.SIM_REFERENCE || "C:/Users/Utilisateur/Desktop/projet J/versions/DEV/version - 84/23 - simulateur de combat v2 concis/js/debug/simulationRuntime.js";
 const html = await readFile(reportPath, 'utf8');
 const saved = JSON.parse(html.match(/<script\b[^>]*id=["']simulation-data["'][^>]*>([\s\S]*?)<\/script>/i)[1]);
 const reference = process.env.SIM_BASELINE === '1' ? await readFile(referencePath, 'utf8') : null;
@@ -18,7 +18,7 @@ const server = createServer(async (req, res) => {
   if (!path.startsWith(root + sep)) return res.writeHead(403).end();
   try {
     let data = await readFile(path);
-    if (path === resolve(root, 'js/combatSimulationRuntime.js')) {
+    if (path === resolve(root, "js/debug/simulationRuntime.js")) {
       let source = useReference ? reference : data.toString();
       // Emulate the browser's background timer clamp, without slowing virtual game timers.
       source = source.replace('export async function runSimulationTrial(input) {', `export async function runSimulationTrial(input) {
@@ -49,8 +49,8 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async source => {
-    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js'), S = await import('/js/GameStorage.js');
+    const U = await import("/js/ui/application.js"), E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js"), S = await import("/js/storage/gameStorage.js");
     const { balanceData } = await import('/js/data/balanceData.js');
     const merge = (target, values) => { for (const [key, value] of Object.entries(values)) {
       if (value && typeof value === 'object' && !Array.isArray(value) && target[key] && typeof target[key] === 'object') merge(target[key], value);
@@ -71,7 +71,7 @@ try {
       grid.append(hex); E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.Sim = await import('/js/combatSimulation.js');
+    window.Sim = await import("/js/debug/simulation.js");
     window.snapshot = Sim.captureSimulationBoard();
     window.boardBefore = JSON.stringify(E.entites, (key, value) => typeof value === 'function' || value instanceof Node ? undefined : value);
     window.storageBefore = JSON.stringify(Object.entries(localStorage));
@@ -126,7 +126,7 @@ try {
     for (const trial of batch.trials) for (const entity of trial.entities) assert.deepEqual(entity.initialStats, capturedStats[entity.id]);
     await writeFile(resolve(output, `${browserName}-rapport-100.html`), await page.evaluate(r => Sim.simulationReportHtml(r, { standalone: true }), batch));
     const isolation = await page.evaluate(async () => {
-      const E = await import('/js/entites.js');
+      const E = await import("/js/entities/runtime.js");
       return { frames: document.querySelectorAll('iframe[title="Calcul isolé"]').length,
         board: boardBefore === JSON.stringify(E.entites, (key, value) => typeof value === 'function' || value instanceof Node ? undefined : value),
         storage: storageBefore === JSON.stringify(Object.entries(localStorage)) };

@@ -24,10 +24,10 @@ async function fixture(config = {}) {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
     const U = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
     const grid = document.createElement('div'); grid.id = 'hexGrid'; grid.className = 'hex-grid';
@@ -54,10 +54,10 @@ async function fixture(config = {}) {
       const cell=document.createElement('div');cell.className='hex Neutral';cell.dataset.position='free-'+n;cell.dataset.row='0';cell.dataset.col=String(n+4);
       cell.style.cssText=`position:absolute;left:${n*50+300}px;top:0;width:45px;height:45px`;grid.append(cell);
     }
-    window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
+    window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
-    window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard(); snapshot.balance.brokenSpell.chance.basePercent = 0;
+    window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
+    window.Sim = await import("/js/debug/simulation.js"); window.snapshot = Sim.captureSimulationBoard(); snapshot.balance.brokenSpell.chance.basePercent = 0;
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {
       const { type, data } = event.detail;
@@ -120,7 +120,7 @@ try {
   const priority=await fixture({A:{magic:true,range:'range',preparation:200,execution:100,effects:['silence'],effectOverrides:{silence:{effectDuration:3}}},
     B:{magic:true,range:'range',preparation:5000,execution:100,cooldown:60000}});
   const priorityTrial=await priority.evaluate(async()=>{
-    const R=await import('/js/attackResolution.js'),catalog=(await import('/js/data/attackList.js')).attackDetails;
+    const R=await import("/js/combat/attackResolution.js"),catalog=(await import('/js/data/attackList.js')).attackDetails;
     const b=E.entites.find(e=>e.side==='B'),original=b.attackDetails[0];
     const alternate=(id,preparation,cooldown)=>({attackId:id,functionName:id,displayName:id,combatFunction:'Attaquant',attacknature:['magicalDamage'],attackRange:['range'],attackTarget:['enemy'],deadTarget:['no'],effets:[],selfEffects:[],preparationTime:preparation,executionTime:100,recoveryTime:100,cooldown,magicalRatio:1,physicalRatio:0});
     R.setEntityAttackDefinitions(b,[original,alternate('priority-alternative',600,2000),alternate('low-priority',100,1000)],catalog);

@@ -1,5 +1,5 @@
 // Game startup. UI construction lives in the themed modules below.
-import { gameStorage as localStorage } from "../sessionStorage.js";
+import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import {
   loadFromLocalStorage,
   saveToLocalStorage,
@@ -7,10 +7,10 @@ import {
   loadCurrentGameData,
   saveCurrentGameData,
   setCurrentLevel,
-} from "../GameStorage.js";
-import { migrateEntityAcquisitions } from "../entites.js";
-import { AdminButtons } from "../admin.js";
-import { launchCurrentLevelFromStorage, initializeWorldMapInterface } from "../newgame.js";
+} from "../storage/gameStorage.js";
+import { migrateEntityAcquisitions } from "../entities/runtime.js";
+import { AdminButtons } from "../debug/admin.js";
+import { launchCurrentLevelFromStorage, initializeWorldMapInterface } from "./worldMap.js";
 import { sanitizeItemId } from "../items/itemManager.js";
 import {
   detectPageReload,
@@ -111,7 +111,7 @@ function initializeGameOnLoad() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (await (await import("../combatPause.js")).restorePausedCombat()) return;
+    if (await (await import("../combat/pause.js")).restorePausedCombat()) return;
     const reloaded = detectPageReload(); // ❗ On détecte vraiment le reload cette fois
     console.log(`✅ Page Reload détecté ? ${reloaded}`);
     initializeGameOnLoad();

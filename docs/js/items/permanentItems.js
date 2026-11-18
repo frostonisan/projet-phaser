@@ -1,7 +1,7 @@
 import { stats } from '../data/statsData.js';
 import { HELPER_PICTOGRAM_NAMES } from '../data/helpers.js';
-import { normalizeStatKey, getDisplayStatKey } from '../entite/entityRules.js';
-import { STAT_SYSTEM_ORIGINS, calculateStatSources } from '../entite/statSystem.js';
+import { normalizeStatKey, getDisplayStatKey } from "../entities/rules.js";
+import { STAT_SYSTEM_ORIGINS, calculateStatSources } from "../entities/statSystem.js";
 import { registerIngameItem } from './items.js';
 
 export function getPermanentStatChoices() {

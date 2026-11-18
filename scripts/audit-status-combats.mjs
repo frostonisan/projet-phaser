@@ -3,9 +3,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createStatusAudit } from './status-audit-harness.mjs';
 async function install(config) {
-  const E = await import('/js/entites.js'), C = await import('/js/combatClock.js'), Ctrl = await import('/js/entityControl.js');
-  const Fx = await import('/js/attackEffectMecanics.js'), T = await import('/js/entityUpdatesStorage.js'), R = await import('/js/attackResolution.js');
-  const A = await import('/js/entityAttributs.js'), G = await import('/js/gameState.js');
+  const E = await import("/js/entities/runtime.js"), C = await import("/js/combat/clock.js"), Ctrl = await import("/js/combat/control.js");
+  const Fx = await import("/js/combat/effects.js"), T = await import("/js/storage/entityStorage.js"), R = await import("/js/combat/attackResolution.js");
+  const A = await import("/js/combat/vitals.js"), G = await import("/js/app/state.js");
   const epoch = C.clockNow(), actors = [...E.entites], last = new Map(), seen = new Map();
   const data = window.__statusAudit = { samples: 0, asleepSamples: 0, asleepMs: 0, sleepEntries: 0,
     insolenceActions: 0, damageEvents: 0, periodicDamage: 0, totalDamage: 0,

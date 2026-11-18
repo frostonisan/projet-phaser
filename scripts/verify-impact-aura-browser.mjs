@@ -12,7 +12,7 @@ const server = createServer(async (req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
   let file = resolve(root, '.' + decodeURIComponent(pathname === '/' ? '/index.html' : pathname));
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
-  if (before && ['/js/entitesAnimation.js', '/js/entitesAura.js'].includes(pathname)) file = resolve(baseline, '.' + pathname);
+  if (before && ["/js/rendering/animations.js", "/js/rendering/auras.js"].includes(pathname)) file = resolve(baseline, '.' + pathname);
   try { res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.gif': 'image/gif' })[extname(file)] || 'application/octet-stream'); res.end(await readFile(file)); }
   catch { res.writeHead(404).end(); }
 });
@@ -24,8 +24,8 @@ async function fixture() {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.evaluate(async () => {
-    window.An = await import('/js/entitesAnimation.js'); window.Aura = await import('/js/entitesAura.js');
-    window.Clock = await import('/js/combatClock.js');
+    window.An = await import("/js/rendering/animations.js"); window.Aura = await import("/js/rendering/auras.js");
+    window.Clock = await import("/js/combat/clock.js");
     window.sleep = ms => new Promise(done => setTimeout(done, ms));
     window.actors = [{ id: 993900, side: 'A' }, { id: 993901, side: 'B' }].map(entity => ({ ...entity, stats: { HP: { current: 1000 }, hpBattleRegen: 150 } }));
     const host = document.createElement('div'); host.style.cssText = 'position:fixed;inset:0;background:#111'; document.body.append(host);

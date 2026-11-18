@@ -25,13 +25,13 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const report = await page.evaluate(async () => {
-    window.E = await import('/js/entites.js');
-    window.G = await import('/js/gameState.js');
-    window.Game = await import('/js/game.js');
-    window.S = await import('/js/GameStorage.js');
-    window.Events = await import('/js/events.js');
+    window.E = await import("/js/entities/runtime.js");
+    window.G = await import("/js/app/state.js");
+    window.Game = await import("/js/app/stages.js");
+    window.S = await import("/js/storage/gameStorage.js");
+    window.Events = await import("/js/events/runtime.js");
     const U = await import("/js/ui/application.js");
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     Game.configureBattleSystemsOnce(); U.createGameContainer(); U.GameUi();
     S.setAdminMode(false); window.levelRunning = 'scripted';
     const army = ['A', 'B'].map((side, i) => E.enrichEntityStats({
@@ -104,16 +104,16 @@ try {
     check(start(.99) === 'B', 'Fresh prepared ambush survives a high random value at Start');
     check(S.loadFromLocalStorage('GameStages').stages[0].surpriseEncountered === true, 'First loaded fight commits its encounter');
     // Restoration must keep the same fight rather than starting another encounter.
-    window.P = await import('/js/combatPause.js');
+    window.P = await import("/js/combat/pause.js");
     await P.pauseCombat();
     return checks;
   });
   await page.waitForFunction(() => P.getCombatPauseReasons().tactical && !P.isCombatCheckpointBusy());
   await page.reload();
   const restored = await page.evaluate(async () => {
-    const P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    const Events = await import('/js/events.js');
-    const S = await import('/js/GameStorage.js');
+    const P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    const Events = await import("/js/events/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     return { paused: P.getCombatPauseReasons().tactical, surprised: Events.getSurprisedSide(), stage: S.loadFromLocalStorage('GameStages').stages[0] };
   });
   assert.equal(restored.paused, true);

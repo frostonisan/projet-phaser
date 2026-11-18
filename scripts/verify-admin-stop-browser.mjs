@@ -25,16 +25,16 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   assert.equal(await page.locator('#admin-stop-combat').count(), 0);
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
-    const A = await import('/js/admin.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
+    const A = await import("/js/debug/admin.js");
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
-    const N = await import('/js/newgame.js');
+    const N = await import("/js/app/worldMap.js");
     S.setAdminMode(true);
     window.levelRunning = 'worldmap';
     A.initializeAdminLevel(E.entitesNestUp);
     if (document.getElementById('admin-stop-combat')) throw Error('Admin mode outside the Admin level must not expose Stop');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991810, name: 'Saved army', side: 'A', level: 1,
       attacks: ['shot-p-r'], stats: {}, baseStats: { HP: 1000, shift: 10, speed: 10000, armor: 10 }, stuff: {}, resourceStocks: {} });
     S.saveToLocalStorage('selectedArmyA', [actor]); window.selectedArmyA = [actor];
@@ -51,14 +51,14 @@ try {
   await page.waitForTimeout(1700);
   assert.equal(await page.locator('#admin-stop-combat').count(), 0, 'Stop is absent before launching');
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
-    const G = await import('/js/gameState.js');
-    const C = await import('/js/createEntity.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
+    const G = await import("/js/app/state.js");
+    const C = await import("/js/rendering/entities.js");
     document.querySelectorAll('#hexGrid .entite-box').forEach(node => node.remove());
     document.querySelectorAll('#hexGrid .hex').forEach(hex => hex.classList.remove('occupied'));
     E.entites.length = 0;
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     for (const [index, side] of ['A', 'B'].entries()) {
       const hex = document.querySelector(`#hexGrid .hex.Side${side}`);
       const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991810 + index,
@@ -71,7 +71,7 @@ try {
     }
     S.saveToLocalStorage('selectedArmyA', [E.entites[0]]);
     S.saveToLocalStorage('ArmyB', { armies: { test: { entities: [E.entites[1]] } } });
-    (await import('/js/fight.js')).initFightEntites();
+    (await import("/js/combat/loop.js")).initFightEntites();
     G.manageBattleActions({ mode: G.BATTLE_ACTION_MODE.START });
     window.__stops = 0; window.__resolutions = 0;
     window.addEventListener('battleStopped', () => window.__stops++);
@@ -83,7 +83,7 @@ try {
   });
   await page.locator('#startButton').click();
   await page.waitForFunction(async () => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     return entites.every(entity => entity.speedTimer > 0 && entity.turnCount > 0);
   });
   await button.waitFor({ state: 'visible' });
@@ -96,9 +96,9 @@ try {
   }), startPosition, 'Stop uses the same position as Start');
   await page.screenshot({ path: resolve(output, 'stop-replaces-start.png'), fullPage: true });
   await page.evaluate(async () => {
-    const { entites } = await import('/js/entites.js');
-    const G = await import('/js/gameState.js');
-    const A = await import('/js/entitesAnimation.js');
+    const { entites } = await import("/js/entities/runtime.js");
+    const G = await import("/js/app/state.js");
+    const A = await import("/js/rendering/animations.js");
     const { createAttackFlight } = await import('/js/combat/attacks.js');
     const attack = { ...entites[0].attackDetails[0], attacknature: ['physicalDamage'], attackRange: ['range'],
       attackTarget: ['enemy'], deadTarget: ['no'], effets: [], selfEffects: [] };
@@ -110,14 +110,14 @@ try {
     const projectile = document.createElement('div'); projectile.className = 'projectile-parent'; document.body.append(projectile);
     const chest = document.createElement('div'); chest.className = 'chest-container'; chest.id = 'preserved-chest'; document.body.append(chest);
     window.__intervalTicks = 0; window.__lateCallback = false;
-    const combatClock = await import('/js/combatClock.js');
+    const combatClock = await import("/js/combat/clock.js");
     G.activeIntervals.push(combatClock.setInterval(() => window.__intervalTicks++, 50));
     combatClock.setTimeout(() => { window.__lateCallback = true; }, 1500);
   });
   await button.click();
   await page.waitForFunction(() => document.getElementById('startButton') && !document.getElementById('admin-stop-combat'));
   const stopped = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'); const G = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js"); const G = await import("/js/app/state.js");
     await (await import('/js/combat/attacks.js')).resolveAttackImpact(window.__flight);
     return { started: G.gameStarted, finished: G.isBattleFinished(), actors: E.entites.length,
       frozen: E.entites.every(e => e.battleStopped && e.status === 'inactive' && e.speedTimer === 0 && e.preparationTime === 0 && e.executionTime === 0 && e.recoveryTime === 0 && e.cooldownTimer === 0),
@@ -135,8 +135,8 @@ try {
   assert.deepEqual(await page.evaluate(() => [window.__intervalTicks, window.__lateCallback]), [stopped.ticks, false]);
   await page.screenshot({ path: resolve(output, 'combat-stopped.png'), fullPage: true });
   await page.evaluate(async () => {
-    const { entites } = await import('/js/entites.js');
-    const { updateEntityAttackDefinition } = await import('/js/attackResolution.js');
+    const { entites } = await import("/js/entities/runtime.js");
+    const { updateEntityAttackDefinition } = await import("/js/combat/attackResolution.js");
     for (const entity of entites) {
       entity.stats.speed = 100;
       entity.stats.accuracy = 10000;
@@ -151,27 +151,27 @@ try {
   });
   await page.locator('#startButton').click();
   await page.waitForFunction(async () => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     return entites.every(entity => !entity.battleStopped && entity.turnCount > 0);
   });
   await page.waitForFunction(async () => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     return entites.every(entity => entity.turnCount >= 2 && entity.stats.HP.current < 10000);
   }, null, { timeout: 20000 });
   await page.evaluate(() => { window.__staleStopButton = document.getElementById('admin-stop-combat'); });
   await button.click();
   await page.waitForFunction(() => window.__stops === 2);
-  const resumeHP = await page.evaluate(async () => (await import('/js/entites.js')).entites.map(entity => entity.stats.HP.current));
+  const resumeHP = await page.evaluate(async () => (await import("/js/entities/runtime.js")).entites.map(entity => entity.stats.HP.current));
   await page.locator('#startButton').click();
   await page.waitForFunction(async hp => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     return entites.every((entity, index) => !entity.battleStopped && entity.turnCount >= 2 && entity.stats.HP.current < hp[index]);
   }, resumeHP, { timeout: 20000 });
   await button.click();
   await page.waitForFunction(() => window.__stops === 3);
   await page.evaluate(async () => {
-    const A = await import('/js/admin.js');
-    const E = await import('/js/entites.js');
+    const A = await import("/js/debug/admin.js");
+    const E = await import("/js/entities/runtime.js");
     const oldButton = window.__staleStopButton;
     window.levelRunning = 'worldmap'; window.currentStageId = 'outside';
     oldButton.click();

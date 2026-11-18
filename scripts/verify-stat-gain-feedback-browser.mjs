@@ -25,11 +25,11 @@ try {
   await page.clock.install();
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const report = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-    const UI = await import("/js/ui/display.js"), U = await import('/js/UpgradeEntity.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
+    const UI = await import("/js/ui/display.js"), U = await import("/js/entities/progression.js");
     const P = await import('/js/items/permanentItems.js'), I = await import('/js/items/itemEffectMecanics.js');
-    const Rules = await import('/js/entite/entityRules.js'), State = await import('/js/gameState.js');
-    const N = await import('/js/newgame.js'), H = await import('/js/data/helpers.js');
+    const Rules = await import("/js/entities/rules.js"), State = await import("/js/app/state.js");
+    const N = await import("/js/app/worldMap.js"), H = await import('/js/data/helpers.js');
     const Gear = await import('/js/items/equipement.js');
     const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
     const clear = () => document.querySelectorAll('.stat-gain-feedback').forEach(node => node.remove());
@@ -148,7 +148,7 @@ try {
     assert.equal(await page.locator('.stat-gain-feedback').count(), 0);
 
     const dynamics = await page.evaluate(async () => {
-      const UI = await import("/js/ui/display.js"), FX = await import('/js/attackEffectMecanics.js');
+      const UI = await import("/js/ui/display.js"), FX = await import("/js/combat/effects.js");
       const entity = { id: 981740 };
       const anchor = document.createElement('div'); anchor.id = `PopDow_${entity.id}`;
       anchor.style.cssText = 'position:fixed;left:calc(50% - 50px);top:400px;width:100px;height:100px';

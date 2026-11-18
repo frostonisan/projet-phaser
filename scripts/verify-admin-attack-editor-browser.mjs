@@ -25,16 +25,16 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   assert.equal(await page.locator('#admin-stop-combat').count(), 0);
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
-    const A = await import('/js/admin.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
+    const A = await import("/js/debug/admin.js");
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
-    const N = await import('/js/newgame.js');
+    const N = await import("/js/app/worldMap.js");
     S.setAdminMode(true);
     window.levelRunning = 'worldmap';
     A.initializeAdminLevel(E.entitesNestUp);
     if (document.getElementById('admin-stop-combat')) throw Error('Admin mode outside the Admin level must not expose Stop');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991810, name: 'Saved army', side: 'A', level: 1,
       attacks: ['shot-p-r'], stats: {}, baseStats: { HP: 1000, shift: 10, speed: 10000, armor: 10 }, stuff: {}, resourceStocks: {} });
     S.saveToLocalStorage('selectedArmyA', [actor]); window.selectedArmyA = [actor];
@@ -49,14 +49,14 @@ try {
   await page.waitForFunction(() => !document.querySelector('.loading-screen') && document.getElementById('startButton'));
   assert.equal(await page.locator('#admin-stop-combat').count(), 0, 'Stop is absent before launching');
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
-    const G = await import('/js/gameState.js');
-    const C = await import('/js/createEntity.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
+    const G = await import("/js/app/state.js");
+    const C = await import("/js/rendering/entities.js");
     document.querySelectorAll('#hexGrid .entite-box').forEach(node => node.remove());
     document.querySelectorAll('#hexGrid .hex').forEach(hex => hex.classList.remove('occupied'));
     E.entites.length = 0;
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     for (const [index, side] of ['A', 'B'].entries()) {
       const hex = document.querySelector(`#hexGrid .hex.Side${side}`);
       const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991810 + index,
@@ -69,7 +69,7 @@ try {
     }
     S.saveToLocalStorage('selectedArmyA', [E.entites[0]]);
     S.saveToLocalStorage('ArmyB', { armies: { test: { entities: [E.entites[1]] } } });
-    (await import('/js/fight.js')).initFightEntites();
+    (await import("/js/combat/loop.js")).initFightEntites();
     G.manageBattleActions({ mode: G.BATTLE_ACTION_MODE.START });
     window.__stops = 0; window.__resolutions = 0;
     window.addEventListener('battleStopped', () => window.__stops++);
@@ -82,7 +82,7 @@ try {
   assert.deepEqual(await page.locator('.admin-attack-editor-input--text').evaluateAll(nodes => nodes.map(n => n.getAttribute('aria-label'))), ['Nom affiché']);
   assert.equal(await page.getByText('Identité', { exact: true }).count(), 0);
   const before = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     window.__untouchedAttack = JSON.stringify(E.entites[1].attackDetails);
     return structuredClone(E.entites[0].attackDetails[0]);
   });
@@ -141,14 +141,14 @@ try {
   await page.getByRole('spinbutton', { name: 'Ratio magique', exact: true }).fill('1.75');
   await page.getByRole('spinbutton', { name: 'Cooldown base', exact: true }).fill('1234');
   await page.getByRole('spinbutton', { name: 'Préparation base', exact: true }).fill('345');
-  assert.deepEqual(await page.evaluate(async () => (await import('/js/entites.js')).entites[0].attackDetails[0]), before,
+  assert.deepEqual(await page.evaluate(async () => (await import("/js/entities/runtime.js")).entites[0].attackDetails[0]), before,
     'Edits stay in the draft until validation');
   await page.getByRole('button', { name: 'Valider', exact: true }).click();
   const saved = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const R = await import('/js/attackResolution.js');
-    const S = await import('/js/GameStorage.js');
-    const L = await import('/js/essenceur.js');
+    const E = await import("/js/entities/runtime.js");
+    const R = await import("/js/combat/attackResolution.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const L = await import("/js/items/essences.js");
     const entity = E.entites[0];
     for (let i = 0; i < 3; i++) E.recomputeEntityStats(entity);
     return { attack: R.readAttackDefinitionsForEntity(entity)[0], current: entity.currentAttack,
@@ -184,15 +184,15 @@ try {
   await choose('Nature', 'piercingDamage');
   await page.getByRole('button', { name: 'Valider', exact: true }).click();
   const mixed = await page.evaluate(async () => {
-    const entity = (await import('/js/entites.js')).entites[0];
-    return { nature: entity.attackDetails[0].attacknature, ledger: (await import('/js/essenceur.js')).validateEntityEssenceLedger(entity) };
+    const entity = (await import("/js/entities/runtime.js")).entites[0];
+    return { nature: entity.attackDetails[0].attacknature, ledger: (await import("/js/items/essences.js")).validateEntityEssenceLedger(entity) };
   });
   assert.deepEqual(mixed.nature, ['hybridalDamage', 'piercingDamage']);
   assert.equal(mixed.ledger.ok, true, JSON.stringify(mixed.ledger));
   await page.evaluate(async () => {
     const entity = window.__adminActiveLiveEntityDraft;
-    const R = await import('/js/attackResolution.js');
-    const I = await import('/js/essenceInventory.js');
+    const R = await import("/js/combat/attackResolution.js");
+    const I = await import("/js/items/essenceInventory.js");
     const slots = Array.from({ length: R.ATTACK_ESSENCE_MAX_SLOTS }, (_, index) => {
       const item = I.createLinkedEssenceItem(entity.id, 'blue', { origin: 'admin-test' });
       entity.attackEssenceInventory.linkedItems.push(item);
@@ -200,15 +200,15 @@ try {
         essenceSource: 'linked', linkedColor: 'blue' };
     });
     R.updateEntityAttackDefinition(entity, entity.attackDetails[0], { essenceSlots: slots });
-    (await import('/js/essenceur.js')).syncEntityLinkedEssenceInventory(entity);
+    (await import("/js/items/essences.js")).syncEntityLinkedEssenceInventory(entity);
   });
   await choose('Nature', 'hybridalDamage');
   await choose('Nature', 'piercingDamage');
   await page.getByRole('button', { name: 'Valider', exact: true }).click();
   const full = await page.evaluate(async () => {
-    const entity = (await import('/js/entites.js')).entites[0];
+    const entity = (await import("/js/entities/runtime.js")).entites[0];
     return { slots: entity.attackDetails[0].essenceSlots.length, nature: entity.attackDetails[0].attacknature,
-      ledger: (await import('/js/essenceur.js')).validateEntityEssenceLedger(entity) };
+      ledger: (await import("/js/items/essences.js")).validateEntityEssenceLedger(entity) };
   });
   assert.equal(full.slots, 10, 'Changing a full attack keeps the ten-socket limit');
   assert.deepEqual(full.nature, ['hybridalDamage', 'piercingDamage']);

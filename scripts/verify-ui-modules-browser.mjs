@@ -37,11 +37,11 @@ try {
   // Import each public subsystem first in a fresh module graph. No bootstrap
   // ordering may be required to initialize its shared constants or registries.
   const independentFailures = [];
-  for (const entry of ['entites', 'attackResolution', 'damagesCalcul', 'entite/entityRules',
-    'entite/statSystem', 'entite/reverseArchetype', 'dom', 'GameStorage', 'entityAttributs',
-    'gameState', 'fight', 'essenceInventory', 'essenceur', 'items/resourceStocks',
-    'items/itemManager', 'UpgradeEntity', 'entityUpdatesStorage', 'procedural/proc-bareme',
-    'data/loaderList', 'combatSimulation', 'combatPause']) {
+  for (const entry of ["entities/runtime", "combat/attackResolution", "combat/statistics", "entities/rules",
+    "entities/statSystem", "entities/archetypes", "rendering/hud", "storage/gameStorage", "combat/vitals",
+    "app/state", "combat/loop", "items/essenceInventory", "items/essences", 'items/resourceStocks',
+    'items/itemManager', "entities/progression", "storage/entityStorage", 'procedural/proc-bareme',
+    'data/loaderList', "debug/simulation", "combat/pause"]) {
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
@@ -85,7 +85,7 @@ try {
     }
     const attack = entries[0], codex = entries[1], inventory = entries[5], helpers = entries[8];
     const catalogue = await import('/js/data/attackList.js');
-    const resolution = await import('/js/attackResolution.js');
+    const resolution = await import("/js/combat/attackResolution.js");
     return { before, after: window.__uiRegistrations,
       shared: game.MultiAttackDisplay === attack.MultiAttackDisplay && game.createCodexEntityScan === codex.createCodexEntityScan
         && game.createInventory === inventory.createInventory && game.helperEntityByRoot === helpers.helperEntityByRoot,
@@ -97,7 +97,7 @@ try {
   assert.equal(result.shared, true, 'Entry exports and direct module imports share functions and helper state');
   assert.equal(result.constants, true, 'Essence constants have a single catalogue owner');
   assert.equal(result.gameContainers, 1);
-  assert.deepEqual(requests.filter(url => /^\/js\/admin\.js(?:\?|$)/.test(url)), ['/js/admin.js'], 'One canonical admin module');
+  assert.deepEqual(requests.filter(url => /^\/js\/debug\/admin\.js(?:\?|$)/.test(url)), ["/js/debug/admin.js"], 'One canonical admin module');
   assert.deepEqual(errors, []);
   assert.deepEqual(consoleErrors, [], 'Bootstrap and UI initialization emit no errors');
   await context.close();

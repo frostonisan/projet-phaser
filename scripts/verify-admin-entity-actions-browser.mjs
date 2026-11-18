@@ -25,14 +25,14 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
-    const A = await import('/js/admin.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
+    const A = await import("/js/debug/admin.js");
     const R = await import('/js/items/resourceStocks.js');
     S.setAdminMode(true);
     window.levelRunning = 'admin'; window.currentStageId = 'admin-actions';
     S.setCurrentLevel('admin-actions');
-    (await import('/js/sessionStorage.js')).beginAdminSession();
+    (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     window.__persistent = JSON.stringify(Object.entries(localStorage).sort());
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'admin-actions', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} });
@@ -50,7 +50,7 @@ try {
       hex.appendChild(Object.assign(document.createElement('div'), { className: 'socle' }));
       grid.appendChild(hex);
     }
-    const template = structuredClone((await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013));
+    const template = structuredClone((await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013));
     const gear = { itemId: 'test-gear', equippedId: 'e-test-gear', equippedTo: 991780, slot: 'slot1', name: 'Test charges',
       Stuffeffets: [{ type: 'stat-buff', stat: 'shift', value: { current: 5, max: 3 } },
         { type: 'stat-buff', stat: 'extraLife', value: 1, rechargeDays: 6 },
@@ -61,7 +61,7 @@ try {
       baseStats: { HP: 100, speed: 10000, strength: 10, agility: 5, intelligence: 3, charge: 1, shift: 6,
         vigor: 0, extraLife: 1, eternalLife: 1, armor: 8, fadedLife: 2, weaponOrfevre: 10 },
       stuff: { slot1: [gear.equippedId] }, baseStatSources: { crystal: { strength: 3 } }, experience: 100 });
-    await (await import('/js/entitySpawnEngine.js')).spawnEntiteIngame(actor);
+    await (await import("/js/entities/spawn.js")).spawnEntiteIngame(actor);
     actor.stats.HP.current = 37;
     R.spendMovementCharges(actor, 2);
     R.addFadedLife(actor, 3, 'consumable');
@@ -79,16 +79,16 @@ try {
   await page.locator('#Box_Entite_991780').dispatchEvent('click', { detail: 1 });
   await page.locator('.admin-duplicate-entity-button').waitFor({ state: 'visible' });
   await page.locator('.admin-duplicate-entity-button').click();
-  await page.waitForFunction(async () => (await import('/js/entites.js')).entites.length === 2);
+  await page.waitForFunction(async () => (await import("/js/entities/runtime.js")).entites.length === 2);
   await page.waitForFunction(() => !document.querySelector('.admin-duplicate-entity-button').disabled);
   const clone = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
     const a = window.__actor, b = E.entites.find(row => row !== a);
     window.__copy = b;
     const aid = a.stuff.slot1[0], bid = b.stuff.slot1[0];
     const sourceItem = S.loadEquippedItems().find(item => item.equippedId === aid);
     const item = S.loadEquippedItems().find(item => item.equippedId === bid);
-    const { validateEntityEssenceLedger } = await import('/js/essenceur.js');
+    const { validateEntityEssenceLedger } = await import("/js/items/essences.js");
     const statsEqual = JSON.stringify(a.stats) === JSON.stringify(b.stats);
     const essenceIds = a.attackEssenceInventory.linkedItems.map(item => item.id);
     const independent = a.stats !== b.stats && a.attackDetails !== b.attackDetails && a.resourceStocks !== b.resourceStocks;
@@ -110,7 +110,7 @@ try {
   await page.locator('.admin-hard-reset-entity-button').click();
   await page.waitForFunction(() => document.getElementById('admin-event-launch-status').textContent.includes('stats à 0'));
   const reset = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
     const a = window.__actor;
     for (let i = 0; i < 3; i++) E.recomputeEntityStats(a);
     return { hp: a.stats.HP, nonzero: Object.fromEntries(Object.entries(a.stats).filter(([key, value]) => key !== 'HP'
@@ -127,15 +127,15 @@ try {
   check(reset.inventory.some(item => (item.itemId || item) === 'test-gear'), 'Hard-reset returns equipment without deleting it');
   await page.screenshot({ path: resolve(output, 'hard-reset-desktop.png') });
   await page.locator('.admin-duplicate-entity-button').click();
-  await page.waitForFunction(async () => (await import('/js/entites.js')).entites.length === 3);
+  await page.waitForFunction(async () => (await import("/js/entities/runtime.js")).entites.length === 3);
   await page.waitForFunction(() => !document.querySelector('.admin-duplicate-entity-button').disabled);
   check(await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const actor = E.entites.at(-1); E.recomputeEntityStats(actor);
     return actor.adminZeroBaseline && actor.stats.HP.max === 1 && actor.stats.dayHpRegen === 0 && actor.stats.weight === 0;
   }), 'A hard-reset entity can be duplicated without restoring implicit bonuses');
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     window.__actor.baseStats.strength = 4;
     window.__actor.baseStats.vitality = 3;
     E.recomputeEntityStats(window.__actor);
@@ -143,9 +143,9 @@ try {
   check(await page.evaluate(() => window.__actor.stats.strength === 4 && window.__actor.stats.HP.max > 1
     && window.__actor.stats.dayHpRegen > 0), 'Hard-reset does not lock future stat gains');
   const further = await page.evaluate(async () => {
-    const A = await import('/js/admin.js'), E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+    const A = await import("/js/debug/admin.js"), E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
     const R = await import('/js/items/resourceStocks.js');
-    const Rules = await import('/js/entite/entityRules.js');
+    const Rules = await import("/js/entities/rules.js");
     const original = window.__copy;
     const results = {};
     R.spendMovementCharges(original, 100);
@@ -183,7 +183,7 @@ try {
     blockers.forEach(node => node.remove());
     const enemy = await A.duplicateAdminEntity({ ...original, side: 'B' });
     results.enemy = enemy.side === 'B' && document.getElementById(`Box_Entite_${enemy.id}`).closest('.hex').classList.contains('SideB');
-    const G = await import('/js/gameState.js');
+    const G = await import("/js/app/state.js");
     G.setGameOver(false); G.startGame();
     const shift = original.stats.shift.current, hp = original.stats.HP.current;
     const combatCopy = await A.duplicateAdminEntity(original);
@@ -196,8 +196,8 @@ try {
   });
   for (const [label, value] of Object.entries(further)) check(value, label);
   const navigation = await page.evaluate(async () => {
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
     const settle = () => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
     const results = {};
     const writes = [];

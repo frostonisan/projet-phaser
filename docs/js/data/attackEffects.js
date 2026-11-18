@@ -1,4 +1,4 @@
-import { burnRules, EFFECT_APPLICATION_MODES } from '../effectRules.js';
+import { burnRules, EFFECT_APPLICATION_MODES } from "../combat/effectRules.js";
 import { stats as STAT_CATALOG, STAT_KEY_ALIASES } from './statsData.js';
 export { EFFECT_APPLICATION_MODES };
 export const attackEffects = [

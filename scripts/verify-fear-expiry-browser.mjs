@@ -11,10 +11,10 @@ await mkdir(output, { recursive: true });
 // The server injects only scenario setup into the isolated simulator. Effects,
 // timers, targeting, damage, cooldowns and recovery all use production modules.
 async function installScenario(config) {
-  const E = await import('/js/entites.js'), A = await import('/js/entityAttributs.js');
-  const C = await import('/js/combatClock.js'), R = await import('/js/attackResolution.js');
-  const T = await import('/js/entityUpdatesStorage.js'), Control = await import('/js/entityControl.js');
-  const Effects = await import('/js/attackEffectMecanics.js'), G = await import('/js/gameState.js');
+  const E = await import("/js/entities/runtime.js"), A = await import("/js/combat/vitals.js");
+  const C = await import("/js/combat/clock.js"), R = await import("/js/combat/attackResolution.js");
+  const T = await import("/js/storage/entityStorage.js"), Control = await import("/js/combat/control.js");
+  const Effects = await import("/js/combat/effects.js"), G = await import("/js/app/state.js");
   const [target, source] = E.entites, epoch = C.clockNow();
   const expiry = config.at + config.duration;
   // A stale flee attempt after expiry would now succeed, exposing any lingering loop.
@@ -54,7 +54,7 @@ const server = createServer(async (req, res) => {
   if (rel === '..' || rel.startsWith('..' + sep)) return res.writeHead(403).end();
   try {
     let data = await readFile(file);
-    if (path === '/js/combatSimulationRuntime.js') {
+    if (path === "/js/debug/simulationRuntime.js") {
       assert.ok(data.toString().includes('  G.startGame();'));
       data = data.toString().replace('  G.startGame();', `  G.startGame();\n  if (input.validationCase) await (await import('/__fear-expiry-fixture.js')).install(input.validationCase);`);
     }
@@ -77,9 +77,9 @@ async function fixture(side, config) {
   });
   await page.goto(origin + '/index.html');
   await page.evaluate(async ({ side, config }) => {
-    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js'), F = await import('/js/fight.js');
-    const Sim = await import('/js/combatSimulation.js'), Clock = await import('/js/combatClock.js'), Timeline = await import('/js/combatTimeline.js');
+    const U = await import("/js/ui/application.js"), E = await import("/js/entities/runtime.js"), Create = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js"), G = await import("/js/app/state.js"), F = await import("/js/combat/loop.js");
+    const Sim = await import("/js/debug/simulation.js"), Clock = await import("/js/combat/clock.js"), Timeline = await import("/js/combat/timeline.js");
     const { balanceData } = await import('/js/data/balanceData.js'); balanceData.brokenSpell.chance.basePercent = 0;
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     G.configureBattleActionManager({ createStartButton: e => e, createFleeButton: e => e, createQuitButton: e => e });
@@ -87,7 +87,7 @@ async function fixture(side, config) {
     const grid = document.createElement('div'); grid.id = 'hexGrid'; grid.className = 'hex-grid';
     grid.style.cssText = 'position:absolute;left:50px;top:100px;width:900px;height:400px';
     document.getElementById('game-container').append(grid); E.entites.length = 0;
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     for (const [i, camp] of [side, side === 'A' ? 'B' : 'A'].entries()) {
       const hex = document.createElement('div'); hex.className = `hex Side${camp} occupied`;
       Object.assign(hex.dataset, { position: String(i + 1), row: '1', col: String(i * 3) });

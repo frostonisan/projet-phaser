@@ -29,11 +29,11 @@ try{
   });
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
-    const Fx=await import('/js/attackEffectMecanics.js'),R=await import('/js/attackResolution.js'),C=await import('/js/combatClock.js');
-    const Timeline=await import('/js/combatTimeline.js');
-    const Control=await import('/js/entityControl.js'),Move=await import('/js/board.js'),Rules=await import('/js/entite/entityRules.js');
+    const E=await import("/js/entities/runtime.js"),D=await import("/js/combat/statistics.js"),A=await import("/js/combat/vitals.js");
+    const UI=await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import("/js/app/state.js");
+    const Fx=await import("/js/combat/effects.js"),R=await import("/js/combat/attackResolution.js"),C=await import("/js/combat/clock.js");
+    const Timeline=await import("/js/combat/timeline.js");
+    const Control=await import("/js/combat/control.js"),Move=await import("/js/board/controller.js"),Rules=await import("/js/entities/rules.js");
     const Data=await import('/js/data/attackEffects.js'),catalog=(await import('/js/data/attackList.js')).attackDetails;
     const T=await import('/js/procedural/proc-bareme.js');
     const Loader=await import('/js/data/loaderList.js');
@@ -73,7 +73,7 @@ try{
         const [id,t]=due;now=Math.max(now,t.at);timers.delete(id);t.fn();
       }now=end;await flush();await Timeline.settleCombatTimeline();await flush();
     };
-    const Battle=await import('/js/fight.js');
+    const Battle=await import("/js/combat/loop.js");
     const effectAttack=(name,seconds)=>({effets:[name],effectOverrides:{[name]:{effectDuration:seconds}}});
     const apply=(target,name,source,seconds)=>A.applyEffect(target,name,source,seconds==null?null:effectAttack(name,seconds));
     const spell=(key,extra={})=>Data.resolveAttackEffects({...catalog[0],attackId:key,functionName:key,displayName:key,attackRange:['range'],attacknature:['physicalDamage'],
@@ -82,7 +82,7 @@ try{
     const stop=async(e,task)=>{e.battleStopped=true;await advance(100);await task;Fx.clearControlEffects(e);};
     try{
       Math.random=()=>.999999;
-      const Params=await import('/js/effectParameters.js');
+      const Params=await import("/js/combat/effectParameters.js");
       const source=actor('A',{intelligence:100}),target=actor('B');
       const names=['interruption','stun','bafouillage','lenteur','folie','insolence','confusion','charme','effroi','sommeil'];
       for(const name of names) ok(A.getAttackEffectHandler(name)&&Data.attackEffects.some(e=>e.effectName===name),name+': catalog and handler');
@@ -141,7 +141,7 @@ try{
       configured.effectOverrides.silence.effectDuration.flat=100;
       eq(Control.getControlState(target,'silence').effect.effectDuration,frozen,'Applied values are frozen');Fx.clearControlEffects(target);
       const schema=Data.EFFECT_PARAMETER_SCHEMAS.silence.effectDuration;
-      const Stat=await import('/js/entite/statSystem.js');
+      const Stat=await import("/js/entities/statSystem.js");
       eq(Params.calculateEffectParameter({flat:1,ratios:[{stat:'intelligence',coefficient:.02,curve:'progressive'}]},schema,source),1+Rules.getSafe(source,'intelligence',0)*.02*Stat.getProgressiveRatio(Rules.getSafe(source,'intelligence',0),'intelligence'),'Progressive term uses the existing curve');
       for(const name of names){
         const resistant=actor('B',{resilienceTotal:100});let calls=0;Math.random=()=>{calls++;return 0;};

@@ -26,9 +26,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
-    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import('/js/UpgradeEntity.js');
-    const State = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js");
+    const State = await import("/js/app/state.js");
     window.levelRunning = 'worldmap'; G.setAdminMode(true); State.refreshStageAccess();
     const entity = { id: 986742, name: 'Équilibre', type: 'sbire', side: 'A', awakening: 3,
       level: { current: 30, max: 250 }, baseStats: { HP: 100, strength: 25, intelligence: 50, agility: 50,
@@ -56,7 +56,7 @@ try {
     };
   });
   checks.push(...await page.evaluate(async()=>{
-    const D=await import('/js/damagesCalcul.js'), L=await import('/js/lordFight.js'), F=await import('/js/sbireFocus.js');
+    const D=await import("/js/combat/statistics.js"), L=await import("/js/combat/lordTurn.js"), F=await import("/js/combat/minionTargeting.js");
     const checks=[],ok=(v,label)=>{if(!v)throw Error(label);checks.push(label);};
     const e=audit.entity,random=Math.random;
     try {

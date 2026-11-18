@@ -1,5 +1,5 @@
 // Application shell, starter selection, settings and stage menu lifecycle.
-import { gameStorage as localStorage } from '../sessionStorage.js';
+import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import { cachedResourceUrl } from '../data/loaderList.js';
 import {
   resetFullGame,
@@ -9,14 +9,14 @@ import {
   purgeStatPreview,
   loadPlayerInfo,
   savePlayerInfo,
-} from '../GameStorage.js';
-import { assertEntityType, isLord, getSafe } from '../entite/entityRules.js';
-import { generateUniqueID, entitesNestUp, enrichEntityStats } from '../entites.js';
+} from "../storage/gameStorage.js";
+import { assertEntityType, isLord, getSafe } from "../entities/rules.js";
+import { generateUniqueID, entitesNestUp, enrichEntityStats } from "../entities/runtime.js";
 import { hideCombatAttackControlPanel, createEntityAttackDisplay } from "./attacks.js";
-import { createMovementDisplay, ensureMovementState } from '../damagesCalcul.js';
-import { createSoundControls } from '../soundManager.js';
-import { generateArmyA } from '../ArmyAFactory.js';
-import { updateExperienceDisplay } from '../UpgradeEntity.js';
+import { createMovementDisplay, ensureMovementState } from "../combat/statistics.js";
+import { createSoundControls } from "../rendering/sound.js";
+import { generateArmyA } from "../entities/armies.js";
+import { updateExperienceDisplay } from "../entities/progression.js";
 import { clearItemDescriptions, setLastDraggedItemId } from '../items/itemManager.js';
 import { resetParallaxView, dismissGamePopups } from "./display.js";
 import {
@@ -24,16 +24,16 @@ import {
   renderBattleBookList,
   renderBattleBookReport,
   clearAllBattleLogs,
-} from '../battleLogs.js';
+} from "../combat/journal.js";
 import { endDragHelperCleanup } from "./drag.js";
-import { closeAttackEssenceSocketPopups } from '../essenceur.js';
-import { getStageAccess, refreshStageAccess, requireSafeMenuAccess } from '../gameState.js';
+import { closeAttackEssenceSocketPopups } from "../items/essences.js";
+import { getStageAccess, refreshStageAccess, requireSafeMenuAccess } from "../app/state.js";
 import { createBattleSatchelView, PlayerInventory, MapShop } from './inventory.js';
 import { createEntityPowerValue } from "./statistics/components.js";
 import { createUmbraBlock } from "./statistics/components.js";
 import { PlayerEssenceur } from "./essences.js";
 import { PlayerArmyCodex } from "./codex/index.js";
-import { applyCombatProfileView } from '../load-entity.js';
+import { applyCombatProfileView } from "../board/deployment.js";
 
 function detectPageReload() {
     let isTrueReload = false;

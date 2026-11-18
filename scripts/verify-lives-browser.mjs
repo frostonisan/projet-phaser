@@ -25,16 +25,16 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const R = await import('/js/items/resourceStocks.js');
-    const S = await import('/js/GameStorage.js');
-    const U = await import('/js/entityUpdatesStorage.js');
-    const A = await import('/js/entityAttributs.js');
-    const G = await import('/js/game.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const U = await import("/js/storage/entityStorage.js");
+    const A = await import("/js/combat/vitals.js");
+    const G = await import("/js/app/stages.js");
     const I = await import('/js/items/itemEffectMecanics.js');
     const Armor = await import('/js/items/armor.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const P = await import('/js/UpgradeEntity.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const P = await import("/js/entities/progression.js");
     const Q = await import('/js/procedural/proc-bareme.js');
     const checks = [];
     const check = (yes, message) => { if (!yes) throw Error(message); checks.push(message); };
@@ -208,9 +208,9 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'); const S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"); const S = await import("/js/storage/gameStorage.js");
     const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)); const M = await import('/js/items/itemManager.js');
-    const Gear = await import('/js/items/equipement.js'); const A = await import('/js/entityAttributs.js');
+    const Gear = await import('/js/items/equipement.js'); const A = await import("/js/combat/vitals.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     window.levelRunning = 'worldmap'; S.setAdminMode(true);
     const entity = structuredClone(E.entitesNestUp[0]);
@@ -250,7 +250,7 @@ try {
     if (!Gear.equip({ item: second, targetEntity: recipient, slotId: `slot1-${recipient.id}` })) throw Error('Recipient equip failed');
     A.extraLifeConsumption(recipient);
     const R = await import('/js/items/resourceStocks.js');
-    const U = await import('/js/entityUpdatesStorage.js');
+    const U = await import("/js/storage/entityStorage.js");
     const day = Number(localStorage.getItem('gameDay')) || 1;
     R.advanceLifeRegen(recipient, 'extraLife', 1, day + 1, true);
     localStorage.setItem('gameDay', String(day + 1));
@@ -327,10 +327,10 @@ try {
     await page.evaluate(() => window.__livesUI.M.clearItemDescriptions());
   }
   const perLifeChecks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
     const M = await import('/js/items/itemManager.js'), UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const Gear = await import('/js/items/equipement.js'), R = await import('/js/items/resourceStocks.js');
-    const Store = await import('/js/entityUpdatesStorage.js');
+    const Store = await import("/js/storage/entityStorage.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     UI.closeOpenHelpers(); M.clearItemDescriptions();
     document.getElementById('lives-audit')?.remove();

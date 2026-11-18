@@ -26,9 +26,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
-    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import('/js/UpgradeEntity.js');
-    const State = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import("/js/entities/progression.js");
+    const State = await import("/js/app/state.js");
     window.levelRunning = 'worldmap'; G.setAdminMode(true); State.refreshStageAccess();
     const entity = { id: 986742, name: 'Vivacité', type: 'sbire', side: 'A', awakening: 3,
       level: { current: 30, max: 250 }, baseStats: { HP: 100, strength: 25, intelligence: 50, agility: 50,
@@ -56,9 +56,9 @@ try {
     };
   });
   checks.push(...await page.evaluate(async()=>{
-    const Fx=await import('/js/attackEffectMecanics.js'),C=await import('/js/combatClock.js');
-    const D=await import('/js/damagesCalcul.js'),Anim=await import('/js/entitesAnimation.js');
-    const E=await import('/js/entites.js');
+    const Fx=await import("/js/combat/effects.js"),C=await import("/js/combat/clock.js");
+    const D=await import("/js/combat/statistics.js"),Anim=await import("/js/rendering/animations.js");
+    const E=await import("/js/entities/runtime.js");
     const checks=[],ok=(v,label)=>{if(!v)throw Error(label);checks.push(label);};
     const eq=(a,b,label)=>ok(Math.abs(a-b)<1e-8,`${label}: ${a} / ${b}`);
     const e=audit.entity,random=Math.random;

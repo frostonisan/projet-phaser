@@ -1,6 +1,6 @@
-import { removeCombatVisualAfter } from '../combatClock.js';
-import { setTimeout } from '../combatClock.js';
-import { updateHealthBar, syncDOMWithStats } from '../UpgradeEntity.js';
+import { removeCombatVisualAfter } from "../combat/clock.js";
+import { setTimeout } from "../combat/clock.js";
+import { updateHealthBar, syncDOMWithStats } from "../entities/progression.js";
 import {
   itemSaveEntityHPToStorage,
   recordEntityCombatAmount,
@@ -9,16 +9,16 @@ import {
   saveEntireEntityToStorage,
   saveEntityMovementState,
   saveEntityfadedLifeToStorage,
-} from "../entityUpdatesStorage.js";
+} from "../storage/entityStorage.js";
 import { itemEffects } from './itemEffects.js';
-import { showHealingFeedback, toggleEffectClass, rez } from '../attackEffectMecanics.js';
-import { LifeandDeath, updateBonusLifeCounters } from '../entityAttributs.js';
-import { ensureMovementState, updateMovementDisplay } from '../damagesCalcul.js';
+import { showHealingFeedback, toggleEffectClass, rez } from "../combat/effects.js";
+import { LifeandDeath, updateBonusLifeCounters } from "../combat/vitals.js";
+import { ensureMovementState, updateMovementDisplay } from "../combat/statistics.js";
 import { addMovementCharges, addFadedLife } from './resourceStocks.js';
-import { getStageAccess, refreshStageAccess } from '../gameState.js';
-import { calculateResistances, recomputeEntityStats } from '../entites.js';
+import { getStageAccess, refreshStageAccess } from "../app/state.js";
+import { calculateResistances, recomputeEntityStats } from "../entities/runtime.js";
 import { getPermanentStatGrant } from './permanentItems.js';
-import { loadFromLocalStorage } from '../GameStorage.js';
+import { loadFromLocalStorage } from "../storage/gameStorage.js";
 import { showGamePopupMessage, showStatGainFeedback } from "../ui/display.js";
 
 export function calculateItemDamages(target, effect, item) {
@@ -219,7 +219,7 @@ async function itemResetProgression(target, item, canApply, commit) {
         message: 'Votre entité est déjà pure. Impossible de la purifier.',
     };
     // Load the reset service only on use: it also depends on the item/UI modules.
-    const { previewEntityReset, resetEntityProgression } = await import("../UpgradeEntity.js");
+    const { previewEntityReset, resetEntityProgression } = await import("../entities/progression.js");
     const getCurrentTarget = () => {
         const army = loadFromLocalStorage('selectedArmyA', []);
         return Array.isArray(army) ? army.find(entity => String(entity.id) === String(target.id)) : null;

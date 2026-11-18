@@ -4,9 +4,9 @@ const before = process.argv.includes('--before');
 const restoreOnly = process.argv.includes('--restore-only');
 const bodyOnly = process.argv.includes('--body-only');
 async function install(config) {
-  const E = await import('/js/entites.js'), C = await import('/js/combatClock.js'), A = await import('/js/entityAttributs.js');
-  const Fx = await import('/js/attackEffectMecanics.js'), Control = await import('/js/entityControl.js');
-  const R = await import('/js/attackResolution.js'), T = await import('/js/entityUpdatesStorage.js');
+  const E = await import("/js/entities/runtime.js"), C = await import("/js/combat/clock.js"), A = await import("/js/combat/vitals.js");
+  const Fx = await import("/js/combat/effects.js"), Control = await import("/js/combat/control.js");
+  const R = await import("/js/combat/attackResolution.js"), T = await import("/js/storage/entityStorage.js");
   const Display = await import("/js/ui/statistics/components.js");
   const [target, source] = E.entites, epoch = C.clockNow();
   Math.random = () => 0;

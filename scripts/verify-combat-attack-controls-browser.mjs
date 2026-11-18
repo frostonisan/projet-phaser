@@ -27,16 +27,16 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
     const panel = await import("/js/ui/attacks.js");
-    const selection = await import("/js/attackResolution.js");
+    const selection = await import("/js/combat/attackResolution.js");
     const ui = await import("/js/ui/display.js");
-    const { entites, entitesNestUp } = await import('/js/entites.js');
-    const gameState = await import('/js/gameState.js');
-    const { readAttackDefinitionsForEntity, updateEntityAttackDefinition } = await import('/js/attackResolution.js');
+    const { entites, entitesNestUp } = await import("/js/entities/runtime.js");
+    const gameState = await import("/js/app/state.js");
+    const { readAttackDefinitionsForEntity, updateEntityAttackDefinition } = await import("/js/combat/attackResolution.js");
     const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { createLifeBars, CreateATBEntity } = await import('/js/createEntity.js');
-    const { updateHealthBar } = await import('/js/UpgradeEntity.js');
-    const { updateTimerDisplay } = await import('/js/dom.js');
+    const { createLifeBars, CreateATBEntity } = await import("/js/rendering/entities.js");
+    const { updateHealthBar } = await import("/js/entities/progression.js");
+    const { updateTimerDisplay } = await import("/js/rendering/hud.js");
     const reports = [];
     const check = (condition, label) => { if (!condition) throw Error(label); reports.push(label); };
     const sleep = ms => new Promise(done => setTimeout(done, ms));
@@ -329,8 +329,8 @@ try {
   });
   await page.evaluate(async () => {
     const { createBattleSatchelView } = await import("/js/ui/inventory.js");
-    const { entites } = await import('/js/entites.js');
-    const { notifyAttackSelection } = await import("/js/attackResolution.js");
+    const { entites } = await import("/js/entities/runtime.js");
+    const { notifyAttackSelection } = await import("/js/combat/attackResolution.js");
     document.querySelectorAll('.starter-selection, .game-starter, .board-ui').forEach(node => node.remove());
     entites[0].nickname = 'La Vigie';
     entites[0].role = 'tank';
@@ -369,9 +369,9 @@ try {
     await page.setViewportSize({ width, height: 844 });
     for (const count of [1, 2, 6, 10]) {
       const result = await page.evaluate(async count => {
-        const { setEntityAttackDefinitions } = await import('/js/attackResolution.js');
+        const { setEntityAttackDefinitions } = await import("/js/combat/attackResolution.js");
         const { attackDetails } = await import('/js/data/attackList.js');
-        const { entites } = await import('/js/entites.js');
+        const { entites } = await import("/js/entities/runtime.js");
         const { showCombatAttackControlPanel } = await import("/js/ui/attacks.js");
         setEntityAttackDefinitions(entites[0], attackDetails.slice(0, count), attackDetails);
         showCombatAttackControlPanel(entites[0].id);
@@ -405,8 +405,8 @@ try {
   reports.push('Outside click closes heads-up attack controls');
   const stopReport = await page.evaluate(async () => {
     const panel = await import("/js/ui/attacks.js");
-    const gameState = await import('/js/gameState.js');
-    const { entites } = await import('/js/entites.js');
+    const gameState = await import("/js/app/state.js");
+    const { entites } = await import("/js/entities/runtime.js");
     panel.showCombatAttackControlPanel(entites[0]?.id);
     gameState.StopGame();
     return !document.querySelector('.combat-attack-control-panel');
@@ -417,10 +417,10 @@ try {
   adminPage.on('pageerror', error => errors.push(error.message));
   await adminPage.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const adminReports = await adminPage.evaluate(async () => {
-    const Admin = await import('/js/admin.js');
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
-    const C = await import('/js/createEntity.js');
+    const Admin = await import("/js/debug/admin.js");
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const C = await import("/js/rendering/entities.js");
     const Attack = await import('/js/combat/attacks.js');
     const reports = [];
     const check = (value, label) => { if (!value) throw Error(label); reports.push(label); };
@@ -505,7 +505,7 @@ try {
   for (const width of [1280, 390]) {
     await adminPage.setViewportSize({ width, height: 844 });
     const soulReports = await adminPage.evaluate(async () => {
-      const C = await import('/js/createEntity.js');
+      const C = await import("/js/rendering/entities.js");
       const reports = [];
       const check = (value, label) => { if (!value) throw Error(label); reports.push(label); };
       const settle = () => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));

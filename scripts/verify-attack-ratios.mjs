@@ -5,9 +5,9 @@ await installEntityTestEnvironment();
 const {
   initializeAttackPowerRatios, getAttackPowerRatios, isAttackSublime, ensureEntityAttackInstances,
   readAttackDefinitionsForEntity, updateEntityAttackDefinition, applyEntityAttackModifier,
-} = await import('../docs/js/attackResolution.js');
+} = await import("../docs/js/combat/attackResolution.js");
 const { attackDetails: catalog } = await import('../docs/js/data/attackList.js');
-const { resetEntityAttackEssences } = await import('../docs/js/essenceInventory.js');
+const { resetEntityAttackEssences } = await import("../docs/js/items/essenceInventory.js");
 
 const complete = (nature, fields = {}) => {
   const attack = { attacknature: [nature].flat(), ...fields };

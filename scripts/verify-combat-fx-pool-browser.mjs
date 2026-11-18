@@ -14,7 +14,7 @@ const server = createServer(async (req, res) => {
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
   try {
     let data = await readFile(file);
-    if (file === resolve(root, 'js/entitesAnimation.js')) {
+    if (file === resolve(root, "js/rendering/animations.js")) {
       data = pool ? prototype(data.toString()) : data.toString();
       data += '\nexport { playMeleeImpactFx as testPlay, releaseMeleeImpactFx as testRelease };\n';
       data += `export const testPool = () => ${pool ? 'measuredMeleeImpactPool' : '[]'};`;
@@ -34,7 +34,7 @@ try {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     results[variant] = await page.evaluate(async pooled => {
-      const A = await import('/js/entitesAnimation.js');
+      const A = await import("/js/rendering/animations.js");
       const parent = document.createElement('div'); parent.className = 'BattleFX'; parent.style.cssText = 'position:fixed;inset:0;background:#111'; document.body.append(parent);
       const target = document.createElement('div'); target.style.cssText = 'position:absolute;left:300px;top:300px;width:60px;height:60px;background:#567;transform:translate(7px,9px) scale(1.2)'; parent.append(target);
       const samples = [], counts = [];

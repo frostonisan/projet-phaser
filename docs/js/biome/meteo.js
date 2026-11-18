@@ -1,6 +1,6 @@
-import { registerCombatState, isCombatPaused } from '../combatClock.js';
-import { combatData } from '../combatClock.js';
-import { setTimeout, clearTimeout, requestAnimationFrame, cancelAnimationFrame, clockNow } from '../combatClock.js';
+import { registerCombatState, isCombatPaused } from "../combat/clock.js";
+import { combatData } from "../combat/clock.js";
+import { setTimeout, clearTimeout, requestAnimationFrame, cancelAnimationFrame, clockNow } from "../combat/clock.js";
 let meteoPaused = false;
 let animationFrameId = null;
 let activeEffects = {}; // Stocke les données de chaque effet météo

@@ -28,8 +28,8 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const result = await page.evaluate(async () => {
     const { collectLevelResources, prepareLevelResources } = await import('/js/data/loaderList.js');
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
-    const { enrichEntityStats } = await import('/js/entites.js');
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
+    const { enrichEntityStats } = await import("/js/entities/runtime.js");
     const actor = enrichEntityStats({ ...structuredClone(entitesNest.find(e => e.serial === 900013)), id: 987123, side: 'A', level: 1 });
     const sources = collectLevelResources({ entities: [actor], biome: 'prison' });
     const progress = [];
@@ -48,15 +48,15 @@ try {
   assert.deepEqual(result.errors, []);
   assert.equal(counts.get('/media/assets/effects/heal-green.gif'), 1);
   const launch = await page.evaluate(async () => {
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
-    const { enrichEntityStats } = await import('/js/entites.js');
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
+    const { enrichEntityStats } = await import("/js/entities/runtime.js");
     const actor = enrichEntityStats({ ...structuredClone(entitesNest.find(e => e.serial === 900013)), id: 987124, side: 'A', level: 1 });
     const enemy = enrichEntityStats({ ...structuredClone(entitesNest.find(e => e.serial === 900013)), id: 987125, side: 'B', level: 1 });
     localStorage.setItem('selectedArmyA', JSON.stringify([actor]));
     localStorage.setItem('ArmyB', JSON.stringify({ armies: { 'ArmyB_loader-test': { entities: [enemy], ArmyB_id: 'ArmyB_loader-test' } } }));
     localStorage.setItem('GameStages', JSON.stringify({ stages: [{ id: 'loader-test', biome_serial: 'prison', difficulty: 1, level_type: 'scripted' }] }));
     window.currentStageId = 'loader-test'; window.levelRunning = 'scripted';
-    const { launchLevel } = await import('/js/game.js');
+    const { launchLevel } = await import("/js/app/stages.js");
     return await Promise.race([
       launchLevel({ biome: 'prison', difficulty: 1, levelId: 'loader-test' }).then(loaded => ({ loaded, progress: document.getElementById('loadingProgressBar')?.style.width })),
       new Promise(resolve => setTimeout(() => resolve({ error: document.querySelector('.loading-resource-errors')?.textContent || document.querySelector('.loading-h2')?.textContent || 'timeout' }), 25000))
@@ -97,7 +97,7 @@ try {
   });
   console.log('PASS: satchel appears inside Game-UI after starting combat, never during loading or placement');
   await page.evaluate(async () => {
-    const state = await import('/js/gameState.js');
+    const state = await import("/js/app/state.js");
     const items = await import('/js/items/itemManager.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
     const init = await import("/js/ui/application.js");
@@ -134,8 +134,8 @@ try {
   console.log('PASS: native ground-to-satchel drag on a loaded level');
   await page.evaluate(async () => (await import('/js/items/itemManager.js')).clearBattleGroundItems());
   const failure = await page.evaluate(async () => {
-    const state = await import('/js/gameState.js');
-    const { launchLevel } = await import('/js/game.js');
+    const state = await import("/js/app/state.js");
+    const { launchLevel } = await import("/js/app/stages.js");
     const createElement = document.createElement;
     document.createElement = function(tag, ...args) {
       if (tag === 'h2') throw Error('Injected loader initialization failure');
@@ -160,9 +160,9 @@ try {
     ? route.fulfill({ status: 503, body: 'Temporary failure' }) : route.continue());
   await retryPage.goto(`http://127.0.0.1:${server.address().port}/`);
   await retryPage.evaluate(async () => {
-    (await import('/js/GameStorage.js')).setAdminMode(true);
+    (await import("/js/storage/gameStorage.js")).setAdminMode(true);
     window.levelRunning = 'admin';
-    const { launchLevel } = await import('/js/game.js');
+    const { launchLevel } = await import("/js/app/stages.js");
     window.loaderResult = launchLevel({ biome: 'prison', difficulty: 1, levelId: 'retry-test' });
   });
   assert.equal(await retryPage.evaluate(() => window.loaderResult), true);
@@ -179,9 +179,9 @@ try {
   });
   await ignoredPage.goto(`http://127.0.0.1:${server.address().port}/`);
   const ignored = await ignoredPage.evaluate(async () => {
-    (await import('/js/GameStorage.js')).setAdminMode(true);
+    (await import("/js/storage/gameStorage.js")).setAdminMode(true);
     window.levelRunning = 'admin';
-    const { launchLevel } = await import('/js/game.js');
+    const { launchLevel } = await import("/js/app/stages.js");
     return launchLevel({ biome: 'prison', difficulty: 1, levelId: 'ignored-resource-test' });
   });
   assert.equal(ignored, true);
@@ -196,12 +196,12 @@ try {
   firstVisit.on('pageerror', error => visitErrors.push(error.message));
   await firstVisit.goto(`http://127.0.0.1:${server.address().port}/`);
   const fixture = await firstVisit.evaluate(async () => {
-    (await import('/js/GameStorage.js')).setAdminMode(true);
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
-    const { enrichEntityStats } = await import('/js/entites.js');
+    (await import("/js/storage/gameStorage.js")).setAdminMode(true);
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
+    const { enrichEntityStats } = await import("/js/entities/runtime.js");
     const actor = enrichEntityStats({ ...structuredClone(entitesNest.find(entity => entity.serial === 900013)), id: 987126, side: 'A', level: 1 });
     localStorage.setItem('selectedArmyA', JSON.stringify([actor]));
-    const map = await import('/js/newgame.js');
+    const map = await import("/js/app/worldMap.js");
     map.rebuildWorldMapLevelButtons();
     const button = document.querySelector('.level-button.scripted');
     const stageId = button.dataset.storageid;
@@ -218,7 +218,7 @@ try {
   });
   await firstVisit.locator('.loading-h2.loaded').waitFor();
   const readFirstVisit = () => firstVisit.evaluate(async ({ stageId, otherId }) => {
-    const { entites } = await import('/js/entites.js');
+    const { entites } = await import("/js/entities/runtime.js");
     const army = JSON.parse(localStorage.getItem('ArmyB')).armies[`ArmyB_${stageId}`];
     const other = JSON.parse(localStorage.getItem('GameStages')).stages.find(stage => stage.id === otherId);
     return {
@@ -253,7 +253,7 @@ try {
     data.stages.push({ id: 'missing-army-test', biome_serial: 'prison', level_type: 'scripted', difficulty: {}, scripted_entites: { sbires: [{ serial: 7, level: 5 }], lords: [] } });
     localStorage.setItem('GameStages', JSON.stringify(data));
     document.addEventListener('difficultyUpdated', event => event.stopImmediatePropagation(), { capture: true, once: true });
-    const { launchLevel } = await import('/js/game.js');
+    const { launchLevel } = await import("/js/app/stages.js");
     const loaded = await launchLevel({ levelId: 'missing-army-test', biome: 'prison', difficulty: {} });
     return { loaded, message: [...document.querySelectorAll('.loading-h2')].at(-1).textContent };
   });

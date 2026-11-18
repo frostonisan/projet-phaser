@@ -1,7 +1,7 @@
 import { ItemDetails } from '../data/itemList.js';
-import { loadFromLocalStorage, saveToLocalStorage } from '../GameStorage.js';
-import { generateUniqueID } from '../entites.js';
-import { getDisplayStatKey, normalizeStatKey } from "../entite/entityRules.js";
+import { loadFromLocalStorage, saveToLocalStorage } from "../storage/gameStorage.js";
+import { generateUniqueID } from "../entities/runtime.js";
+import { getDisplayStatKey, normalizeStatKey } from "../entities/rules.js";
 import { POWER_RULES, evaluateItemPower, qualityFromPower, getPowerStatDefinition } from '../procedural/proc-bareme.js';
 
 // Compatibility entry points used by item helpers and equipment.

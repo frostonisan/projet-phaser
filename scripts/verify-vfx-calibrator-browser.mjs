@@ -82,9 +82,9 @@ try {
   await combat.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await combat.evaluate(async()=>{
     const Init=await import("/js/ui/application.js");Init.createGameContainer();Init.GameUi();
-    const E=await import('/js/entites.js'),C=await import('/js/createEntity.js');
-    window.vfxBoard=await import('/js/board.js');
-    const template=(await import('/js/entite/entitesNest.js')).entitesNest.find(e=>e.class==='mouche-asticoteuse');
+    const E=await import("/js/entities/runtime.js"),C=await import("/js/rendering/entities.js");
+    window.vfxBoard=await import("/js/board/controller.js");
+    const template=(await import("/js/data/entityTemplates.js")).entitesNest.find(e=>e.class==='mouche-asticoteuse');
     window.vfxBuildEntities=async(side='A')=>{
     document.querySelectorAll('[data-vfx-parity]').forEach(node=>node.remove());
     E.entites.length=0;window.vfxEntities=[];

@@ -22,19 +22,19 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const mastery = await import("/js/attackResolution.js");
-    const affinity = await import("/js/damagesCalcul.js");
-    const selection = await import("/js/attackResolution.js");
-    const resolution = await import('/js/attackResolution.js');
-    const essence = await import('/js/essenceur.js');
-    const { resetEntityAttackEssences } = await import('/js/essenceInventory.js');
+    const mastery = await import("/js/combat/attackResolution.js");
+    const affinity = await import("/js/combat/statistics.js");
+    const selection = await import("/js/combat/attackResolution.js");
+    const resolution = await import("/js/combat/attackResolution.js");
+    const essence = await import("/js/items/essences.js");
+    const { resetEntityAttackEssences } = await import("/js/items/essenceInventory.js");
     const { attackDetails: catalog } = await import('/js/data/attackList.js');
-    const { enrichEntityStats, recomputeEntityStats, entites } = await import('/js/entites.js');
-    const { getStatSystemResult } = await import('/js/entite/statSystem.js');
-    const damage = await import('/js/damagesCalcul.js'), damageDisplay = await import("/js/ui/statistics/details.js");
+    const { enrichEntityStats, recomputeEntityStats, entites } = await import("/js/entities/runtime.js");
+    const { getStatSystemResult } = await import("/js/entities/statSystem.js");
+    const damage = await import("/js/combat/statistics.js"), damageDisplay = await import("/js/ui/statistics/details.js");
     const combat = await import('/js/combat/attacks.js');
     const { createAttackFlight } = await import("/js/combat/attacks.js");
-    const { selectAttackDecision, entiteTurn } = await import('/js/fight.js');
+    const { selectAttackDecision, entiteTurn } = await import("/js/combat/loop.js");
     const progressionUI = await import("/js/ui/attacks.js");
     const ui = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/attacks.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const reports = [];
@@ -293,11 +293,11 @@ try {
       'Final mastery level caps points and sockets without overflow');
     mastery.awardAttackMastery(many, many.attackDetails[0], { impact: true });
     check(many.attackDetails[0].mastery.points === 2700, 'Maxed attacks stop accumulating points');
-    const effects = await import('/js/attackEffectMecanics.js');
-    const attributes = await import('/js/entityAttributs.js');
-    const summons = await import('/js/summonsMecanics.js');
+    const effects = await import("/js/combat/effects.js");
+    const attributes = await import("/js/combat/vitals.js");
+    const summons = await import("/js/combat/summons.js");
     const { balanceData } = await import('/js/data/balanceData.js');
-    const { calculateResistances } = await import("/js/entite/entityRules.js");
+    const { calculateResistances } = await import("/js/entities/rules.js");
     let natureLaunch = 0;
     const rawAttack = (colors, support = false) => ({
       ...catalog.find(a => a.functionName === 'autoAttack'),
@@ -384,19 +384,19 @@ try {
       const result = attributes.applyDamage(victim, 0, casterNature, supported);
       check(result.hit && getComputedStyle(document.body) && !resolution.getAttackResolutionFlags(magic).canBeDodged,
         'Successful zero heal and pure magic immunity to dodge');
-      check((await import("/js/entite/entityRules.js")).getSafe(victim, 'physicalResistance') === 45,
+      check((await import("/js/entities/rules.js")).getSafe(victim, 'physicalResistance') === 45,
         'Successful support applies Consolidation even at zero effective healing');
       effects.clearAttackNatureEffects(victim);
       const rupture = rawAttack(['red', 'yellow']);
       for (let i = 0; i < 7; i++) effects.applyAttackNatureEffect(victim, casterNature, rupture);
-      const safe = (await import("/js/entite/entityRules.js")).getSafe;
+      const safe = (await import("/js/entities/rules.js")).getSafe;
       check(safe(victim, 'physicalResistance') === 15 && victim.baseStats.physicalResistance === 40,
         'Rupture caps at five shared stacks without changing base stats');
       effects.applyAttackNatureEffect(victim, casterNature, rawAttack(['red', 'red', 'yellow', 'yellow']));
       check(safe(victim, 'physicalResistance') === 14, 'Higher signature replaces only the weakest stack');
       effects.applyAttackNatureEffect(victim, casterNature, { ...rupture, type: ['alteration'] });
       check(safe(victim, 'physicalResistance') === 14, 'Periodic effects cannot grow signature stacks');
-      const storage = await import('/js/GameStorage.js');
+      const storage = await import("/js/storage/gameStorage.js");
       storage.saveToLocalStorage('nature-effect-save-test', victim);
       const savedVictim = JSON.parse(localStorage.getItem('nature-effect-save-test'));
       check(safe(savedVictim, 'physicalResistance') === 40 && safe(victim, 'physicalResistance') === 14,

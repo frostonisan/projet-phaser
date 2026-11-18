@@ -27,7 +27,7 @@ const evaluateChecks = async fn => checks.push(...await page.evaluate(fn));
 // Compare rendered coordinates with the untouched index-15, at identical
 // sprite dimensions, scale, priority, flight and animation progress.
 async function sampleFountain({ production, entityIndex = 0 }) {
-  const Board = production ? await import('/js/board.js') : null;
+  const Board = production ? await import("/js/board/controller.js") : null;
   const owner = production ? document.getElementById(`Box_Entite_${E.entites[entityIndex].id}`) : document.querySelector('.lab-unified');
   const sprite = owner.querySelector('.sprite');
   const host = production ? owner.querySelector('.combat-popup-damages') : owner.querySelector('.lab-fountain');
@@ -84,20 +84,20 @@ async function sampleFountain({ production, entityIndex = 0 }) {
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js'); window.Popups = await import('/js/combatPopups.js');
-    window.E = await import('/js/entites.js'); window.D = await import('/js/dom.js'); window.U = await import("/js/ui/display.js");
-    window.FX = await import('/js/attackEffectMecanics.js'); window.G = await import('/js/gameState.js');
-    const Init = await import("/js/ui/application.js"), C = await import('/js/createEntity.js');
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js"); window.Popups = await import("/js/rendering/popups.js");
+    window.E = await import("/js/entities/runtime.js"); window.D = await import("/js/rendering/hud.js"); window.U = await import("/js/ui/display.js");
+    window.FX = await import("/js/combat/effects.js"); window.G = await import("/js/app/state.js");
+    const Init = await import("/js/ui/application.js"), C = await import("/js/rendering/entities.js");
     Init.createGameContainer(); Init.GameUi();
-    (await import('/js/GameStorage.js')).setAdminMode(true); window.levelRunning = 'admin';
-    const Store = await import('/js/sessionStorage.js'); Store.beginAdminSession(); window.currentStageId = 'popup-audit';
+    (await import("/js/storage/gameStorage.js")).setAdminMode(true); window.levelRunning = 'admin';
+    const Store = await import("/js/storage/sessionStorage.js"); Store.beginAdminSession(); window.currentStageId = 'popup-audit';
     Store.gameStorage.setItem('GameStages', JSON.stringify({ stages: [{ id: 'popup-audit', level_type: 'admin' }] }));
     Store.gameStorage.setItem('currentLevel', 'popup-audit');
     document.querySelector('.worldmap')?.remove(); document.querySelectorAll('.entitylootContainer').forEach(node => node.remove());
     const grid = document.createElement('div'); grid.id = 'hexGrid';
     grid.style.cssText = 'position:absolute;top:500px;left:180px;width:1100px;height:300px'; document.getElementById('game-container').append(grid);
-    const nest = (await import('/js/entite/entitesNest.js')).entitesNest;
+    const nest = (await import("/js/data/entityTemplates.js")).entitesNest;
     E.entites.length = 0;
     for (const [index, key] of ['mouche-asticoteuse', 'foudre-fange', 'cockroach-king'].entries()) {
       const template = nest.find(entity => entity.class === key) || { ...nest[0], class: key, sprite: `./media/sprites/${key}.png` };
@@ -140,8 +140,8 @@ try {
     return passed;
   });
   await evaluateChecks(async () => {
-    const A = await import('/js/entitesAura.js'), An = await import('/js/entitesAnimation.js');
-    const Board = await import('/js/board.js');
+    const A = await import("/js/rendering/auras.js"), An = await import("/js/rendering/animations.js");
+    const Board = await import("/js/board/controller.js");
     const passed = [], ok = (value, label) => { if (!value) throw Error(label); passed.push(label); };
     const near = (a, b) => Math.abs(a - b) < .15;
     for (const entity of E.entites) {
@@ -209,7 +209,7 @@ try {
       ok(aura.querySelectorAll('.life-aura-slot').length === 2 && [...aura.querySelectorAll('.life-aura-slot')].map(node => node.style.getPropertyValue('--aura-row')).join() === '0,1', entity.class + ': consumed halo releases and compacts its row');
     }
     // A tall, narrow CSS sprite catches the height-only sizing regression.
-    const C = await import('/js/createEntity.js');
+    const C = await import("/js/rendering/entities.js");
     const thinStyle = document.createElement('style'); thinStyle.textContent = '.sprite.visual-thin-fixture { width: 60px !important; height: 300px !important; }'; document.head.append(thinStyle);
     const thin = E.enrichEntityStats({ id: 999849, class: 'visual-thin-fixture', sprite: E.entites[0].sprite, name: 'Tall narrow fixture', side: 'A', type: 'sbire', role: 'gueux', level: 1, awakening: 1, stuff: {}, stats: {}, modifierStats: {}, baseStats: {HP:1000,extraLife:1}, attacks:['autoAttack'] });
     const created = C.createEntiteInDOM(thin); await created.spriteReady;
@@ -318,7 +318,7 @@ try {
   });
   await page.waitForFunction(() => !document.querySelector('#combat-pause-control')?.disabled);
   const readPaused = () => page.evaluate(async () => {
-    const clock = await import('/js/combatClock.js');
+    const clock = await import("/js/combat/clock.js");
     return { paused: clock.isCombatPaused(), frames: [...document.querySelectorAll('.entity-visual-calibrated')].map(frame => ({ style: frame.style.cssText,
       width: frame.dataset.spriteWidth, height: frame.dataset.spriteHeight,
       hosts: [...frame.children].map(node => node.className), rows: [...frame.querySelectorAll('.life-aura-slot')].map(node => [node.dataset.life,node.style.cssText]) })),
@@ -329,21 +329,21 @@ try {
   checks.push('Tactical pause freezes popup animation positions and removal deadlines');
   await page.screenshot({ path: resolve(output, 'battle-popups.png'), fullPage: true });
   await page.reload();
-  await page.evaluate(async () => (await import('/js/combatPause.js')).restorePausedCombat());
-  await page.waitForFunction(async () => (await import('/js/combatClock.js')).isCombatPaused() && document.querySelector('.combat-popup-card'));
+  await page.evaluate(async () => (await import("/js/combat/pause.js")).restorePausedCombat());
+  await page.waitForFunction(async () => (await import("/js/combat/clock.js")).isCombatPaused() && document.querySelector('.combat-popup-card'));
   assert.deepEqual(await readPaused(), beforePause); checks.push('Reload restores the paused popup DOM and exact animation positions without replay');
   checks.push('F5 retains the original host tree, calibrated dimensions and aura rows');
   await page.waitForFunction(() => !document.querySelector('#combat-pause-control')?.disabled);
-  await page.evaluate(async () => (await import('/js/combatPause.js')).resumeCombat());
+  await page.evaluate(async () => (await import("/js/combat/pause.js")).resumeCombat());
   await page.waitForTimeout(1900);
   check(await page.locator('.combat-popup-card').count() === 0, 'Restored popups expire after resume even though their original callbacks no longer exist');
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/dom.js'), U = await import("/js/ui/display.js");
+    const E = await import("/js/entities/runtime.js"), D = await import("/js/rendering/hud.js"), U = await import("/js/ui/display.js");
     const target = E.entites[0];
     for (let i = 0; i < 50; i++) { D.PopUpDamages(target, i, [], '', {}, 'critical'); U.EffectMessage(target, 'Reprise !'); }
   });
   check(await page.locator('.combat-popup-flight').count() === 8, 'New arrivals after reload retain the same bound');
-  await page.evaluate(async () => (await import('/js/gameState.js')).StopGame({ preserveScene: true }));
+  await page.evaluate(async () => (await import("/js/app/state.js")).StopGame({ preserveScene: true }));
   check(await page.locator('.combat-popup-card').count() === 0, 'Stopping combat clears both popup families');
   assert.deepEqual(errors, []);
   await writeFile(resolve(output, 'report.json'), JSON.stringify({ checks, errors, stressMs, comparisons, beforePause }, null, 2));

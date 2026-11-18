@@ -28,7 +28,7 @@ try {
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
     const UI = await import("/js/ui/codex/index.js");
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const entity = { id: 987131, name: 'Constitution audit', type: 'sbire', side: 'A', awakening: 1,
       level: { current: 1, max: 250 }, attacks: ['autoAttack'], stuff: {}, stats: {},
       baseStats: { HP: 100, strength: 10, constitution: 10, physicalResistance: 10, physicalResistancePlus: 5 } };
@@ -76,8 +76,8 @@ try {
     await page.keyboard.press('Escape');
   }
   const impacts = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const { applyDamage } = await import('/js/entityAttributs.js');
+    const E = await import("/js/entities/runtime.js");
+    const { applyDamage } = await import("/js/combat/vitals.js");
     const actor = (id, side, values = {}) => E.enrichEntityStats({ id, name: `K70 ${id}`, side,
       type: 'sbire', level: 1, attacks: ['autoAttack'], baseStats: { HP: 1000, ...values }, stuff: {} });
     const attacker = actor(987132, 'A');

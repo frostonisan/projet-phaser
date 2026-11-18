@@ -1,27 +1,27 @@
 // Army and entity Codex navigation, composition and focused attack routing.
-import { getStatSystemResult } from "../../entite/statSystem.js";
+import { getStatSystemResult } from "../../entities/statSystem.js";
 import { HELPER_TEXT } from "../../data/helpers.js";
 import { cachedResourceUrl } from "../../data/loaderList.js";
 import { attackDetails } from "../../data/attackList.js";
 import { balanceData } from "../../data/balanceData.js";
-import { isAdminMode, loadFromLocalStorage, purgeStatPreview } from "../../GameStorage.js";
-import { getSafe } from "../../entite/entityRules.js";
-import { entites, calculateTranscendenceExtraLife, getMovementWeightMalus, getStatMalusSources } from "../../entites.js";
-import { attackSelectionKey } from "../../attackResolution.js";
-import { calculateTotalRegenAmount, calculateMysticismTranceDuration } from "../../damagesCalcul.js";
-import { createLevelUpForm, LevelupSignal } from "../../UpgradeEntity.js";
-import { setAdminSelectedEntity, closeAdminEntityFormOnly } from "../../admin.js";
+import { isAdminMode, loadFromLocalStorage, purgeStatPreview } from "../../storage/gameStorage.js";
+import { getSafe } from "../../entities/rules.js";
+import { entites, calculateTranscendenceExtraLife, getMovementWeightMalus, getStatMalusSources } from "../../entities/runtime.js";
+import { attackSelectionKey } from "../../combat/attackResolution.js";
+import { calculateTotalRegenAmount, calculateMysticismTranceDuration } from "../../combat/statistics.js";
+import { createLevelUpForm, LevelupSignal } from "../../entities/progression.js";
+import { setAdminSelectedEntity, closeAdminEntityFormOnly } from "../../debug/admin.js";
 import {
   removeItemDescription,
   DropInventorytoCodex,
   equippedHoverDescription,
   clearItemDescriptions,
 } from "../../items/itemManager.js";
-import { createLifeBars, createLifeCounter, createArmorCounter, createMovementCounter } from "../../createEntity.js";
+import { createLifeBars, createLifeCounter, createArmorCounter, createMovementCounter } from "../../rendering/entities.js";
 import { goldTitle } from "../display.js";
-import { syncEntityAuras } from "../../entitesAura.js";
-import { closeAttackEssenceSocketPopups } from "../../essenceur.js";
-import { getStageAccess, requireSafeMenuAccess } from "../../gameState.js";
+import { syncEntityAuras } from "../../rendering/auras.js";
+import { closeAttackEssenceSocketPopups } from "../../items/essences.js";
+import { getStageAccess, requireSafeMenuAccess } from "../../app/state.js";
 import {
   bindCodexNavigationMemory,
   getCodexMenuIndex,
@@ -75,7 +75,7 @@ import {
   createArchetypesList,
 } from "./stats.js";
 import { getCodexStableEquipmentCharge } from "./profile.js";
-import { applyCombatProfileView } from "../../load-entity.js";
+import { applyCombatProfileView } from "../../board/deployment.js";
 
 function escapeInventorySelectorValue(value = '') {
     const text = String(value ?? '');

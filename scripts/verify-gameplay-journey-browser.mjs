@@ -22,12 +22,12 @@ await new Promise(done => server.listen(0, '127.0.0.1', done));
 let browser, page;
 const report = { result: 'running', injectMissingStart, checkpoints: [], errors: [], diagnostics: [] };
 const installProbe = async () => page.evaluate(async () => {
-  const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-  const G = await import('/js/game.js'), State = await import('/js/gameState.js');
-  const F = await import('/js/fight.js'), M = await import('/js/items/itemManager.js');
+  const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
+  const G = await import("/js/app/stages.js"), State = await import("/js/app/state.js");
+  const F = await import("/js/combat/loop.js"), M = await import('/js/items/itemManager.js');
   const Gear = await import('/js/items/equipement.js'), R = await import('/js/items/resourceStocks.js');
-  const A = await import('/js/entityAttributs.js'), U = await import('/js/entityUpdatesStorage.js');
-  const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts)), D = await import('/js/damagesCalcul.js');
+  const A = await import("/js/combat/vitals.js"), U = await import("/js/storage/entityStorage.js");
+  const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts)), D = await import("/js/combat/statistics.js");
   const checks = [];
   const check = (ok, text) => { if (!ok) throw Error(text); checks.push(text); };
   const actor = id => E.entites.find(entity => entity.id === id)
@@ -83,9 +83,9 @@ try {
   await installProbe();
   await page.evaluate(async () => {
     const { E, S, G, State, M, Gear, UI, check } = window.__journey;
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
-    const Map = await import('/js/newgame.js');
+    const Map = await import("/js/app/worldMap.js");
     S.setAdminMode(false);
     window.levelRunning = 'worldmap'; State.refreshStageAccess();
     localStorage.setItem('gameDay', '1');

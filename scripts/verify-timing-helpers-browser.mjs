@@ -28,10 +28,10 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
-    const U = await import('/js/UpgradeEntity.js');
-    const R = await import('/js/entite/entityRules.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
+    const U = await import("/js/entities/progression.js");
+    const R = await import("/js/entities/rules.js");
     const keys = ['attackCooldownReduc', 'attackPreparationReduc', 'attackExecutionReduc', 'attackRecoveryReduc', 'attackProjectileSpeed'];
     const fixture = (amount = 2, haste = 25) => {
       const entity = { id: 987150, name: 'Timing audit', type: 'sbire', side: 'A', awakening: 1,

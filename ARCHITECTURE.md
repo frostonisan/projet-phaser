@@ -31,7 +31,7 @@ DOM reste identique au comportement initial.
 
 ## Deuxième lot : calcul des dégâts et affichage
 
-Le module damagesCalcul.js passe d'environ 6 400 à 3 700 lignes. Trois propriétaires
+Le module combat/statistics.js passe d'environ 6 400 à 3 700 lignes. Trois propriétaires
 portent désormais des responsabilités distinctes :
 
 | Responsabilité | Module propriétaire |
@@ -55,11 +55,11 @@ Les fonctions de présentation reçoivent les résultats déjà déterminés. Le
 les règles d'éligibilité et la consommation du bonus critique restent dans le chemin
 de combat. Les délais des animations utilisent toujours l'horloge de combat.
 Les consommateurs importent directement le nouveau propriétaire des fonctions ;
-aucune réexportation de compatibilité n'est ajoutée dans damagesCalcul.js.
+aucune réexportation de compatibilité n'est ajoutée dans combat/statistics.js.
 
-Ce lot ne termine pas toute l'extraction : damagesCalcul.js contient encore les
+Ce lot ne termine pas toute l'extraction : combat/statistics.js contient encore les
 états et animations de déplacement, d'occultisme, d'astralité et de transe. La résolution
-des PV et de l'armure dans entityAttributs.js mélange encore calculs, application,
+des PV et de l'armure dans combat/vitals.js mélange encore calculs, application,
 effets et journaux. Ces frontières restent à séparer avant d'introduire Phaser.
 
 Validation propre à ce lot :
@@ -77,7 +77,7 @@ Validation propre à ce lot :
 
 Les rapports sont dans outputs/refactor-damage/. Avant modification, deux audits
 Node (verify-critical.mjs et verify-resilience.mjs) échouaient au chargement car
-leur environnement de test simule gameState.js sans exporter refreshStageAccess.
+leur environnement de test simule app/state.js sans exporter refreshStageAccess.
 Le scénario verify-resilience-browser.mjs échouait aussi sur « Friendly swap is not
 a harmful displacement ». Ces échecs de référence sont conservés dans les rapports ;
 les assertions concernées ne sont pas affaiblies pour valider ce lot.
@@ -100,7 +100,7 @@ le résultat aux réserves courantes et conserve l'identité des pools consommab
 L'ordre consommable → équipements équipés → sorts → armure naturelle → robustesse,
 les fractions d'armure renforcée et les arrondis par source restent identiques.
 
-entityAttributs.js conserve la coordination temporelle du combat et son API applyDamage.
+combat/vitals.js conserve la coordination temporelle du combat et son API applyDamage.
 Les PV provisoires sont appliqués avant la tentative d'astralité ; la survie éventuelle
 à 1 PV est ensuite prise en compte dans les pertes et les statistiques. Le calcul des
 soins reste dans leur callback différé, afin d'utiliser les PV réellement présents
@@ -126,7 +126,7 @@ Validation du lot, conservée dans outputs/refactor-vitals/ :
 - Le contrôle habituel vérifie syntaxe, imports, ressources et 42 tests Node au total.
 
 Les audits Node verify-astrality.mjs et verify-robustness.mjs rencontrent le même défaut
-que les audits critique/résilience : leur simulation de gameState.js ne fournit pas
+que les audits critique/résilience : leur simulation de app/state.js ne fournit pas
 refreshStageAccess. Le défaut est reproduit avec les sources du commit précédent
 2ee00e8 ; les scénarios navigateur correspondants passent sans modifier leurs assertions.
 
@@ -148,7 +148,7 @@ sont des données simples, copiées et sérialisables. Les règles de placement 
 sans navigateur, stockage ou tirage aléatoire et ne modifient pas l'état examiné.
 La recherche conserve son ordre déterministe, ses coûts et sa limite de 20 000 nœuds.
 
-board.js coordonne le plateau existant. Il traduit les demandes HTML en identifiants,
+board/controller.js coordonne le plateau existant. Il traduit les demandes HTML en identifiants,
 revalide le plan contre l'occupation courante, applique toutes les réservations logiques,
 puis met à jour les vues et envoie les notifications au combat. Un objet apparu entre
 la préparation et l'application continue donc de bloquer un ancien plan. Les réservations
@@ -157,7 +157,7 @@ des consommables gardent leur exception pour les déplacements manuels.
 Le plateau visible et celui du simulateur utilisent ces mêmes règles. Le DOM actuel
 reste l'adaptateur d'initialisation et de restauration ; ce lot ne supprime pas le plateau
 HTML du simulateur et ne change pas les sauvegardes. Les décors, notifications et rôles
-visuels restent coordonnés par board.js. La prochaine étape P4 peut s'appuyer sur le
+visuels restent coordonnés par board/controller.js. La prochaine étape P4 peut s'appuyer sur le
 modèle logique sans recréer les règles de placement dans un autre moteur.
 
 Validation dans outputs/refactor-board/ :
@@ -208,7 +208,7 @@ Les petits modules de navigation et de glisser-déposer restent indépendants de
 leur fusion avec les menus ou l'inventaire créerait des cycles. Les équipements sont
 regroupés avec la fiche du Codex. Les composants de statistiques, de puissance et d'effets
 partagent un seul module. Le Codex conserve trois fichiers pour éviter un fichier géant.
-Le helper du conteneur de jeu appartient à display.js, utilisé directement par board.js.
+Le helper du conteneur de jeu appartient à display.js, utilisé directement par board/controller.js.
 
 Les neuf initialisations gardent leur ordre et leurs protections contre les doubles
 écouteurs. L'équipement et la fiche conservent chacun leur propre protection.
@@ -243,9 +243,58 @@ Le scénario administrateur verify-admin-codex-controls-browser.mjs conserve aus
 un délai dépassé dans runCombatCheck, reproduit avec les sources antérieures.
 Les autres contrôles de navigation, d'ouverture et d'attaques du Codex passent.
 
+## Sixième lot : classement global des sources
+
+Les **52 fichiers JavaScript à la racine de docs/js/** sont maintenant classés par rôle.
+Le dossier français `entite/` rejoint `entities/` ; les modèles et textes des personnages
+rejoignent `data/`. Le projet passe de **120 à 117 modules**, sans fichier relais à l'ancien
+emplacement. Le tableau du README sert de point d'entrée dans les répertoires.
+
+Les fabriques utilisées des armées A et B sont réunies dans `entities/armies.js` :
+recrutement, constitution de l'armée du joueur, génération aléatoire et armées scénarisées.
+Les anciens doublons ArmyPlayerFactory.js et ArmyEnemyFactory.js n'avaient aucun
+consommateur dans le code, les pages ou les tests et sont supprimés. Les fonctions actives,
+les identifiants, les règles de recrutement et l'ordre des tirages restent identiques.
+
+Le classement distingue notamment :
+
+- `app/` : lancement, changement de niveau, carte du monde et état courant.
+- `entities/` : registre, création, armées, progression et règles des personnages.
+- `combat/` : boucle de combat, attaques, effets, statistiques, horloge et pause.
+- `board/` : modèle du plateau, placements, déploiement et interactions.
+- `rendering/` : création des éléments visibles, animations, compteurs, messages et son.
+- `storage/` : sauvegardes du jeu et des personnages, stockage isolé du simulateur.
+- `events/` : événements scénarisés et leur déroulement.
+- `items/` : objets, équipement, butin et données des essences.
+- `ui/` : écrans du joueur, Codex, statistiques et dialogues.
+- `debug/` : administration, simulation, réglage des effets et journal de diagnostic.
+
+Les imports directs et différés, les doubles de test, les sondes navigateur et les trois
+pages HTML concernées utilisent les nouveaux chemins. Les ressources relatives au module
+(nuage de pause, fumée de déplacement et document du simulateur) conservent leur URL finale.
+Les formats de sauvegarde et les clés de stockage ne changent pas.
+
+Validation conservée dans `outputs/refactor-layout/` :
+
+- Les corps exécutables et les imports des **117 modules**, dont **3 398 fonctions**,
+  sont comparés à leur version précédente après normalisation des chemins.
+- Les 13 scénarios de référence passent avant et après le déplacement. Avec le
+  diagnostic mobile, le Codex et le banc de réglage des effets, 16 scénarios passent,
+  dont deux lots de 20 simulations de combat.
+- L'audit d'import isolé conserve exactement les dix échecs historiques, après traduction
+  des noms de modules. Les 14 modules d'interface restent sans cycle statique entre eux ;
+  l'initialisation répétée n'ajoute ni écouteur ni conteneur.
+- Le contrôle habituel vérifie syntaxe, imports, ressources et 51 tests Node.
+
+Ce lot classe les propriétaires et retire les doublons inutilisés. Les gros modules
+`debug/admin.js`, `events/runtime.js` et `entities/progression.js` gardent encore des
+responsabilités internes à séparer. Le classement ne rend pas automatiquement pures les
+fonctions historiques qui mélangent calcul, état et affichage ; cette séparation continue
+par étapes avant Phaser.
+
 ## Temps et présentation
 
-combatClock.js reste l'horloge de combat ; combatTimeline.js ordonne les échéances et les
+combat/clock.js reste l'horloge de combat ; combat/timeline.js ordonne les échéances et les
 impacts simultanés. attackExecution.js planifie l'impact et transmet sa promesse au rendu.
 Le rendu suit ce résultat. Les soins et vies supplémentaires peuvent sauver un lanceur
 avant que sa mort soit confirmée ; les règles de guidage conservent ce comportement.
@@ -326,10 +375,10 @@ attaque hybride.
 3. **P3 livrée** : état logique du plateau, occupation et placements indépendants du DOM,
    avec un adaptateur de coordonnées et de rendu pour le jeu actuel.
 4. Raccorder le jeu visible et le simulateur au même état et aux mêmes règles.
-5. Réduire les cycles restants, puis poursuivre le découpage de events.js,
-   UpgradeEntity.js et admin.js par fonction métier.
+5. Réduire les cycles restants, puis poursuivre le découpage de events/runtime.js,
+   entities/progression.js et debug/admin.js par fonction métier.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-damagesCalcul.js, entityControl.js et le plateau DOM. Ces cinq premiers lots ne constituent
+combat/statistics.js, combat/control.js et le plateau DOM. Ces six premiers lots ne constituent
 pas une séparation complète du moteur de jeu.

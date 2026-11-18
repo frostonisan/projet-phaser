@@ -3,10 +3,10 @@ import { buildEssenceInventoryHelperHTML } from '../data/helpers.js';
 import { cachedResourceUrl } from '../data/loaderList.js';
 import { attackDetails } from '../data/attackList.js';
 import { getScoredItemQuality } from '../procedural/proc-bareme.js';
-import { loadFromLocalStorage, saveToLocalStorage } from '../GameStorage.js';
-import { normalizeStatKey } from '../entite/entityRules.js';
-import { entites } from '../entites.js';
-import { readAttackDefinitionKey, ensureEntityAttackInstances } from '../attackResolution.js';
+import { loadFromLocalStorage, saveToLocalStorage } from "../storage/gameStorage.js";
+import { normalizeStatKey } from "../entities/rules.js";
+import { entites } from "../entities/runtime.js";
+import { readAttackDefinitionKey, ensureEntityAttackInstances } from "../combat/attackResolution.js";
 import {
   displayShopItems,
   createItemDescription,
@@ -44,8 +44,8 @@ import {
   getAttackEssenceSocketViewModel,
   getEssenceItemDefinition,
   loadUniversalEssenceItems,
-} from '../essenceur.js';
-import { getStageAccess, requireSafeMenuAccess } from '../gameState.js';
+} from "../items/essences.js";
+import { getStageAccess, requireSafeMenuAccess } from "../app/state.js";
 import { statsByKey } from "./statistics/helpers.js";
 import {
   toggleWindowInMenuMap,

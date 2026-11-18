@@ -510,6 +510,6 @@
   window.hexGroupLab={ready,snapshot:()=>({entities:[...logicalHexes.values()].map(h=>({id:h.occupant,anchor:h.anchor,sizeIndex:h.sizeIndex,scale:h.scale,role:h.role,members:h.members.map(c=>c.id),center:{...h.center},neighbors:neighbors(h).map(n=>n.id)})),occupied:Object.fromEntries(occupied),metrics:{...metrics},scale:boardScale}),logicalAt:id=>{const h=logicalAt(id);return h&&{id:h.id,occupant:h.occupant,role:h.role,members:h.members.map(c=>c.id)};}};
 })();
 </script>
-<script src="js/vfxCalibrator.js"></script>
+<script src="js/debug/vfxCalibrator.js"></script>
 </body>
 </html>

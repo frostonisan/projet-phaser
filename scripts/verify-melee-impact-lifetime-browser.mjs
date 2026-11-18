@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs'), output = resolve('outputs/melee-impact-lifetime');
-const baseline = process.env.MELEE_BASELINE && await readFile(resolve(process.env.MELEE_BASELINE, 'js/entitesAnimation.js'));
+const baseline = process.env.MELEE_BASELINE && await readFile(resolve(process.env.MELEE_BASELINE, "js/rendering/animations.js"));
 let before = false;
 const server = createServer(async (req, res) => {
   const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -15,7 +15,7 @@ const server = createServer(async (req, res) => {
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
   try {
     res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.gif': 'image/gif' })[extname(file)] || 'application/octet-stream');
-    res.end(before && file === resolve(root, 'js/entitesAnimation.js') ? baseline : await readFile(file));
+    res.end(before && file === resolve(root, "js/rendering/animations.js") ? baseline : await readFile(file));
   } catch { res.writeHead(404).end(); }
 });
 await new Promise(done => server.listen(0, '127.0.0.1', done));
@@ -31,12 +31,12 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.evaluate(async () => {
-      const E = await import('/js/entites.js');
-      window.M = await import('/js/entitesAnimation.js');
-      window.C = await import('/js/combatClock.js');
-      window.T = await import('/js/combatTimeline.js');
+      const E = await import("/js/entities/runtime.js");
+      window.M = await import("/js/rendering/animations.js");
+      window.C = await import("/js/combat/clock.js");
+      window.T = await import("/js/combat/timeline.js");
       window.A = await import('/js/combat/attacks.js');
-      window.B = await import('/js/board.js');
+      window.B = await import("/js/board/controller.js");
       const host = document.createElement('div'); host.id = 'melee-test';
       host.style.cssText = 'position:fixed;inset:0;background:#222'; document.body.append(host);
       E.entites.length = 0;

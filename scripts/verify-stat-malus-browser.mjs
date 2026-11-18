@@ -30,11 +30,11 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   checks.push(...await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const S = await import('/js/entite/statSystem.js');
+    const E = await import("/js/entities/runtime.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const S = await import("/js/entities/statSystem.js");
     const H = await import('/js/data/helpers.js');
-    const U = await import('/js/UpgradeEntity.js');
+    const U = await import("/js/entities/progression.js");
     const passed = [];
     const check = (ok, label) => { if (!ok) throw new Error(label); passed.push(label); };
     for (const [key, origin] of Object.entries(S.STAT_SYSTEM_ORIGINS)) for (const points of [10, 500]) {
@@ -143,7 +143,7 @@ try {
     check(E.getStatMalusSources(entity, 'physicalDamage').find(s => s.equipment).value === -15, 'preview cancellation restores current penalty');
     delete entity.modifierStats.durable.stuff;
     recompute();
-    const G = await import('/js/GameStorage.js');
+    const G = await import("/js/storage/gameStorage.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const gearActor = { id: 987163, type: 'sbire', side: 'A', awakening: 1, level: 1,
       baseStats: { HP: 100, physicalDamage: 35, physicalDamagePlus: 2, strength: 10, charge: 4, weaponOrfevre: 0 },
@@ -401,9 +401,9 @@ try {
   checks.push('removal clears badge and pinned helper without reopening');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
-    const G = await import('/js/GameStorage.js'), P = await import('/js/UpgradeEntity.js');
-    const Gear = await import('/js/items/equipement.js'), State = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js"), UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
+    const G = await import("/js/storage/gameStorage.js"), P = await import("/js/entities/progression.js");
+    const Gear = await import('/js/items/equipement.js'), State = await import("/js/app/state.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     let actors, mode, key, residual, pinned, selected, category;
     const check = (ok, message) => { if (!ok) throw Error(message); };

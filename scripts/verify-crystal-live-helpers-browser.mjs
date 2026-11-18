@@ -26,12 +26,12 @@ try {
   page.on('console', msg => { if (msg.type() === 'error' && !msg.text().includes('404')) errors.push(msg.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import('/js/UpgradeEntity.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"), S = await import('/js/entite/statSystem.js');
+    const E = await import("/js/entities/runtime.js"), G = await import("/js/storage/gameStorage.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"), S = await import("/js/entities/statSystem.js");
     const H = await import('/js/data/helpers.js');
     const P = await import('/js/items/permanentItems.js'), M = await import('/js/items/itemManager.js');
-    const State = await import('/js/gameState.js');
+    const State = await import("/js/app/state.js");
     let entity, draft, mount, host, helper, baseline, choice, mode, itemId, expected, beforeDetail, previewDeltas, openDetail;
     const check = (ok, message) => { if (!ok) throw Error(message); };
     const number = text => Number(text.replace(/\s|%/g, ''));

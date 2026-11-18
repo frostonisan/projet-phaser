@@ -27,11 +27,11 @@ try{
   });
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
-    const Fx=await import('/js/attackEffectMecanics.js'),R=await import('/js/attackResolution.js'),C=await import('/js/combatClock.js');
-    const Timeline=await import('/js/combatTimeline.js');
-    const Control=await import('/js/entityControl.js'),Move=await import('/js/board.js'),Rules=await import('/js/entite/entityRules.js');
+    const E=await import("/js/entities/runtime.js"),D=await import("/js/combat/statistics.js"),A=await import("/js/combat/vitals.js");
+    const UI=await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import("/js/app/state.js");
+    const Fx=await import("/js/combat/effects.js"),R=await import("/js/combat/attackResolution.js"),C=await import("/js/combat/clock.js");
+    const Timeline=await import("/js/combat/timeline.js");
+    const Control=await import("/js/combat/control.js"),Move=await import("/js/board/controller.js"),Rules=await import("/js/entities/rules.js");
     const Data=await import('/js/data/attackEffects.js'),catalog=(await import('/js/data/attackList.js')).attackDetails;
     const T=await import('/js/procedural/proc-bareme.js');
     const Loader=await import('/js/data/loaderList.js');
@@ -71,7 +71,7 @@ try{
         const [id,t]=due;now=Math.max(now,t.at);timers.delete(id);t.fn();
       }now=end;await flush();await Timeline.settleCombatTimeline();await flush();
     };
-    const Battle=await import('/js/fight.js');
+    const Battle=await import("/js/combat/loop.js");
     const effectAttack=(name,seconds)=>({effets:[name],effectOverrides:{[name]:{effectDuration:seconds}}});
     const apply=(target,name,source,seconds)=>A.applyEffect(target,name,source,seconds==null?null:effectAttack(name,seconds));
     const spell=(key,extra={})=>({...catalog[0],attackId:key,functionName:key,displayName:key,attackRange:['range'],attacknature:['physicalDamage'],
@@ -175,7 +175,7 @@ try{
   });
   assert.deepEqual(errors,[]);
   await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),A=await import('/js/entityAttributs.js'),C=await import('/js/combatClock.js');
+    const E=await import("/js/entities/runtime.js"),A=await import("/js/combat/vitals.js"),C=await import("/js/combat/clock.js");
     C.clearCombatClock();C.freezeCombatClock();
     const source=E.entites[0],target=E.entites.find(e=>e.id===window.__activeEffectAudit.target);
     target.baseStats.alterationResistance=50;E.recomputeEntityStats(target);

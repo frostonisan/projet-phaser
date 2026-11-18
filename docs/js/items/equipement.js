@@ -4,7 +4,7 @@ import {
   saveUpgradedEntity,
   getEquippedItemById,
   purgeStatPreview,
-} from "../GameStorage.js";
+} from "../storage/gameStorage.js";
 import {
   removeItem,
   addItemToInventory,
@@ -18,14 +18,14 @@ import {
   removeStuffModifier,
   recomputeEntityStats,
   getEquipmentSlotKeys,
-} from "../entites.js";
-import { syncDOMWithStats } from '../UpgradeEntity.js';
+} from "../entities/runtime.js";
+import { syncDOMWithStats } from "../entities/progression.js";
 import { showStatGainsFromDiff } from "../ui/display.js";
 import { beginDragHelperCleanup, endDragHelperCleanup } from "../ui/drag.js";
-import { requireSafeMenuAccess } from '../gameState.js';
+import { requireSafeMenuAccess } from "../app/state.js";
 import { ensureStuffArmorReserve } from './armor.js';
 import { ensureStuffResourceStocks, getEquipmentResourceCurrent } from './resourceStocks.js';
-import { persistEquippedResourceStocks } from '../entityUpdatesStorage.js';
+import { persistEquippedResourceStocks } from "../storage/entityStorage.js";
 import { getScoredItemQuality } from '../procedural/proc-bareme.js';
 export function stuffInteraction({
     mode,

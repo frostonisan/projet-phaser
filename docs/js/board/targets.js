@@ -1,4 +1,4 @@
-import { getFootprintOccupant } from '../board.js';
+import { getFootprintOccupant } from "./controller.js";
 
 // DOM-backed board access stays here while the logical board is extracted.
 export const isHexTarget = target => target?.nodeType === 1 && target.classList.contains('hex');

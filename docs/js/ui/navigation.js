@@ -1,8 +1,8 @@
 // Shared menu placement and navigation memory. No screen construction.
-import { loadFromLocalStorage, saveToLocalStorage } from '../GameStorage.js';
-import { attackSelectionKey } from '../attackResolution.js';
-import { closeAttackEssenceSocketPopups } from '../essenceur.js';
-import { requireSafeMenuAccess } from '../gameState.js';
+import { loadFromLocalStorage, saveToLocalStorage } from "../storage/gameStorage.js";
+import { attackSelectionKey } from "../combat/attackResolution.js";
+import { closeAttackEssenceSocketPopups } from "../items/essences.js";
+import { requireSafeMenuAccess } from "../app/state.js";
 
 const CODEX_MENU_KEY = 'CodexMenuIndex';
 

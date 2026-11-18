@@ -24,9 +24,9 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    const B = await import('/js/board.js'), E = await import('/js/entites.js');
-    const U = await import("/js/ui/display.js"), S = await import('/js/GameStorage.js');
-    const L = await import('/js/load-entity.js'), C = await import('/js/createEntity.js');
+    const B = await import("/js/board/controller.js"), E = await import("/js/entities/runtime.js");
+    const U = await import("/js/ui/display.js"), S = await import("/js/storage/gameStorage.js");
+    const L = await import("/js/board/deployment.js"), C = await import("/js/rendering/entities.js");
     window.levelRunning = 'placement-audit';
     E.entites.splice(0);
     document.body.innerHTML = '<div id="game-windows" style="opacity:1"><div id="game-container"><div class="Game-UI"></div><div class="Game-helper"></div></div></div>';
@@ -150,9 +150,9 @@ try {
   ]) {
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
     const level = await page.evaluate(async ({ label, opponents, savedPositions }) => {
-      const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-      const { entitesNest } = await import('/js/entite/entitesNest.js');
-      const G = await import('/js/game.js');
+      const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
+      const { entitesNest } = await import("/js/data/entityTemplates.js");
+      const G = await import("/js/app/stages.js");
       const template = entitesNest.find(entity => entity.serial === 900013);
       const actor = (index, side, position) => E.enrichEntityStats({ ...structuredClone(template),
         id: 991000 + index, side, level: 1, position, role: index % 2 ? 'mage' : ['tank'] });

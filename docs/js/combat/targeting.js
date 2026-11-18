@@ -1,6 +1,6 @@
-import { normArr } from '../attackResolution.js';
-import { getControlState, getCombatSide, isCombatEnemy, isCharmedEnemyTarget } from '../entityControl.js';
-import { entites } from '../entites.js';
+import { normArr } from "./attackResolution.js";
+import { getControlState, getCombatSide, isCombatEnemy, isCharmedEnemyTarget } from "./control.js";
+import { entites } from "../entities/runtime.js";
 import { isHexTarget, getEntityHex } from '../board/targets.js';
 
 export const isAttackEntityAlive = entity => Boolean(entity && !entity.isDEAD && Number(entity.stats?.HP?.current) > 0);

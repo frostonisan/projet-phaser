@@ -24,11 +24,11 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const result = await page.evaluate(async () => {
-    const { calculateAttackDamagePreview, calculateDirectAttackDps, calculateCritDamageBonus, getEffectiveAttackTimings, attemptMeleeExecBonus } = await import('/js/damagesCalcul.js');
-    const { getAttackPowerRatios, getAttackResolutionFlags, initializeAttackPowerRatios, readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
+    const { calculateAttackDamagePreview, calculateDirectAttackDps, calculateCritDamageBonus, getEffectiveAttackTimings, attemptMeleeExecBonus } = await import("/js/combat/statistics.js");
+    const { getAttackPowerRatios, getAttackResolutionFlags, initializeAttackPowerRatios, readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
     const { buildAttackTimingsWithHaste } = await import('/js/combat/attacks.js');
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { entitesNestUp } = await import('/js/entites.js');
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
     const { AttackDetailInfos, generateAttackDescription } = await import("/js/ui/attacks.js");
     const entity = { id: 1, name: 'Test', stats: { physicalDamage: 15, magicalDamage: 0, piercingDamage: 0,
       speed: 3000, criticalPower: 0, criticalChance: 0, ambidextry: 0, agility: 0, strength: 0, haste: 0 } };
@@ -205,12 +205,12 @@ try {
   assert.ok(result.excluded.every(entry => entry.calculation === null && !entry.visible),
     JSON.stringify(result.excluded));
   const healingReports = await page.evaluate(async () => {
-    const calc = await import('/js/damagesCalcul.js');
+    const calc = await import("/js/combat/statistics.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { applyDamage } = await import('/js/entityAttributs.js');
-    const { entites } = await import('/js/entites.js');
-    const { getEntityCombatDetails } = await import('/js/entityUpdatesStorage.js');
-    const { getAttackPowerRatios } = await import('/js/attackResolution.js');
+    const { applyDamage } = await import("/js/combat/vitals.js");
+    const { entites } = await import("/js/entities/runtime.js");
+    const { getEntityCombatDetails } = await import("/js/storage/entityStorage.js");
+    const { getAttackPowerRatios } = await import("/js/combat/attackResolution.js");
     const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const reports = [];
     const check = (ok, label) => { if (!ok) throw Error(label); reports.push(label); };
@@ -380,8 +380,8 @@ try {
   await page.evaluate(async () => {
     const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { entitesNestUp } = await import('/js/entites.js');
-    const { readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
+    const { readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
     const host = document.createElement('div');
     host.className = 'section-content attaques';
     host.id = 'attack-dps-test';
@@ -426,10 +426,10 @@ try {
   }
   const liveHealing = await page.evaluate(async () => {
     const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
-    const { entites, entitesNestUp, recomputeEntityStats } = await import('/js/entites.js');
-    const { calculateDirectAttackHps } = await import('/js/damagesCalcul.js');
-    const { syncDOMWithStats } = await import('/js/UpgradeEntity.js');
-    const { readAttackDefinitionsForEntity, getAttackPowerRatios } = await import('/js/attackResolution.js');
+    const { entites, entitesNestUp, recomputeEntityStats } = await import("/js/entities/runtime.js");
+    const { calculateDirectAttackHps } = await import("/js/combat/statistics.js");
+    const { syncDOMWithStats } = await import("/js/entities/progression.js");
+    const { readAttackDefinitionsForEntity, getAttackPowerRatios } = await import("/js/combat/attackResolution.js");
     const reports = [];
     const check = (ok, label) => { if (!ok) throw Error(label); reports.push(label); };
     const frame = () => new Promise(resolve => requestAnimationFrame(resolve));

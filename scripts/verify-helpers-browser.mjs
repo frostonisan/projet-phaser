@@ -136,16 +136,16 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   await dismissStarterForFixture(page);
   const snapshot = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const A = await import("/js/ui/attacks.js");
-    const R = await import('/js/attackResolution.js');
-    const Ess = await import('/js/essenceur.js');
+    const R = await import("/js/combat/attackResolution.js");
+    const Ess = await import("/js/items/essences.js");
     const Items = await import('/js/items/itemManager.js');
     const { stats } = await import('/js/data/statsData.js');
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { analyzeEntityCombatProfile } = await import('/js/entite/entityRules.js');
+    const { analyzeEntityCombatProfile } = await import("/js/entities/rules.js");
     const snapshot = {};
     const owners = [
       E.entitesNestUp.find(entity => entity.name === 'Grouille-Doigt TEST 2A support'),
@@ -232,9 +232,9 @@ try {
     }
     snapshot.formulaArithmeticChecks = arithmeticChecks;
     // Compare the helper to live combat entry points, not to an obsolete display snapshot.
-    const B = await import('/js/entityAttributs.js');
-    const Rules = await import('/js/entite/entityRules.js');
-    const StatSystem = await import('/js/entite/statSystem.js');
+    const B = await import("/js/combat/vitals.js");
+    const Rules = await import("/js/entities/rules.js");
+    const StatSystem = await import("/js/entities/statSystem.js");
     const { isUmbraRestricted } = await import('/js/procedural/proc-bareme.js');
     let parityChecks = 0;
     const regressions = [];
@@ -466,7 +466,7 @@ try {
       }
     } finally { Object.assign(armorConfig.ratios, savedRatios); armorConfig.flatPerPoint = savedGift; }
     const Armor = await import('/js/items/armor.js');
-    const Upgrade = await import('/js/UpgradeEntity.js');
+    const Upgrade = await import("/js/entities/progression.js");
     const makeArmorEntity = () => {
       const entity = { id: 987101, name: 'Armor audit', type: 'sbire', side: 'A', level: { current: 1, max: 250 },
         baseStats: { HP: 100, strength: 100, robustness: 150, will: 250, charge: 5 }, attacks: ['autoAttack'] };
@@ -477,7 +477,7 @@ try {
     equal(armored.armorLayers.robustness.max, 516, 'Generated Robustness capacity uses Force');
     equal(armored.stats.armor.current, 516, 'New entities receive their armor before any daily refill');
     equal(armored.armorLayers.robustness.current, 516, 'Initial armor is present in the combat reserve');
-    const { createLifeBars } = await import('/js/createEntity.js');
+    const { createLifeBars } = await import("/js/rendering/entities.js");
     const barEntity = structuredClone(armored);
     barEntity.id = 987105;
     const barHost = document.createElement('div');
@@ -581,8 +581,8 @@ try {
     const blockedBoost = Rules.entityBattleBooste(frozenArmor, { stat: 'robustness', value: 150, source: 'armor-test' });
     equal(frozenArmor.armorLayers.robustness.max, 0, 'Temporary Robustness cannot bypass Frozen restriction');
     blockedBoost.remove();
-    const Storage = await import('/js/GameStorage.js');
-    const Updates = await import('/js/entityUpdatesStorage.js');
+    const Storage = await import("/js/storage/gameStorage.js");
+    const Updates = await import("/js/storage/entityStorage.js");
     const storedBefore = ['selectedArmyA', 'ArmyA', 'ArmyB', 'playerExperience'].map(key => [key, Storage.loadFromLocalStorage(key)]);
     try {
       const combatArmor = makeArmorEntity();
@@ -1112,8 +1112,8 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#armor-bars-regression').screenshot({ path: resolve(output, 'armor-bars-mobile.png') });
   const layeredChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const Rules = await import('/js/entite/entityRules.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const Rules = await import("/js/entities/rules.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');
     const { stats } = await import('/js/data/statsData.js');
@@ -1240,7 +1240,7 @@ try {
       }
       check(JSON.stringify(edge) === untouched, 'Boundary details must remain read-only');
     }
-    const { calculateHypercognitionEssenceCount } = await import('/js/essenceInventory.js');
+    const { calculateHypercognitionEssenceCount } = await import("/js/items/essenceInventory.js");
     const essenceConfig = balanceData.hypercognition.essences;
     const essenceStateBefore = JSON.stringify(essenceConfig);
     for (const points of [-1, .5, 15.2, 99.5, 124.9, ...Array.from({ length: 301 }, (_, index) => index)]) {
@@ -1282,7 +1282,7 @@ try {
       check(progression.current.count === 8 && progression.next.points === 115 && progression.next.count === 9,
         'Milestones read the live engine configuration, not hard-coded thresholds');
     } finally { essenceConfig.softCap = previousSoftCap; }
-    const { calculateTranscendenceExtraLife } = await import('/js/entites.js');
+    const { calculateTranscendenceExtraLife } = await import("/js/entities/runtime.js");
     const lifeConfig = balanceData.generatedStats.transcendenceExtraLife;
     const lifeStateBefore = JSON.stringify(lifeConfig);
     for (const points of [-1, .1, .5, 5.4, 57.9, 89.9, 149.9, 1000, ...Array.from({ length: 301 }, (_, index) => index)]) {
@@ -1442,7 +1442,7 @@ try {
       check(occultismModels[key].parts[0].fixed && !/×|→/.test(H.buildUmbraContributionHelper(occultismModels[key], 0)),
         'Fixed Occultism drawbacks expose their existing value without a ratio');
     }
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const completedCurves = [
       ['vitality', 'vitalityBonus', 0, e => E.calculateVitalityBonus(e.stats.vitality)],
       ['haste', 'hastePreparation', 0, e => E.calculateHastePercent(e.stats.haste)],
@@ -2136,7 +2136,7 @@ try {
     assert.equal(await detail.count(), 1);
     assert.equal(await detail.locator('.umbra-description').innerText(), 'Statistique : Vie supplémentaire +');
     const expectedLifeHelper = await page.evaluate(async () => {
-      const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+      const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
       return DDisplay.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
     });
     assert.equal(await detail.locator('.stat-hover-body').innerHTML(), `\n      ${expectedLifeHelper}\n    `);
@@ -2156,7 +2156,7 @@ try {
   await page.evaluate(() => new Promise(requestAnimationFrame));
   assert.equal(await page.locator('[data-umbra-detail]').count(), 1, 'A third-party helper stays open when its parent text is unchanged');
   assert.equal(await page.locator('[data-umbra-detail] .stat-hover-body').evaluate(async node => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     return node.innerHTML.trim() === DDisplay.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
   }), true, 'Already-open third-party helpers refresh from current entity stats without another hover');
   const transcendenceRatio = transcendenceCard.locator('[data-umbra-calculation="transcendenceExBonus"]').first();
@@ -2183,9 +2183,9 @@ try {
   await page.evaluate(() => document.getElementById('armor-bars-regression').remove());
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
-    const Upgrade = await import('/js/UpgradeEntity.js');
+    const Upgrade = await import("/js/entities/progression.js");
     const entity = { id: 987191, name: 'Level helper preview', side: 'A', type: 'sbire', class: 'TestHelpers', level: 1,
       baseStats: { strength: 6, agility: 6, intelligence: 6, integrite: 3, HP: 100, will: 150 },
       attacks: [{ functionName: 'autoAttack', attacknature: ['physicalDamage'], attackRange: ['melee'] }] };
@@ -2233,7 +2233,7 @@ try {
   };
   const assertDraftHelper = async key => {
     const previewCheck = await page.evaluate(async key => {
-      const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+      const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
       const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
       const { host, draft, originalStats, baseStats } = window.__levelHelperTest;
       const beforeRead = JSON.stringify(draft);
@@ -2271,7 +2271,7 @@ try {
   const assertRelatedPowerHelper = async () => {
     await page.locator('[data-umbra-pinned] [data-helper-picto-stat="physicalDamage"]').first().dispatchEvent('mouseover');
     const matches = await page.evaluate(async () => {
-      const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+      const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
       const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
       const parent = document.querySelector('[data-umbra-pinned]');
       const view = UI.getBoundHelperEntity(parent._helperHost);
@@ -2361,7 +2361,7 @@ try {
     const block = window.__levelHelperTest.host.querySelector('.codex-substat-panel--umbra .stat-container[data-stat="vigueur"]');
     const updated = structuredClone(UI.getBoundHelperEntity(block));
     for (const [key, value] of Object.entries({ strength: 11, vigueur: 4 })) updated.baseStats[key] = (updated.baseStats[key] || 0) + value - (updated.stats[key] || 0);
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     E.recomputeEntityStats(updated, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
     UI.refreshCodexUmbraPanel(updated);
   });
@@ -2401,8 +2401,8 @@ try {
   assert.equal(await page.locator('.stat-hover').count(), 0, 'Removing the level-up screen clears its helpers');
   console.log('PASS: real Soul preview helpers, new/unchanged Umbras, sub-helpers, undo, clear, confirmation, reopen and desktop/mobile bounds');
   const autonomousChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     let checks = 0;
     const check = (condition, message) => { checks++; if (!condition) throw Error(message); };
@@ -2478,7 +2478,7 @@ try {
     check(DDisplay.getStatImprovement(context, 'dodge')?.source === 'occultism', 'Active invisible dodge boost supplies its contextual +');
     delete context.battleBoosts.dodge;
     check(!DDisplay.getStatImprovement(context, 'dodge'), 'The + disappears when the temporary boost ends');
-    const essences = await import('/js/essenceur.js');
+    const essences = await import("/js/items/essences.js");
     check(essences.resolveAttackNatureFromEssenceurConfig({ slots: [] })[0] === 'inerte', 'Empty essence configuration actually resolves to Inert');
     for (const key of ['attackEssenceRed', 'attackEssenceBlue', 'attackEssenceYellow', 'attackEssenceEmpty']) {
       const text = DDisplay.calculateStatsDisplay(key, entity).helpContent;
@@ -2501,7 +2501,7 @@ try {
     E.recomputeEntityStats(moving);
     check(D.getMarathonChance(moving) === 2 && D.getTrailerChance(moving) === 4,
       'Removing Movement leaves only autonomous probabilities');
-    const { attemptExtraLife } = await import('/js/entityAttributs.js');
+    const { attemptExtraLife } = await import("/js/combat/vitals.js");
     for (const pool of ['extraLife', 'fadedLife', 'eternalLife']) {
       const revived = { id: 987195, name: 'Autonomous protection', archetypeFrozen: true, isDEAD: true,
         stats: { HP: { current: 0, max: 100 }, transcendenceTotal: 100, [pool]: { current: 1, max: 1 } },
@@ -2557,7 +2557,7 @@ try {
   await page.evaluate(() => window.__autonomousHelperTest.host.remove());
   console.log(`PASS: ${autonomousChecks} autonomous/combined/restricted stat checks, colored + names, source ratios and desktop/mobile helpers`);
   const sourceTotalChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const H = await import('/js/data/helpers.js');
     let count = 0;
     const check = (ok, message) => { if (!ok) throw Error(message); count++; };
@@ -2636,8 +2636,8 @@ try {
   console.log(`PASS: ${sourceTotalChecks} source totals, final units, equipment, percentages, caps, previews and inactive Umbras`);
   await page.setViewportSize({ width: 1280, height: 900 });
   const effectKeys = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');
     const entity = structuredClone(window.__autonomousHelperTest.entity);
@@ -2700,8 +2700,8 @@ try {
     }
   }
   const essentialChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
     const H = await import('/js/data/helpers.js');
     const { balanceData } = await import('/js/data/balanceData.js');
     let count = 0;
@@ -2821,7 +2821,7 @@ try {
   });
   const weightVisualChecks = await page.evaluate(async () => {
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
-    const E = await import('/js/entites.js');
+    const E = await import("/js/entities/runtime.js");
     const row = window.__dedicatedHelperTest.host.querySelector('.codex-attack-stat-block .stat-container[data-stat="weight"]');
     const original = UI.getBoundHelperEntity(row);
     const before = JSON.stringify(original);
@@ -2990,7 +2990,7 @@ try {
   await dedicatedHost.locator('[data-stat-effect="indestructibilityReductionTotal"]').dispatchEvent('click');
   const previewCheck = await page.evaluate(async () => {
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const row = window.__dedicatedHelperTest.host.querySelector('[data-stat-effect="indestructibilityReductionTotal"]');
     const bound = UI.getBoundHelperEntity(row);
     const committed = JSON.stringify(bound.stats);
@@ -3025,8 +3025,8 @@ try {
   console.log(`PASS: ${effectKeys.length} dedicated statistic helpers, isolated effects, pin replacement, sources, previews and mobile bounds`);
   await page.setViewportSize({ width: 1280, height: 900 });
   const conversions = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');
     const entity = structuredClone(window.__autonomousHelperTest.entity);
@@ -3126,7 +3126,7 @@ try {
   }
   await page.locator('body').dispatchEvent('click');
   const autonomousRows = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const H = await import('/js/data/helpers.js');
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const rows = [...window.__conversionHelperTest.root.querySelectorAll('[data-autonomous-helper="true"]')];
@@ -3170,11 +3170,11 @@ try {
   });
   let autonomousDetails = 0;
   const sourceMatrix = await page.evaluate(async rows => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const E = await import('/js/entites.js');
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const E = await import("/js/entities/runtime.js");
     const H = await import('/js/data/helpers.js');
-    const { getDisplayStatKey } = await import('/js/entite/entityRules.js');
-    const Upgrade = await import('/js/UpgradeEntity.js');
+    const { getDisplayStatKey } = await import("/js/entities/rules.js");
+    const Upgrade = await import("/js/entities/progression.js");
     const { stats } = await import('/js/data/statsData.js');
     const { isUmbraRestricted } = await import('/js/procedural/proc-bareme.js');
     let checks = 0;

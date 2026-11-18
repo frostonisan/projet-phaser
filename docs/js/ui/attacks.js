@@ -1,7 +1,7 @@
-import { getAttackControlValue } from "../entityControl.js";
-import { previewAttackEffects } from "../effectParameters.js";
+import { getAttackControlValue } from "../combat/control.js";
+import { previewAttackEffects } from "../combat/effectParameters.js";
 // Attack cards, descriptions, progression and combat controls.
-import { clockNow, requestAnimationFrame, cancelAnimationFrame } from "../combatClock.js";
+import { clockNow, requestAnimationFrame, cancelAnimationFrame } from "../combat/clock.js";
 import {
   buildAttackLightDescription,
   renderAttackDescription,
@@ -17,9 +17,9 @@ import {
 import { cachedResourceUrl } from "../data/loaderList.js";
 import { attackDetails } from "../data/attackList.js";
 import { balanceData } from "../data/balanceData.js";
-import { isAdminMode } from "../GameStorage.js";
-import { getSafe } from "../entite/entityRules.js";
-import { entites } from "../entites.js";
+import { isAdminMode } from "../storage/gameStorage.js";
+import { getSafe } from "../entities/rules.js";
+import { entites } from "../entities/runtime.js";
 import {
   ATTACK_ESSENCE_MAX_SLOTS,
   attackSelectionKey,
@@ -42,18 +42,18 @@ import {
   refreshEntityCurrentAttackDefinition,
   setAllAttacksEnabled,
   getAttackResonance,
-} from "../attackResolution.js";
+} from "../combat/attackResolution.js";
 import {
   createAttackStatView, getAttackPurity, calculateAttackDamagePreview, calculateDirectAttackDps,
   calculateDirectAttackHps, calculateProfanationSummonLevel, getFinalAttackProjectileSpeed, getEffectiveAttackTimings,
   calculateCritTotalChance, getRangePenaltyDetails, totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi,
   calculateMeleeExecBonus, getAttackUmbraAccess
-} from "../damagesCalcul.js";
+} from "../combat/statistics.js";
 import { calculateStatsDisplay } from "./statistics/details.js";
-import { saveEntityAttackSelection } from "../entityUpdatesStorage.js";
+import { saveEntityAttackSelection } from "../storage/entityStorage.js";
 import { resolveAttackEffects, describeAttackEffect, EFFECT_TYPES } from "../data/attackEffects.js";
-import { normArr } from "../entityAttributs.js";
-import { createAttackEssenceSocketsElement } from "../essenceur.js";
+import { normArr } from "../combat/vitals.js";
+import { createAttackEssenceSocketsElement } from "../items/essences.js";
 import {
   getCodexFocusedAttackKey,
   setCodexFocusedAttackKey,
@@ -66,9 +66,9 @@ import {
 import { resolvePowerOwner, createAttackPowerValue } from "./statistics/components.js";
 import { applyAttackEssenceSocketChoice, applyAdminAttackCardChange } from "./essences.js";
 import { createFullStatDom, createEntityStatsTitleNode } from "./statistics/components.js";
-import { removeCombatVisualAfter } from "../combatClock.js";
-import { gameStarted } from "../gameState.js";
-import { createLifeBars, CreateATBEntity } from "../createEntity.js";
+import { removeCombatVisualAfter } from "../combat/clock.js";
+import { gameStarted } from "../app/state.js";
+import { createLifeBars, CreateATBEntity } from "../rendering/entities.js";
 
 function generateAttackDescription(attack, attacker) {
   const preview = calculateAttackDamagePreview(attacker, attack);

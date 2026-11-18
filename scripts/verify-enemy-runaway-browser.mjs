@@ -21,12 +21,12 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    window.U = await import("/js/ui/application.js"); window.E = await import('/js/entites.js');
-    window.G = await import('/js/gameState.js'); window.O = await import('/js/BattleOrder.js');
-    window.C = await import('/js/createEntity.js'); window.At = await import('/js/entityAttributs.js');
-    window.S = await import('/js/GameStorage.js'); window.Sim = await import('/js/combatSimulation.js');
-    window.T = await import('/js/entityUpdatesStorage.js');
-    window.template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    window.U = await import("/js/ui/application.js"); window.E = await import("/js/entities/runtime.js");
+    window.G = await import("/js/app/state.js"); window.O = await import("/js/combat/orders.js");
+    window.C = await import("/js/rendering/entities.js"); window.At = await import("/js/combat/vitals.js");
+    window.S = await import("/js/storage/gameStorage.js"); window.Sim = await import("/js/debug/simulation.js");
+    window.T = await import("/js/storage/entityStorage.js");
+    window.template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     window.currentStageId = null;
     document.querySelector('.worldmap')?.remove();
@@ -66,7 +66,7 @@ try {
     const pursuitBoard = await setup(['offense', 'heal'], { velocity: 100 });
     const pursuit = await Sim.runCombatSimulation(pursuitBoard, { count: 1, durationSeconds: 15, seed: 17 });
     await setup(['heal', 'offense'], { velocity: 100 });
-    const selection = await import('/js/attackResolution.js');
+    const selection = await import("/js/combat/attackResolution.js");
     selection.setAllAttacksEnabled(E.entites[1], selection.readAttackDefinitionsForEntity(E.entites[1]), false);
     const disabled = await Sim.runCombatSimulation(Sim.captureSimulationBoard(), { count: 1, durationSeconds: 15, seed: 17 });
     const failures = [];

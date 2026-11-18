@@ -26,8 +26,8 @@ try {
   const reports = await page.evaluate(async () => {
     const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/attacks.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { entitesNestUp, entites } = await import('/js/entites.js');
-    const { getAttackNatureRules, readAttackDefinitionsForEntity, isAttackSublime } = await import('/js/attackResolution.js');
+    const { entitesNestUp, entites } = await import("/js/entities/runtime.js");
+    const { getAttackNatureRules, readAttackDefinitionsForEntity, isAttackSublime } = await import("/js/combat/attackResolution.js");
     const check = (ok, label) => { if (!ok) throw Error(label); reports.push(label); };
     const reports = [];
     const entity = structuredClone(entitesNestUp.find(e => e.name === 'Grouille-Doigt TEST 2A support'));
@@ -606,7 +606,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   const visual = await page.evaluate(async () => {
     const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/attacks.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
-    const { entitesNestUp, entites } = await import('/js/entites.js');
+    const { entitesNestUp, entites } = await import("/js/entities/runtime.js");
     const sample = structuredClone(entitesNestUp.find(entity => entity.name === 'Mouche asticoteuse'));
     sample.id = 777001;
     sample.side = 'A';
@@ -629,7 +629,7 @@ try {
     `Representative attack has skills and colored Umbras: ${JSON.stringify(visual)}`);
   const emptyUmbraPanel = await page.evaluate(async () => {
     const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/attacks.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
-    const { enrichEntityStats } = await import('/js/entites.js');
+    const { enrichEntityStats } = await import("/js/entities/runtime.js");
     const sample = enrichEntityStats({id:777002,name:'Sans Umbra',type:'sbire',side:'A',level:1,awakening:1,attacks:['autoAttack'],baseStats:{HP:100},stuff:{}});
     sample.id = 777002;
     [

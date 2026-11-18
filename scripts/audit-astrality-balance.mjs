@@ -89,12 +89,12 @@ async function fixture(){
  page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
  await page.evaluate(async expectedCooldown=>{
-  const UI=await import("/js/ui/application.js"),E=await import('/js/entites.js'),C=await import('/js/createEntity.js');
-  const G=await import('/js/GameStorage.js'),State=await import('/js/gameState.js'),Sim=await import('/js/combatSimulation.js');
+  const UI=await import("/js/ui/application.js"),E=await import("/js/entities/runtime.js"),C=await import("/js/rendering/entities.js");
+  const G=await import("/js/storage/gameStorage.js"),State=await import("/js/app/state.js"),Sim=await import("/js/debug/simulation.js");
   if(expectedCooldown!=null&&globalThis.umbraProgression.astrality.astralCooldown.baseSeconds!==expectedCooldown)throw Error('Unexpected autonomous cooldown');
   UI.createGameContainer();UI.GameUi();G.setAdminMode(true);window.levelRunning='admin';document.querySelector('.worldmap')?.remove();
   State.configureBattleActionManager({createStartButton:c=>c,createFleeButton:c=>c,createQuitButton:c=>c});
-  const template=(await import('/js/entite/entitesNest.js')).entitesNest.find(e=>e.serial===900013);
+  const template=(await import("/js/data/entityTemplates.js")).entitesNest.find(e=>e.serial===900013);
   const grid=document.createElement('div');grid.id='hexGrid';grid.style.cssText='position:absolute;inset:100px 150px;';document.getElementById('game-container').append(grid);
   window.snapshots=new Map();
   window.auditTrial=async(c,index)=>{

@@ -26,10 +26,10 @@ try {
   // Reset restores production perspective; this fixture uses flat rectangular cells.
   await page.addStyleTag({ content: '#hexGrid { transform: none !important; }' });
   await page.evaluate(async () => {
-    const Admin = await import('/js/admin.js');
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
-    const State = await import('/js/gameState.js');
+    const Admin = await import("/js/debug/admin.js");
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const State = await import("/js/app/state.js");
     S.setAdminMode(true);
     S.setCurrentLevel('admin-native-drops'); window.currentStageId = 'admin-native-drops'; window.levelRunning = 'admin';
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'admin-native-drops', level_type: 'admin' }] });
@@ -109,7 +109,7 @@ try {
     }
     const state = await page.evaluate(async () => {
       const M = await import('/js/items/itemManager.js');
-      const S = await import('/js/GameStorage.js');
+      const S = await import("/js/storage/gameStorage.js");
       return { nodes: document.querySelectorAll('[data-ground-summon]').length,
         items: S.loadFromLocalStorage('IngameItems', []), state: M.getBattleInventoryState(), valid: M.validateBattleInventoryState().ok };
     });
@@ -203,7 +203,7 @@ try {
     await tab(side);
     await drag(list.locator('.admin-entity-catalog-row').first());
     await page.waitForFunction(() => document.querySelector('#hex_8 [id^="Box_Entite_"]'));
-    const actors = await page.evaluate(async () => (await import('/js/entites.js')).entites.map(entity => ({ position: entity.position, side: entity.side })));
+    const actors = await page.evaluate(async () => (await import("/js/entities/runtime.js")).entites.map(entity => ({ position: entity.position, side: entity.side })));
     assert.deepEqual(actors, [{ position: 'hex_8', side }]);
     checks.push(`Native entity drop: side ${side}, exact hex, one entity`);
     await reset();

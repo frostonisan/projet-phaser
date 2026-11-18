@@ -31,12 +31,12 @@ try {
   const report = await page.evaluate(async () => {
     const M = await import('/js/items/itemManager.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
-    const { setAdminMode } = await import('/js/GameStorage.js');
+    const { setAdminMode } = await import("/js/storage/gameStorage.js");
     const H = await import('/js/data/helpers.js');
     const { stats } = await import('/js/data/statsData.js');
-    const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
-    const U = await import('/js/UpgradeEntity.js');
+    const E = await import("/js/entities/runtime.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const U = await import("/js/entities/progression.js");
     setAdminMode(true);
     document.body.innerHTML = '<div class="Game-helper"></div><div id="anchor"></div><div id="equipment-anchor"></div>';
     document.body.style.background = '#101214';
@@ -252,9 +252,9 @@ try {
     assert.ok((await page.locator('.stat-hover[data-stat="shift"] .stat-hover-body').innerText()).includes(text));
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
-    const P = await import('/js/UpgradeEntity.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const P = await import("/js/entities/progression.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const { manager, anchor } = window.__itemAudit;
     manager.clearItemDescriptions();

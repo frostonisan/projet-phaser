@@ -28,26 +28,26 @@ page.on('console', message => { if (message.type() === 'error' && !message.text(
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const { entites, enrichEntityStats, recomputeEntityStats } = await import('/js/entites.js');
+    const { entites, enrichEntityStats, recomputeEntityStats } = await import("/js/entities/runtime.js");
     const { createAttackFlight, acceptsImpactTarget, acceptsSelectedTarget, getFlightMode } = await import("/js/combat/attacks.js");
-    const { animationProjectile, finishMeleeCloneOnDeath, animationMelee, clearProjectileEffects } = await import('/js/entitesAnimation.js');
+    const { animationProjectile, finishMeleeCloneOnDeath, animationMelee, clearProjectileEffects } = await import("/js/rendering/animations.js");
     const { executeAttack, resolveAttackImpact } = await import('/js/combat/attacks.js');
-    const { makeRoomForSummon, createEntityIngame } = await import('/js/entitySpawnEngine.js');
-    const { consommationSummon, summonEntite } = await import('/js/summonsMecanics.js');
-    const { LifeandDeath, estimateCancelledAttackHp } = await import('/js/entityAttributs.js');
-    const { getEntityCombatDetails, recordEntityCombatMovement } = await import('/js/entityUpdatesStorage.js');
-    const { checkGameOver, setGameOver, configureBattleActionManager } = await import('/js/gameState.js');
-    configureBattleActionManager({ createQuitButton: (await import('/js/game.js')).createQuitButton });
-    const { getAttackNatureRules, getAttackResolutionFlags, setEntityAttackDefinitions, splitAttackNatureAmount } = await import('/js/attackResolution.js');
-    const { getSafe } = await import("/js/entite/entityRules.js");
-    const { entitesNest } = await import('/js/entite/entitesNest.js');
+    const { makeRoomForSummon, createEntityIngame } = await import("/js/entities/spawn.js");
+    const { consommationSummon, summonEntite } = await import("/js/combat/summons.js");
+    const { LifeandDeath, estimateCancelledAttackHp } = await import("/js/combat/vitals.js");
+    const { getEntityCombatDetails, recordEntityCombatMovement } = await import("/js/storage/entityStorage.js");
+    const { checkGameOver, setGameOver, configureBattleActionManager } = await import("/js/app/state.js");
+    configureBattleActionManager({ createQuitButton: (await import("/js/app/stages.js")).createQuitButton });
+    const { getAttackNatureRules, getAttackResolutionFlags, setEntityAttackDefinitions, splitAttackNatureAmount } = await import("/js/combat/attackResolution.js");
+    const { getSafe } = await import("/js/entities/rules.js");
+    const { entitesNest } = await import("/js/data/entityTemplates.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const { calculateProfanationSummonLevel, calculateLvlMaxEntiteWithWill } = await import('/js/damagesCalcul.js');
+    const { calculateProfanationSummonLevel, calculateLvlMaxEntiteWithWill } = await import("/js/combat/statistics.js");
     const { createAttackDescriptionContent, createAttackLightDescription, refreshCodexUmbraPanel } = await Promise.all([import("/js/ui/attacks.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
-    const { createCorpseLoot } = await import('/js/loot.js');
-    const { entiteTurn, runTargetSearchWindow } = await import('/js/fight.js');
-    const { combatNow } = await import('/js/combatTimeline.js');
-    const { rebuildBoardOccupancy, refreshHexOccupancy, invalidateFootprintGeometry } = await import('/js/board.js');
+    const { createCorpseLoot } = await import("/js/items/loot.js");
+    const { entiteTurn, runTargetSearchWindow } = await import("/js/combat/loop.js");
+    const { combatNow } = await import("/js/combat/timeline.js");
+    const { rebuildBoardOccupancy, refreshHexOccupancy, invalidateFootprintGeometry } = await import("/js/board/controller.js");
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); if (reports.length % 10 === 0) console.log('FLIGHT ' + reports.length + ': ' + message); };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -827,8 +827,8 @@ try {
     check(!document.getElementById(`DragSprite_${attacker.id}`).classList.contains('melee-clone-death'), 'Real body never receives clone death tint');
 
     clearProjectileEffects(entites);
-    const { startGame, StopGame } = await import('/js/gameState.js');
-    const { RemoveEntite } = await import('/js/entites.js');
+    const { startGame, StopGame } = await import("/js/app/state.js");
+    const { RemoveEntite } = await import("/js/entities/runtime.js");
     const spawnHex = document.createElement('div');
     spawnHex.className = 'hex Neutral tank-role'; spawnHex.dataset.position = 'hex_1901';
     spawnHex.innerHTML = '<div class="socle tank"></div>'; host.appendChild(spawnHex);
@@ -852,7 +852,7 @@ try {
     await sleep(30);
     check(getEntityCombatDetails(lateArrival).roles.tank.durationMs === timeOnRemoval,
       'Removing a summon stops its role duration immediately');
-    await import('/js/dragndrop.js');
+    await import("/js/board/interaction.js");
     window.levelRunning = 'scripted';
     const destination = document.createElement('div');
     destination.className = 'hex SideA'; destination.dataset.position = 'hex_1903';
@@ -901,15 +901,15 @@ try {
       && poisonAfter.consumableDamageReceived - poisonBefore.consumableDamageReceived
         === poisonAfter.damageReceived - poisonBefore.damageReceived,
       'A rotten Jarret counts once while its actual periodic damage accumulates separately');
-    (await import('/js/summonsMecanics.js')).clearGroundItems();
+    (await import("/js/combat/summons.js")).clearGroundItems();
     StopGame();
     return reports;
   });
   console.log(reports.join('\n'));
   await page.evaluate(async () => {
     const { AttackDetailInfos } = await import("/js/ui/attacks.js");
-    const { entitesNestUp } = await import('/js/entites.js');
-    const { readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
+    const { entitesNestUp } = await import("/js/entities/runtime.js");
+    const { readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
     const owner = structuredClone(entitesNestUp.find(entity => entity.class === 'profanateur-engoulmort'));
     owner.level.current = 10;
     owner.stats.intelligence = 8;

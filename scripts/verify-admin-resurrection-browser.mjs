@@ -25,24 +25,24 @@ async function fixture(count = 3) {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
   await page.evaluate(async count => {
-    window.S = await import('/js/GameStorage.js'); window.E = await import('/js/entites.js');
-    window.Admin = await import('/js/admin.js'); window.G = await import('/js/gameState.js');
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js'); window.Effects = await import('/js/attackEffectMecanics.js');
+    window.S = await import("/js/storage/gameStorage.js"); window.E = await import("/js/entities/runtime.js");
+    window.Admin = await import("/js/debug/admin.js"); window.G = await import("/js/app/state.js");
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js"); window.Effects = await import("/js/combat/effects.js");
     window.pauseEvents = [];
     for (const type of ['combatPaused', 'combatResumed']) window.addEventListener(type, () => pauseEvents.push({ type, at: Date.now(), reasons: P.getCombatPauseReasons(), stack: new Error().stack }));
     document.addEventListener('visibilitychange', () => pauseEvents.push({ visibility: document.visibilityState }));
-    window.Damage = await import('/js/entityAttributs.js'); window.C = await import('/js/createEntity.js');
-    window.Loot = await import('/js/loot.js');
+    window.Damage = await import("/js/combat/vitals.js"); window.C = await import("/js/rendering/entities.js");
+    window.Loot = await import("/js/items/loot.js");
     S.setAdminMode(true); window.levelRunning = 'admin'; window.currentStageId = 'resurrection-test';
-    S.setCurrentLevel('resurrection-test'); (await import('/js/sessionStorage.js')).beginAdminSession();
+    S.setCurrentLevel('resurrection-test'); (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'resurrection-test', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} });
     S.saveToLocalStorage('equippedItems', []); E.entites.length = 0;
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"><div id="score"></div></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
     const grid = document.getElementById('hexGrid');
     grid.style.cssText = 'position:fixed;left:140px;top:200px;display:flex;gap:40px;transform:none';
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     for (let i = 0; i < count; i++) {
       const side = i === 1 ? 'B' : 'A';
       const hex = document.createElement('div'); hex.id = `hex_${i + 1}`; hex.className = `hex Side${side} occupied`;
@@ -62,7 +62,7 @@ async function fixture(count = 3) {
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
     window.actor = E.entites[0]; window.enemy = E.entites[1];
-    (await import('/js/game.js')).configureBattleSystemsOnce();
+    (await import("/js/app/stages.js")).configureBattleSystemsOnce();
     Admin.initializeAdminLevel(E.entitesNestUp);
     window.kill = entity => {
       entity.stats.HP.current = 0; Damage.LifeandDeath(entity);

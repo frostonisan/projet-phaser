@@ -22,18 +22,18 @@ await mkdir('outputs/combat-tests', { recursive: true });
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const { entites, enrichEntityStats, recomputeEntityStats } = await import('/js/entites.js');
+    const { entites, enrichEntityStats, recomputeEntityStats } = await import("/js/entities/runtime.js");
     const { attackDetails } = await import('/js/data/attackList.js');
-    const resolution = await import('/js/attackResolution.js');
+    const resolution = await import("/js/combat/attackResolution.js");
     const { setEntityAttackDefinitions: setKit, readAttackDefinitionsForEntity: readKit, readEntityCombatProfile: profile } = resolution;
-    const { applyCombatProfileView } = await import('/js/load-entity.js');
-    const { updateEntityAttackTargetDisplay: showTarget, updateCombatantTargetZones, getBattleTargetAttack } = await import('/js/load-entity.js');
-    const { selectAttackDecision, collectAttackTargetCandidates } = await import('/js/fight.js');
-    const { getAttackCastingVisual, animatePreparation, animateFinalPhase } = await import('/js/entitesAnimation.js');
-    const { showHealingFeedback, brulure } = await import('/js/attackEffectMecanics.js');
-    const gameState = await import('/js/gameState.js');
+    const { applyCombatProfileView } = await import("/js/board/deployment.js");
+    const { updateEntityAttackTargetDisplay: showTarget, updateCombatantTargetZones, getBattleTargetAttack } = await import("/js/board/deployment.js");
+    const { selectAttackDecision, collectAttackTargetCandidates } = await import("/js/combat/loop.js");
+    const { getAttackCastingVisual, animatePreparation, animateFinalPhase } = await import("/js/rendering/animations.js");
+    const { showHealingFeedback, brulure } = await import("/js/combat/effects.js");
+    const gameState = await import("/js/app/state.js");
     const { setGameOver, setOrderSide } = gameState;
-    const { applyDamage } = await import('/js/entityAttributs.js');
+    const { applyDamage } = await import("/js/combat/vitals.js");
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); };
     const reports = [];
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -56,7 +56,7 @@ try {
       const hex = document.createElement('div'); hex.className = 'hex SideA'; hex.dataset.position = `hex_${700 + i}`;
       hex.style.left = `${i * 110}px`; hex.innerHTML = '<div class="socle neutre"></div>'; board.append(hex); return hex;
     });
-    const boardState = (await import('/js/board.js')).getHexes();
+    const boardState = (await import("/js/board/controller.js")).getHexes();
     boardState.hexesSideA.splice(0, boardState.hexesSideA.length, ...hexes);
     boardState.hexesSideB.length = 0;
     boardState.hexesNeutral.length = 0;
@@ -196,8 +196,8 @@ try {
   await page.screenshot({ path: 'outputs/combat-tests/combat-profile-mobile.png' });
   assert.equal(await page.locator('.profile-panel').evaluate(panel => panel.scrollWidth <= panel.clientWidth + 1), true, 'Profile fits mobile width');
   const spriteChecks = await page.evaluate(async () => {
-    const { enrichEntityStats } = await import('/js/entites.js');
-    const { createEntiteInDOM, getEntitySpriteSource } = await import('/js/createEntity.js');
+    const { enrichEntityStats } = await import("/js/entities/runtime.js");
+    const { createEntiteInDOM, getEntitySpriteSource } = await import("/js/rendering/entities.js");
     const sprite = new Image();
     await new Promise((resolve, reject) => {
       sprite.onload = resolve; sprite.onerror = reject;

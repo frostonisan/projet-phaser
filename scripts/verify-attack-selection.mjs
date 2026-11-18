@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 
 await installEntityTestEnvironment();
-const api = await import('../docs/js/attackResolution.js');
+const api = await import("../docs/js/combat/attackResolution.js");
 const attacks = ['a', 'b', 'c'].map((functionName, index) => ({ functionName, cooldown: (3 - index) * 1000 }));
 const entity = { id: 1 };
 const choices = (now = 10000) => api.describeAttackChoices(entity, attacks, a => a.cooldown, now);

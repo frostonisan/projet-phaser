@@ -26,12 +26,12 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
   const report = await page.evaluate(async () => {
-    const Admin = await import('/js/admin.js');
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
+    const Admin = await import("/js/debug/admin.js");
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     const M = await import('/js/items/itemManager.js');
     const P = await import('/js/items/permanentItems.js');
-    const State = await import('/js/gameState.js');
+    const State = await import("/js/app/state.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const { summons } = await import('/js/data/summons.js');
     const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
@@ -251,9 +251,9 @@ try {
     E.entites.push(target); S.saveToLocalStorage('selectedArmyA', [target]);
     const amount = registry()[0].permanentStat.amount;
     check(amount === 6, 'Ground pickup fixture uses the exact manually entered amount');
-    const C = await import('/js/createEntity.js');
-    const Aura = await import('/js/entitesAura.js');
-    const Drag = await import('/js/dragndrop.js');
+    const C = await import("/js/rendering/entities.js");
+    const Aura = await import("/js/rendering/auras.js");
+    const Drag = await import("/js/board/interaction.js");
     const created = C.createEntiteInDOM(target);
     const box = created.element;
     grid.querySelector('#hex_1').appendChild(box);
@@ -278,7 +278,7 @@ try {
       && !('node' in savedTarget._saveProbe) && !('callback' in savedTarget._saveProbe) && !('owner' in savedTarget._saveProbe),
       'Nested runtime nodes, callbacks and cycles are omitted while shared stat data survives');
     S.saveToLocalStorage('ArmyB', { armies: { test: { entities: [savedTarget] } } });
-    (await import('/js/entityUpdatesStorage.js')).saveEntireEntityToStorage(target);
+    (await import("/js/storage/entityStorage.js")).saveEntireEntityToStorage(target);
     const savedEnemy = S.loadFromLocalStorage('ArmyB').armies.test.entities[0];
     check(savedEnemy.baseStats.magicalPenPlus === amount && runtimeKeys.every(key => !(key in savedEnemy)),
       'Enemy army storage also saves the permanent bonus without runtime DOM references');
@@ -321,7 +321,7 @@ try {
   assert.equal(await amountInput.inputValue(), '7');
   assert.equal(await page.locator('[data-ground-summon]').count(), 0);
   await amountRow.locator('.admin-stat-editor-name').click();
-  assert.equal(await page.evaluate(async () => (await import('/js/GameStorage.js')).loadFromLocalStorage('IngameItems', [])[0]?.permanentStat.amount), 7);
+  assert.equal(await page.evaluate(async () => (await import("/js/storage/gameStorage.js")).loadFromLocalStorage('IngameItems', [])[0]?.permanentStat.amount), 7);
   report.checks.push('Real pointer and keyboard input edits spawn nothing until the stat name is clicked, then grant the exact amount');
   await page.evaluate(async () => (await import('/js/items/itemManager.js')).clearBattleGroundItems());
   // Keep the synthetic board out of the catalog layout captures.
@@ -403,15 +403,15 @@ try {
   for (const [label, value] of Object.entries(held)) { assert.ok(value, label); report.checks.push(`Infinite admin lifetime: ${label}`); }
   await page.locator('#admin-entity-form').screenshot({ path: resolve(output, 'infinite-items.png') });
   await page.screenshot({ path: resolve(output, 'infinite-board.png') });
-  await page.evaluate(async () => (await import('/js/admin.js')).cleanupAdminLevel());
-  assert.equal(await page.evaluate(async id => (await import('/js/GameStorage.js')).loadFromLocalStorage('selectedArmyA', [])
+  await page.evaluate(async () => (await import("/js/debug/admin.js")).cleanupAdminLevel());
+  assert.equal(await page.evaluate(async id => (await import("/js/storage/gameStorage.js")).loadFromLocalStorage('selectedArmyA', [])
     .find(entity => entity.id === id)?.baseStats.magicalPenPlus, report.savedEntityId), report.savedAmount);
   report.checks.push('Reopening the admin menu preserves the bonus in the current in-memory session');
   const reloadState = await page.evaluate(async ({ grid, ids, nativeId }) => {
-    const S = await import('/js/GameStorage.js');
-    const E = await import('/js/entites.js');
-    const Admin = await import('/js/admin.js');
-    const State = await import('/js/gameState.js');
+    const S = await import("/js/storage/gameStorage.js");
+    const E = await import("/js/entities/runtime.js");
+    const Admin = await import("/js/debug/admin.js");
+    const State = await import("/js/app/state.js");
     const M = await import('/js/items/itemManager.js');
     E.entites.length = 0; S.saveToLocalStorage('selectedArmyA', []);
     window.currentStageId = 'admin-items-test'; window.levelRunning = 'admin';
@@ -457,8 +457,8 @@ try {
   });
   const consumedInfinite = await page.evaluate(async () => {
     const M = await import('/js/items/itemManager.js');
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     const entry = M.getBattleInventoryState().battleGroundItems[0];
     const item = M.getIngameItemById(entry.itemId);
     const startHex = [...document.querySelectorAll('.hex')].find(hex => hex.dataset.position !== entry.position);
@@ -468,12 +468,12 @@ try {
     E.recomputeEntityStats(target);
     (await import('/js/items/resourceStocks.js')).addFadedLife(target, 1, 'consumable');
     E.entites.push(target); S.saveToLocalStorage('selectedArmyA', [target]);
-    const created = (await import('/js/createEntity.js')).createEntiteInDOM(target);
+    const created = (await import("/js/rendering/entities.js")).createEntiteInDOM(target);
     startHex.appendChild(created.element); startHex.classList.add('occupied');
     await created.spriteReady;
-    (await import('/js/entitesAura.js')).syncEntityAuras(target);
+    (await import("/js/rendering/auras.js")).syncEntityAuras(target);
     if (!Object.values(target).some(value => value instanceof Node)) throw Error('Missing live aura in infinite regression fixture');
-    (await import('/js/dragndrop.js')).restoreEntityDragAndDrop();
+    (await import("/js/board/interaction.js")).restoreEntityDragAndDrop();
     const dataTransfer = new DataTransfer(); dataTransfer.setData('text', created.element.id);
     document.querySelector(`.hex[data-position="${entry.position}"]`).dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
     return { itemId: item.itemId, entityId: target.id, amount: item.permanentStat.amount, infinite: entry.infinite };
@@ -490,8 +490,8 @@ try {
   assert.ok(await page.evaluate(async ({ itemId }) => !(await import('/js/items/itemManager.js')).getIngameItemById(itemId), consumedInfinite));
   assert.ok(consumedInfinite.infinite);
   assert.ok(await page.evaluate(async ({ entityId, amount }) => {
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     return E.entites.find(entity => entity.id === entityId).baseStats.attackCooldownReduc === amount
       && S.loadFromLocalStorage('selectedArmyA', []).find(entity => entity.id === entityId).baseStats.attackCooldownReduc === amount;
   }, consumedInfinite));

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E = await import('../docs/js/entites.js');
-const S = await import('../docs/js/entite/statSystem.js');
-const R = await import('../docs/js/entite/entityRules.js');
-const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
-const U = await import('../docs/js/UpgradeEntity.js');
-const Storage = await import('../docs/js/GameStorage.js');
+const E = await import("../docs/js/entities/runtime.js");
+const S = await import("../docs/js/entities/statSystem.js");
+const R = await import("../docs/js/entities/rules.js");
+const D = await import("../docs/js/combat/statistics.js"), DDisplay = await import("../docs/js/ui/statistics/details.js");
+const U = await import("../docs/js/entities/progression.js");
+const Storage = await import("../docs/js/storage/gameStorage.js");
 const { stats } = await import('../docs/js/data/statsData.js');
 const keys = stats.filter(stat => stat.nature === 'umbra').map(stat => stat.key);
 const map = value => Object.fromEntries(keys.map(key => [key, value]));

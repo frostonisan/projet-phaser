@@ -1,8 +1,8 @@
 import { cachedResourceUrl } from "../../data/loaderList.js";
 import { getScoredItemQuality } from "../../procedural/proc-bareme.js";
-import { loadFromLocalStorage, getEquippedItemById } from "../../GameStorage.js";
-import { normalizeStatKey, getSafe, getDisplayStatKey } from "../../entite/entityRules.js";
-import { getEquipmentSlotKeys } from "../../entites.js";
+import { loadFromLocalStorage, getEquippedItemById } from "../../storage/gameStorage.js";
+import { normalizeStatKey, getSafe, getDisplayStatKey } from "../../entities/rules.js";
+import { getEquipmentSlotKeys } from "../../entities/runtime.js";
 import {
   DropFromCodexToInventory, setupDragAndDropItem, DropEquipementtoInventory, DclicSlottoInventory,
   getIngameItemById, equippedHoverDescription, bindPersistentDescription, createItemPowerValue,
@@ -16,16 +16,16 @@ import { buildDefenseHpHelper, buildRoleDurationHelper, HELPER_TEXT } from "../.
 import { attackDetails } from "../../data/attackList.js";
 import {
   getAttackResolutionFlags, getAttackNatureRules, resolveAttackDefinitionForEntity,
-} from "../../attackResolution.js";
-import { createMovementDisplay, ensureMovementState } from "../../damagesCalcul.js";
+} from "../../combat/attackResolution.js";
+import { createMovementDisplay, ensureMovementState } from "../../combat/statistics.js";
 import { calculateStatsDisplay } from "../statistics/details.js";
-import { getEntityCombatDetails, COMBAT_ROLES } from "../../entityUpdatesStorage.js";
-import { createNicknameForm } from "../../UpgradeEntity.js";
+import { getEntityCombatDetails, COMBAT_ROLES } from "../../storage/entityStorage.js";
+import { createNicknameForm } from "../../entities/progression.js";
 import {
   createLifeBars, createLifeCounter, createArmorCounter, createMovementCounter,
-} from "../../createEntity.js";
-import { normArr } from "../../entityAttributs.js";
-import { entitesLore } from "../../entite/entitesLore.js";
+} from "../../rendering/entities.js";
+import { normArr } from "../../combat/vitals.js";
+import { entitesLore } from "../../data/entityLore.js";
 import { statsByKey, umbraDetection } from "../statistics/helpers.js";
 
 // Profil du Codex : equipements, emplacements, inventaire associe et fiche de l’entite.

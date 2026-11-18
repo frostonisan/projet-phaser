@@ -25,11 +25,11 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
   await page.evaluate(async () => {
-    const S = await import('/js/GameStorage.js'), E = await import('/js/entites.js'), A = await import('/js/admin.js');
+    const S = await import("/js/storage/gameStorage.js"), E = await import("/js/entities/runtime.js"), A = await import("/js/debug/admin.js");
     S.setAdminMode(true);
     window.levelRunning = 'admin'; window.currentStageId = 'admin-navigation';
     S.setCurrentLevel('admin-navigation');
-    (await import('/js/sessionStorage.js')).beginAdminSession();
+    (await import("/js/storage/sessionStorage.js")).beginAdminSession();
     S.saveToLocalStorage('GameStages', { stages: [{ id: 'admin-navigation', level_type: 'admin' }] });
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} });
     S.saveToLocalStorage('equippedItems', []);
@@ -37,20 +37,20 @@ try {
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"><div class="scoring-ui"><div class="scoring-experience"><img src="/media/assets/ui/experience-01.png" class="experience-01"><img src="/media/assets/ui/experience-02.png" class="experience-02"></div><div class="scoring" id="score">Experience : 999998565964</div></div><div class="menu-player-icons">Menu joueur</div></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
     const grid = document.getElementById('hexGrid');
     grid.style.cssText = 'position:fixed;left:400px;top:180px;display:flex;gap:30px;transform:none;';
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(row => row.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(row => row.serial === 900013);
     for (let i = 1; i <= 3; i++) {
       const hex = document.createElement('div'); hex.id = `hex_${i}`;
       Object.assign(hex.dataset, { position: hex.id, row: 0, col: i - 1 });
       hex.className = 'hex SideA';
       hex.style.cssText = 'width:120px;height:120px;position:relative;transform:none;background:#20252a;';
       hex.appendChild(Object.assign(document.createElement('div'), { className: 'socle' })); grid.appendChild(hex);
-      (await import('/js/board.js')).invalidateFootprintGeometry(grid);
+      (await import("/js/board/controller.js")).invalidateFootprintGeometry(grid);
       const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991900 + i, name: `Navigation ${i}`,
         side: 'A', position: hex.id, level: 1, awakening: 1, attacks: ['shot-p-r'], stats: {}, stuff: {},
         baseStats: { HP: 1000, speed: 10000, strength: i * 10, intelligence: 10, agility: 10,
           vigueur: 10, constitution: 10, esprit: 10, integrite: 10, finesse: 10, haste: 10, vitality: 10,
           robustness: 10, physicalDamage: 20 } });
-      await (await import('/js/entitySpawnEngine.js')).spawnEntiteIngame(actor);
+      await (await import("/js/entities/spawn.js")).spawnEntiteIngame(actor);
     }
     S.saveToLocalStorage('selectedArmyA', E.entites);
     A.initializeAdminLevel(E.entitesNestUp);
@@ -94,10 +94,10 @@ try {
   await form.getByRole('textbox', { name: 'Nom', exact: true }).fill('Navigation renommée');
   const nicknameInput = form.getByRole('textbox', { name: 'Nickname', exact: true });
   await nicknameInput.fill('Petit porc');
-  assert.equal(await page.evaluate(async () => (await import('/js/entites.js')).entites.find(e => e.id === 991901).name), 'Navigation 1', 'Identity edits remain in the draft');
+  assert.equal(await page.evaluate(async () => (await import("/js/entities/runtime.js")).entites.find(e => e.id === 991901).name), 'Navigation 1', 'Identity edits remain in the draft');
   await nicknameInput.press('Enter');
   const identity = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
     return [E.entites.find(e => e.id === 991901), S.loadFromLocalStorage('selectedArmyA', []).find(e => e.id === 991901)]
       .map(e => ({ name: e.name, nickname: e.nickname }));
   });
@@ -217,19 +217,19 @@ try {
   const physicalRatio = form.getByRole('spinbutton', { name: 'Ratio physique', exact: true });
   await physicalRatio.fill('1.75');
   await physicalRatio.press('Enter');
-  assert.equal(await page.evaluate(async () => (await import('/js/entites.js')).entites.find(e => e.id === 991901).attackDetails[0].physicalRatio), 1.75, 'Enter saves an attack ratio even between the stepper increments');
+  assert.equal(await page.evaluate(async () => (await import("/js/entities/runtime.js")).entites.find(e => e.id === 991901).attackDetails[0].physicalRatio), 1.75, 'Enter saves an attack ratio even between the stepper increments');
   await form.getByRole('button', { name: 'Entité active', exact: true }).click();
   assert.equal(await search.inputValue(), 'force', 'Stats and attacks keep separate searches');
   const strengthInput = form.locator('input.admin-stat-editor-input[data-stat-key="strength"]');
   await strengthInput.fill('7');
-  assert.equal(await page.evaluate(async () => (await import('/js/entites.js')).entites.find(e => e.id === 991901).stats.strength), 10, 'Typing keeps edits in the draft');
+  assert.equal(await page.evaluate(async () => (await import("/js/entities/runtime.js")).entites.find(e => e.id === 991901).stats.strength), 10, 'Typing keeps edits in the draft');
   await form.evaluate(node => {
     window.__adminTestSubmits = 0;
     node.addEventListener('submit', () => window.__adminTestSubmits++);
   });
   await strengthInput.press('Enter');
   const validated = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/storage/gameStorage.js");
     return { submits: window.__adminTestSubmits, live: E.entites.find(e => e.id === 991901).stats.strength,
       stored: S.loadFromLocalStorage('selectedArmyA', []).find(e => e.id === 991901).stats.strength,
       other: E.entites.find(e => e.id === 991902).stats.strength };
@@ -301,7 +301,7 @@ try {
 
   await page.setViewportSize({ width: 1536, height: 480 });
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await import("/js/ui/codex/index.js"), S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), UI = await import("/js/ui/codex/index.js"), S = await import("/js/storage/gameStorage.js");
     S.saveToLocalStorage('CodexMenuIndex', 3);
     S.saveToLocalStorage('CodexSubstatMode', 'stat');
     const menu = document.createElement('div'); menu.className = 'menu-map-container';
@@ -351,9 +351,9 @@ try {
   await openCodex(991902);
   assert.equal(await codex.locator('.codex-information-tabs [data-mode="combat"]').getAttribute('aria-selected'), 'true', 'Information subtab is remembered');
   await page.evaluate(async () => {
-    (await import('/js/GameStorage.js')).setAdminMode(false);
+    (await import("/js/storage/gameStorage.js")).setAdminMode(false);
     window.levelRunning = 'worldmap';
-    (await import('/js/admin.js')).cleanupAdminLevel();
+    (await import("/js/debug/admin.js")).cleanupAdminLevel();
   });
   assert.equal(await page.locator('body.admin-level-active').count(), 0);
   assert.equal(await resetButton.count(), 0, 'Leaving Admin removes its reset control');

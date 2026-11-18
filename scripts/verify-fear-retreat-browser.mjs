@@ -9,9 +9,9 @@ const root = resolve('docs'), output = resolve('outputs/fear-retreat');
 await mkdir(output, { recursive: true });
 
 async function installScenario(config) {
-  const E = await import('/js/entites.js'), A = await import('/js/entityAttributs.js');
-  const C = await import('/js/combatClock.js'), G = await import('/js/gameState.js');
-  const O = await import('/js/BattleOrder.js'), Effects = await import('/js/attackEffectMecanics.js');
+  const E = await import("/js/entities/runtime.js"), A = await import("/js/combat/vitals.js");
+  const C = await import("/js/combat/clock.js"), G = await import("/js/app/state.js");
+  const O = await import("/js/combat/orders.js"), Effects = await import("/js/combat/effects.js");
   const [source, ...targets] = E.entites, epoch = C.clockNow();
   const log = data => window.dispatchEvent(new CustomEvent('combatLogEntry', { detail: { type: 'test_checkpoint', data } }));
   Math.random = () => config.fail ? 0 : .99;
@@ -45,7 +45,7 @@ const server = createServer(async (req, res) => {
   if (rel === '..' || rel.startsWith('..' + sep)) return res.writeHead(403).end();
   try {
     let data = await readFile(file);
-    if (path === '/js/combatSimulationRuntime.js') {
+    if (path === "/js/debug/simulationRuntime.js") {
       const source = data.toString(); assert.ok(source.includes('  G.startGame();'));
       data = source.replace('  G.startGame();', `  G.startGame();\n  if (input.validationCase) await (await import('/__fear-fixture.js')).install(input.validationCase);`);
     }
@@ -62,9 +62,9 @@ async function fixture(config) {
   page.on('console', message => { if (message.type() === 'error' && !message.text().includes('Failed to load resource')) errors.push(message.text()); });
   await page.goto(origin + '/index.html');
   await page.evaluate(async config => {
-    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js'), F = await import('/js/fight.js');
-    const Sim = await import('/js/combatSimulation.js');
+    const U = await import("/js/ui/application.js"), E = await import("/js/entities/runtime.js"), Create = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js"), G = await import("/js/app/state.js"), F = await import("/js/combat/loop.js");
+    const Sim = await import("/js/debug/simulation.js");
     S.setAdminMode(!config.worldmap); window.levelRunning = config.worldmap ? 'stage' : 'admin'; window.currentStageId = null;
     U.createGameContainer(); U.GameUi();
     localStorage.setItem('gameDay', '12'); localStorage.setItem('worldmap_id', '12345');
@@ -75,7 +75,7 @@ async function fixture(config) {
     const grid = document.createElement('div'); grid.id = 'hexGrid'; grid.className = 'hex-grid';
     grid.style.cssText = 'position:absolute;left:30px;top:80px;width:1200px;height:400px';
     document.getElementById('game-container').append(grid); E.entites.length = 0;
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     for (let i = 0; i <= (config.count || 1); i++) {
       const side = i ? config.side : config.side === 'A' ? 'B' : 'A';
       const hex = document.createElement('div'); hex.className = `hex Side${side} occupied`;
@@ -171,7 +171,7 @@ try {
         journal: test.journal, messages: test.messages,
         entities: test.E.entites.map(e => ({ id: e.id, phase: e.currentPhase, side: e.side, hp: e.stats.HP.current,
           attacks: e.attacks, details: e.attackDetails, selection: e.attackSelection })),
-        fled: (await import('/js/BattleOrder.js')).fledEntities.map(e => ({ id: e.id, side: e.side,
+        fled: (await import("/js/combat/orders.js")).fledEntities.map(e => ({ id: e.id, side: e.side,
           attacks: e.attacks, details: e.attackDetails, selection: e.attackSelection })),
       })), null, 2));
       assert.equal(await page.evaluate(() => test.G.battleOutcome), null, config.name + ': attempts/partial departure do not end combat');

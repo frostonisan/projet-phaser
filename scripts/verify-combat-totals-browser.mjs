@@ -20,17 +20,17 @@ try {
   page.on('pageerror', error => { throw error; });
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const { enrichEntityStats, recomputeEntityStats, entites } = await import('/js/entites.js');
+    const { enrichEntityStats, recomputeEntityStats, entites } = await import("/js/entities/runtime.js");
     const { grantEntityExternalArmor } = await import('/js/items/armor.js');
     const { addFadedLife } = await import('/js/items/resourceStocks.js');
-    const { applyDamage, LifeandDeath, calculateDefensiveHpOutcome, estimateCancelledAttackHp } = await import('/js/entityAttributs.js');
-    const { lifesteal, LifestealBloodFury, rez } = await import('/js/attackEffectMecanics.js');
-    const { resetLevelBattleStats, getLevelBattleStats, getLevelCombatDetails } = await import('/js/dom.js');
+    const { applyDamage, LifeandDeath, calculateDefensiveHpOutcome, estimateCancelledAttackHp } = await import("/js/combat/vitals.js");
+    const { lifesteal, LifestealBloodFury, rez } = await import("/js/combat/effects.js");
+    const { resetLevelBattleStats, getLevelBattleStats, getLevelCombatDetails } = await import("/js/rendering/hud.js");
     const { recordEntityCombatStat, recordEntityDamageDetails, recordEntityDamageReceived, recordEntityCombatMovement,
       recordEntityCombatProc, getEntityCombatDetails, resetStoredArmorCurrentToMax, beginEntityBattleRole,
       endEntityBattleRole, applyHpBattleRegenAtTurnStart, recordEntityProgression, recordEntityDays,
-      countCompletedArchetypes } = await import('/js/entityUpdatesStorage.js');
-    const { saveToLocalStorage, loadFromLocalStorage, setAdminMode, isAdminMode } = await import('/js/GameStorage.js');
+      countCompletedArchetypes } = await import("/js/storage/entityStorage.js");
+    const { saveToLocalStorage, loadFromLocalStorage, setAdminMode, isAdminMode } = await import("/js/storage/gameStorage.js");
     const { createCodexCombatRecord } = await import("/js/ui/codex/profile.js");
     const check = (condition, message) => { if (!condition) throw Error(message); return message; };
     const fixture = (id, side) => {
@@ -472,7 +472,7 @@ try {
         && getEntityCombatDetails(regenTarget).healingReceived === 4
         && loadFromLocalStorage('selectedArmyA')[0].combatDetails.battleHpRegenerated === 4,
         'Combat regeneration counts only missing HP, persists it and does not count overhealing'));
-      const { bumpDayHpRegenInStorage } = await import('/js/game.js');
+      const { bumpDayHpRegenInStorage } = await import("/js/app/stages.js");
       regenTarget.stats.dayHpRegen = 5;
       regenTarget.stats.HP.current = 90;
       const storedRegen = structuredClone(regenTarget);
@@ -607,7 +607,7 @@ try {
       beginEntityBattleRole(escapeTarget);
       let fleeRolls = 0;
       Math.random = () => ++fleeRolls === 1 ? 0 : .99;
-      const { RunawayFunction } = await import('/js/BattleOrder.js');
+      const { RunawayFunction } = await import("/js/combat/orders.js");
       await RunawayFunction(escapeTarget);
       const escapeStats = getEntityCombatDetails(escapeTarget);
       reports.push(check(escapeTarget.hasFled && escapeStats.fleeAttempts === 2
@@ -643,7 +643,7 @@ try {
       && savedLife.aliveStreak === 1 && savedLife.deadStreak === 0
       && savedLife.longestAliveStreak === 2 && savedLife.longestDeadStreak === 3,
       'A resurrection starts a new living streak and persists both historical maxima'));
-    const { nextDay } = await import('/js/game.js');
+    const { nextDay } = await import("/js/app/stages.js");
     saveToLocalStorage('gameDay', 9);
     nextDay(1, { animate: false });
     reports.push(check(getEntityCombatDetails(career).lifetime.daysAlive === 4
@@ -655,7 +655,7 @@ try {
     recordEntityCombatMovement(career, { negative: true, forced: true });
     reports.push(check(getEntityCombatDetails(career).negativeMovements === 1,
       'Only paid manual movement can consume negative movement reserve'));
-    const { getCycleLenFor } = await import("/js/entite/entityRules.js");
+    const { getCycleLenFor } = await import("/js/entities/rules.js");
     career.level.current = 8;
     const completed = { key: 'egare', level: 1, step: getCycleLenFor('egare', career) };
     career.Archetype = { current: { key: 'egare', level: 1, step: 0 }, inProgress: [], achieve: [completed] };
@@ -666,7 +666,7 @@ try {
       && getEntityCombatDetails(career).lifetime.maxLevelReached === 8
       && getEntityCombatDetails(career).lifetime.archetypesCompleted === 1,
       'Progression stores committed expense, peak level and each completed archetype once'));
-    const { resetEntityProgression } = await import("/js/UpgradeEntity.js");
+    const { resetEntityProgression } = await import("/js/entities/progression.js");
     const reset = await resetEntityProgression(career);
     reports.push(check(reset.ok && career.experience === 0 && career.level.current === 1
       && countCompletedArchetypes(career) === 0
@@ -685,8 +685,8 @@ try {
     reports.push(check(career.combatDetails.lifetime.experienceSpent === 135
       && loadFromLocalStorage('selectedArmyA')[0].combatDetails.lifetime.experienceSpent === 135,
       'A subsequent action from the menu copy preserves the accumulated career counters'));
-    const battleState = await import('/js/gameState.js');
-    const { fledEntities } = await import('/js/BattleOrder.js');
+    const battleState = await import("/js/app/state.js");
+    const { fledEntities } = await import("/js/combat/orders.js");
     const deadAlly = fixture(998812, 'A');
     deadAlly.stats.HP.current = 0;
     deadAlly.isDEAD = true;

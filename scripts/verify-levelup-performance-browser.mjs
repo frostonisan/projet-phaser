@@ -9,9 +9,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'C:/Users/Utilisateu
 const root = resolve('docs'), output = resolve('outputs/levelup-performance');
 await mkdir(output, { recursive: true });
 const probes = {
-  '/js/entites.js': [['export function getStatSystemInputs(entity, { preview = true, combat = true } = {}) {', 'inputs']],
-  '/js/UpgradeEntity.js': [['export function ComputeStatPreview(entite) {', 'preview']],
-  '/js/damagesCalcul.js': [['export function calculateStatsDisplay(statKey, entite, statValue, options = {}) {', 'display']],
+  "/js/entities/runtime.js": [['export function getStatSystemInputs(entity, { preview = true, combat = true } = {}) {', 'inputs']],
+  "/js/entities/progression.js": [['export function ComputeStatPreview(entite) {', 'preview']],
+  "/js/combat/statistics.js": [['export function calculateStatsDisplay(statKey, entite, statValue, options = {}) {', 'display']],
 };
 const server = createServer(async (req, res) => {
   const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -39,9 +39,9 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js');
-    const U = await import('/js/UpgradeEntity.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js"), G = await import("/js/app/state.js");
+    const U = await import("/js/entities/progression.js");
     window.levelRunning = 'worldmap'; G.setGameOver(false);
     const template = E.entitesNestUp.find(e => /mouche astic/i.test(e.name));
     const actor = structuredClone(template);
@@ -92,7 +92,7 @@ try {
   const { profile } = await cdp.send('Profiler.stop');
   const checks = await page.evaluate(async () => {
     const { U, UI, S, actor } = window.__levelFixture;
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
     const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
     const form = document.querySelector('.level-up-section');
     const arrow = (key, direction) => form.querySelector(`.axis-line[data-key="${key}"] .${direction}-arrow`).click();

@@ -28,18 +28,18 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   checks.push(...await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const S = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js");
+    const S = await import("/js/storage/gameStorage.js");
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js');
-    const A = await import('/js/entityAttributs.js');
+    const A = await import("/js/combat/vitals.js");
     const R = await import('/js/items/resourceStocks.js');
-    const Aura = await import('/js/entitesAura.js');
-    const U = await import('/js/UpgradeEntity.js');
-    const Store = await import('/js/entityUpdatesStorage.js');
-    const G = await import('/js/game.js');
-    const State = await import('/js/gameState.js');
+    const Aura = await import("/js/rendering/auras.js");
+    const U = await import("/js/entities/progression.js");
+    const Store = await import("/js/storage/entityStorage.js");
+    const G = await import("/js/app/stages.js");
+    const State = await import("/js/app/state.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const passed = [];
     const check = (ok, label) => { if (!ok) throw Error(label); passed.push(label); };

@@ -24,16 +24,16 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
-    window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
-    window.Clock = await import('/js/combatClock.js');
+    window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
+    window.Clock = await import("/js/combat/clock.js");
     const U = await import("/js/ui/application.js");
-    const E = await import('/js/entites.js');
-    const C = await import('/js/createEntity.js');
-    const S = await import('/js/GameStorage.js');
-    const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
+    const E = await import("/js/entities/runtime.js");
+    const C = await import("/js/rendering/entities.js");
+    const S = await import("/js/storage/gameStorage.js");
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
-    const store = await import('/js/sessionStorage.js');
+    const store = await import("/js/storage/sessionStorage.js");
     store.beginAdminSession(); window.currentStageId = 'pause-test';
     store.gameStorage.setItem('GameStages', JSON.stringify({stages:[{id:'pause-test',level_type:'admin'}]}));
     store.gameStorage.setItem('currentLevel','pause-test');
@@ -58,10 +58,10 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
-    window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
+    window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
-    window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard();
+    window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
+    window.Sim = await import("/js/debug/simulation.js"); window.snapshot = Sim.captureSimulationBoard();
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {
       const { type, data } = event.detail;
@@ -75,8 +75,8 @@ const checks=[];
 try {
  const page=await fixture();
  await page.evaluate(async()=>{
-  window.A=await import('/js/attackEffectMecanics.js');window.D=await import('/js/damagesCalcul.js');
-  window.Damage=await import('/js/entityAttributs.js');window.Armor=await import('/js/items/armor.js');
+  window.A=await import("/js/combat/effects.js");window.D=await import("/js/combat/statistics.js");
+  window.Damage=await import("/js/combat/vitals.js");window.Armor=await import('/js/items/armor.js');
   window.B=E.entites[0];window.enemy=E.entites[1];
   window.hit=(nature='magicalDamage',amount=50)=>({attackId:'audit-hit',functionName:'audit-hit',displayName:'Audit',combatFunction:'Attaquant',attacknature:[nature],attackRange:['melee'],attackTarget:['enemy'],deadTarget:['no'],preparationTime:100,executionTime:100,recoveryTime:100,cooldown:1000,physicalRatio:1,magicalRatio:1,piercingRatio:0,type:[],effets:[],selfEffects:[],forceDamageSources:{[nature==='magicalDamage'?'magical':'physical']:amount}});
   Math.random=()=>0;window.startedAt=Clock.clockNow();G.startGame();
@@ -116,7 +116,7 @@ try {
  await page.evaluate(()=>Clock.notifyCombatAction());
  await page.waitForTimeout(250);
  const read=()=>page.evaluate(async()=>{
-  const E=await import('/js/entites.js'),A=await import('/js/attackEffectMecanics.js'),C=await import('/js/combatClock.js');
+  const E=await import("/js/entities/runtime.js"),A=await import("/js/combat/effects.js"),C=await import("/js/combat/clock.js");
   const e=E.entites.find(e=>e.side==='A'),standalone=E.entites.find(e=>e.side==='B');return {hp:e.stats.HP.current,now:C.clockNow(),state:A.getAstralityRuntime(e),opacity:getComputedStyle(document.getElementById(`spriteContainer_${e.id}`)).opacity,
    autonomousState:A.getAstralityRuntime(standalone),autonomousRemaining:A.astralCooldownRemaining(standalone)};
  });
@@ -136,13 +136,13 @@ try {
  assert.equal(finished.autonomousState,null,'Expired autonomous cooldown is cleaned up');
  checks.push('Pause/F5: healing, body and autonomous cooldown restored exactly, cooldown expires normally');
  await page.evaluate(async()=>{
-  const E=await import('/js/entites.js'),A=await import('/js/attackEffectMecanics.js'),D=await import('/js/damagesCalcul.js');
+  const E=await import("/js/entities/runtime.js"),A=await import("/js/combat/effects.js"),D=await import("/js/combat/statistics.js");
   const e=E.entites.find(e=>e.side==='B');e.baseStats.fatalSurvival=99;E.recomputeEntityStats(e,{equippedItems:[],persistEquipment:false,skipReverseArchetype:true});
   Math.random=()=>0;if(!D.attemptAstrality(null,e))throw Error('Standalone survival fails '+JSON.stringify({chance:D.calculateAstralityTotal(e),stats:e.stats,base:e.baseStats,locked:A.getAstralityRuntime(e)}));
   if(A.startAstralReturn(e)||A.isAstralBodyActive(e))throw Error('Autonomous survival wrongly grants Umbra effects');
   const own=E.entites.find(e=>e.side==='A');A.startAstralReturn(own);own.stats.HP.current=own.stats.HP.max;
   if(!A.isAstralReturnActive(own)||D.attemptAstrality(e,own))throw Error('Full HP wrongly removes lock');
-  (await import('/js/gameState.js')).StopGame({preserveScene:true});
+  (await import("/js/app/state.js")).StopGame({preserveScene:true});
   if(A.getAstralityRuntime(own))throw Error('Combat stop leaves timers');
  });checks.push('Autonomous survival has no Return/Body; full HP keeps lock; combat stop clears timers');
  await page.close();
@@ -150,8 +150,8 @@ try {
  await ui.goto(`http://127.0.0.1:${server.address().port}/index.html`);
  await (await import('./browser-test-fixture.mjs')).dismissStarterForFixture(ui);
  await ui.evaluate(async()=>{
-  const E=await import('/js/entites.js'),G=await import('/js/GameStorage.js'),UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)),U=await import('/js/UpgradeEntity.js');
-  window.levelRunning='worldmap';G.setAdminMode(true);(await import('/js/gameState.js')).refreshStageAccess();
+  const E=await import("/js/entities/runtime.js"),G=await import("/js/storage/gameStorage.js"),UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)),U=await import("/js/entities/progression.js");
+  window.levelRunning='worldmap';G.setAdminMode(true);(await import("/js/app/state.js")).refreshStageAccess();
   const e={id:986743,name:'Astralité',type:'sbire',side:'A',awakening:3,level:{current:30,max:250},baseStats:{HP:1000,astrality:50,strength:50,intelligence:50,agility:0,speed:10000},attacks:['autoAttack'],stuff:{}};
   E.recomputeEntityStats(e,{equippedItems:[],persistEquipment:false,skipReverseArchetype:true});E.entites.splice(0,E.entites.length,e);G.saveToLocalStorage('selectedArmyA',[e]);U.setPlayerExperience(1000000);
   const host=document.createElement('main');host.style.cssText='position:fixed;inset:0;overflow:auto;background:#160d24';document.body.append(host);UI.createCodexEntityScan(e,host,`codex-entity_${e.id}`);

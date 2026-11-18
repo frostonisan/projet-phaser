@@ -29,11 +29,11 @@ try {
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     const result = await page.evaluate(async () => {
-      const { setAdminMode, isAdminMode } = await import('/js/GameStorage.js');
+      const { setAdminMode, isAdminMode } = await import("/js/storage/gameStorage.js");
       setAdminMode(true);
       if (!isAdminMode()) throw Error('Resource retry fixture requires authorized admin mode');
       window.levelRunning = 'admin';
-      const { launchLevel } = await import('/js/game.js');
+      const { launchLevel } = await import("/js/app/stages.js");
       const loaded = await launchLevel({ biome: 'prison', difficulty: 1, levelId: 'resource-retry-test' });
       return {
         loaded,

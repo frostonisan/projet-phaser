@@ -25,10 +25,10 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const result = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"), R = await import('/js/entite/entityRules.js');
-    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), U = await import('/js/UpgradeEntity.js');
-    const G = await import('/js/GameStorage.js');
+    const E = await import("/js/entities/runtime.js"), S = await import("/js/entities/statSystem.js");
+    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js"), R = await import("/js/entities/rules.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/entities/progression.js");
+    const G = await import("/js/storage/gameStorage.js");
     const configs = Object.values(D.getGeneratedUmbraStatConfigs());
     let count = 0;
     const check = (ok, label) => { if (!ok) throw Error(label); count++; };

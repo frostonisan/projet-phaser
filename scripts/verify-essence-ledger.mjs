@@ -7,10 +7,10 @@ const {
   buildAttackEssenceSocketPatch, calculateEntityLinkedEssenceAvailability,
   commitAttackEssenceEquipTransaction, grantEssencesToInventory, loadUniversalEssenceItems,
   previewAttackEssenceEquipTransaction, syncEntityLinkedEssenceInventory, validateEntityEssenceLedger,
-} = await import("../docs/js/essenceur.js");
-const { ensureEntityAttackInstances, updateEntityAttackDefinition, setEntityAttackDefinitions } = await import("../docs/js/attackResolution.js");
-const { getCycleForKey } = await import("../docs/js/entite/entityRules.js");
-const { resetEntityAttackEssences, getEntityEssenceRewards } = await import("../docs/js/essenceInventory.js");
+} = await import("../docs/js/items/essences.js");
+const { ensureEntityAttackInstances, updateEntityAttackDefinition, setEntityAttackDefinitions } = await import("../docs/js/combat/attackResolution.js");
+const { getCycleForKey } = await import("../docs/js/entities/rules.js");
+const { resetEntityAttackEssences, getEntityEssenceRewards } = await import("../docs/js/items/essenceInventory.js");
 const items = entity => entity.attackEssenceInventory.linkedItems;
 const attack = (entity, index = 0) => entity.attackDetails[index];
 
@@ -197,9 +197,9 @@ const invalid = commitAttackEssenceEquipTransaction({ entity: multi, attackKey: 
 assert.equal(invalid.ok, false, 'An already socketed ID cannot occupy a second socket');
 assert.equal(JSON.stringify(multi), beforeInvalid, 'Rejected moves do not mutate data');
 {
-const { calculateHypercognitionEssenceCount, calculateCognitiveEssenceCount, syncEntityEssenceRewards } = await import('../docs/js/essenceInventory.js');
-const { entityBattleBooste } = await import("../docs/js/entite/entityRules.js");
-const { getAttackNatureRules, getAttackPowerRatios, readAttackDefinitionsForEntity } = await import('../docs/js/attackResolution.js');
+const { calculateHypercognitionEssenceCount, calculateCognitiveEssenceCount, syncEntityEssenceRewards } = await import("../docs/js/items/essenceInventory.js");
+const { entityBattleBooste } = await import("../docs/js/entities/rules.js");
+const { getAttackNatureRules, getAttackPowerRatios, readAttackDefinitionsForEntity } = await import("../docs/js/combat/attackResolution.js");
 for (const [h, expected] of [[-1, 0], [0, 0], [0.9, 0], [1, 1], [30, 3], [58, 5], [99, 7], [100, 8], [124, 8], [125, 9], [149, 9], [150, 10], [999, 10]]) {
   assert.equal(calculateHypercognitionEssenceCount(h), expected, `Hypercognition ${h}`);
 }

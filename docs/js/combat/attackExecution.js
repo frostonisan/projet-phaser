@@ -13,15 +13,15 @@ import {
   isEntityActionPaused,
   isEntitySilenced,
   waitForEntityControl
-} from '../entityControl.js';
-import { setTimeout, clearTimeout } from '../combatClock.js';
-import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask } from '../combatTimeline.js';
-import { registerCombatState } from '../combatClock.js';
-import { combatData, combatReference, combatTarget } from '../combatClock.js';
+} from "./control.js";
+import { setTimeout, clearTimeout } from "./clock.js";
+import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask } from "./timeline.js";
+import { registerCombatState } from "./clock.js";
+import { combatData, combatReference, combatTarget } from "./clock.js";
 import {
   getAttackResolutionFlags, splitDodgeDamageSources, normArr, awardAttackMastery,
   startAttackCooldown
-} from '../attackResolution.js';
+} from "./attackResolution.js";
 import {
   createAttackStatView, attemptAttackerDamages, attemptDodge, attemptInvisibleTargetAccuracy,
   calculateAmbidextryTotalChance, calculateAmbidextryDamageBonus, getFinalAttackCooldownReduc, getFinalAttackPreparationReduc,
@@ -30,12 +30,12 @@ import {
   attemptMeleeExecBonus, attemptMysticismTrance, attemptEquilibreAttack, attemptOccultismInvisibility,
   clearOccultismInvisibleState, calculateOccultismPreparationSpeedDebuff, applyOccultismExitCritBoost, shouldApplyForcedInvisibleTargetAccuracy,
   totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi
-} from '../damagesCalcul.js';
+} from "./statistics.js";
 import { AmbidextryVFX } from '../rendering/damageFeedback.js';
-import { recordEntityCombatProc, recordEntityDefenseHp } from '../entityUpdatesStorage.js';
-import { OrderEntity, checkGameOver, isBattleFinished } from "../gameState.js";
-import { entites } from "../entites.js";
-import { updateTimerDisplay } from "../dom.js";
+import { recordEntityCombatProc, recordEntityDefenseHp } from "../storage/entityStorage.js";
+import { OrderEntity, checkGameOver, isBattleFinished } from "../app/state.js";
+import { entites } from "../entities/runtime.js";
+import { updateTimerDisplay } from "../rendering/hud.js";
 import {
   runEntityRecovery,
   LifeandDeath,
@@ -44,14 +44,14 @@ import {
   applyDamageToHex,
   updateBonusLifeCounters,
   estimateCancelledAttackHp
-} from '../entityAttributs.js';
-import { updateTargetStatut } from "../fight.js";
-import { animatePreparation, mysticismBoostedAttackAnimation, mysticismAttackGif } from '../entitesAnimation.js';
-import { updateHealthBar } from "../UpgradeEntity.js";
-import { EffectMessage } from "../attackEffectMecanics.js";
-import { battleLogs } from "../battleLogs.js";
+} from "./vitals.js";
+import { updateTargetStatut } from "./loop.js";
+import { animatePreparation, mysticismBoostedAttackAnimation, mysticismAttackGif } from "../rendering/animations.js";
+import { updateHealthBar } from "../entities/progression.js";
+import { EffectMessage } from "./effects.js";
+import { battleLogs } from "./journal.js";
 
-import { isLord } from "../entite/entityRules.js";
+import { isLord } from "../entities/rules.js";
 
 
 // Attack preparation, execution and recovery.

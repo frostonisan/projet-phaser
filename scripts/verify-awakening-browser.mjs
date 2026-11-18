@@ -32,10 +32,10 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
     const triggered = await page.evaluate(async ({ mode, baseStats }) => {
-      const { enrichEntityStats, levelDetails } = await import('/js/entites.js');
+      const { enrichEntityStats, levelDetails } = await import("/js/entities/runtime.js");
       const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
-      const { setPlayerExperience, getCycleForKey } = await import('/js/UpgradeEntity.js');
-      const { STAT_INDEX } = await import("/js/entite/entityRules.js");
+      const { setPlayerExperience, getCycleForKey } = await import("/js/entities/progression.js");
+      const { STAT_INDEX } = await import("/js/entities/rules.js");
       const entity = { id: 930001, name: 'Test Eveil', side: 'A', type: 'sbire', class: 'TestReset', level: 1,
         baseStats,
         attacks: [{ functionName: 'autoAttack', attacknature: ['physicalDamage'], attackRange: ['melee'] }] };
@@ -200,7 +200,7 @@ try {
       await page.locator('#awakening-test-host .confirm-button.yes').evaluate(el => el.click());
       const next = await page.evaluate(async () => {
         const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
-        (await import('/js/entites.js')).recomputeEntityStats(entity);
+        (await import("/js/entities/runtime.js")).recomputeEntityStats(entity);
         return entity;
       });
       assert.equal(next.level.current, triggered.saved.level.current + 1);
@@ -216,8 +216,8 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const generatedProgression = await page.evaluate(async () => {
-    const { enrichEntityStats, recomputeEntityStats, levelDetails } = await import('/js/entites.js');
-    const { createLevelUpForm, setPlayerExperience } = await import('/js/UpgradeEntity.js');
+    const { enrichEntityStats, recomputeEntityStats, levelDetails } = await import("/js/entities/runtime.js");
+    const { createLevelUpForm, setPlayerExperience } = await import("/js/entities/progression.js");
     const entity = { id: 930002, name: 'Generated level 30', side: 'A', type: 'sbire', level: 30,
       baseStats: { strength: 20, agility: 1, intelligence: 1, will: 25, HP: 100 },
       attacks: [{ functionName: 'autoAttack', attacknature: ['physicalDamage'], attackRange: ['melee'] }] };

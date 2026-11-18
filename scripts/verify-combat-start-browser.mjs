@@ -27,13 +27,13 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const report = await page.evaluate(async () => {
-    const E = await import('/js/entites.js');
-    const F = await import('/js/fight.js');
-    const G = await import('/js/gameState.js');
+    const E = await import("/js/entities/runtime.js");
+    const F = await import("/js/combat/loop.js");
+    const G = await import("/js/app/state.js");
     const U = await import("/js/ui/application.js");
-    const A = await import('/js/entityAttributs.js');
-    const Events = await import('/js/events.js');
-    const Selection = await import('/js/attackResolution.js');
+    const A = await import("/js/combat/vitals.js");
+    const Events = await import("/js/events/runtime.js");
+    const Selection = await import("/js/combat/attackResolution.js");
     const { attackDetails } = await import('/js/data/attackList.js');
     const checks = [], restarts = [], failures = [];
     const check = (condition, message) => { if (!condition) throw Error(message); checks.push(message); };

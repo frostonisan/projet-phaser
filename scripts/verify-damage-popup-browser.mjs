@@ -25,7 +25,7 @@ try {
   await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/battle-infos.css` });
   await page.addStyleTag({ content: 'body{background:#15191d!important} #popup-audit{position:fixed;inset:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;overflow:auto;color:white} .popup-case{background:#252a2f;padding:8px;text-align:center;font:13px Arial} #popup-audit .damage-popup{position:relative;animation:none!important;transform:none!important;opacity:1;margin:8px 0}' });
   const failures = await page.evaluate(async () => {
-    const { PopUpDamages } = await import('/js/dom.js');
+    const { PopUpDamages } = await import("/js/rendering/hud.js");
     document.body.innerHTML = '<main id="popup-audit"></main>';
     const natures = ['physicalDamage', 'magicalDamage', 'transpiercingDamage', 'hybridalDamage',
       'physicalPiercingDamage', 'magicalPiercingDamage', 'hybridalPiercingDamage', 'inerte'];

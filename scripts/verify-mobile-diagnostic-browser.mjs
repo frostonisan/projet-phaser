@@ -54,8 +54,8 @@ try {
           assert.deepEqual(errors, []);
           if (invalidConfig) {
             const stored = await page.evaluate(async () => {
-              const { loadFromLocalStorage, saveToLocalStorage } = await import('/js/GameStorage.js');
-              const { entites } = await import('/js/entites.js');
+              const { loadFromLocalStorage, saveToLocalStorage } = await import("/js/storage/gameStorage.js");
+              const { entites } = await import("/js/entities/runtime.js");
               const fallback = loadFromLocalStorage('armyAConfig');
               const customFallback = loadFromLocalStorage('armyAConfig', { lordId: null, unitIds: [1] });
               let rejected = false;
