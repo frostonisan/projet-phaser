@@ -1,20 +1,20 @@
+import {
+  initializeAllMovementStatesAtBattleStart, updateEntiteClasses, logPositionsAndAnalyze,
+  observeRoleChanges, updateCombatantRoleIndex, updateCombatantTargetZones, clearBattleTargetDisplays,
+} from "../board/deployment.js";
+import { updateBonusLifeCounters } from "../rendering/vitalFeedback.js";
 import { setTimeout, clearTimeout, requestAnimationFrame, clockNow } from "../combat/clock.js";
 import { gameStorage as localStorage, beginAdminSession, isAdminSessionActive,
     restorePersistentSession, endAdminSession } from "../storage/sessionStorage.js";
-import {
-  updateEntiteClasses,
-  logPositionsAndAnalyze,
-  observeRoleChanges,
-  updateCombatantRoleIndex,
-  updateCombatantTargetZones,
-  clearBattleTargetDisplays,
-} from "../board/deployment.js";
+
 import {
   entites,
   injectSavedEntities,
 } from "../entities/runtime.js";
 import { entiteCamp, initFightEntites } from "../combat/loop.js";
-import { getStyleProperties, calculerPointsHexagone, genererSvgHexagone, setupBoard, StageLoading } from "../board/controller.js";
+import {
+  getStyleProperties, calculerPointsHexagone, genererSvgHexagone, setupBoard, StageLoading,
+} from "../board/controller.js";
 import { createEntiteInDOM, getEntitySpriteSource } from "../rendering/entities.js";
 import {
   HideGenerateLevelButton,
@@ -59,9 +59,9 @@ import {
   setOrderSide,
 } from "./state.js";
 import { launchOrderCycleForSide, getPlayerOrderType } from "../combat/orders.js";
-import { initializeAllMovementStatesAtBattleStart } from "../combat/statistics.js";
+
 import { advanceLifeRegen } from "../items/resourceStocks.js";
-import { updateBonusLifeCounters } from "../combat/vitals.js";
+
 import {
   resetStoredArmorCurrentToMax,
   resetStoredShiftCurrentToStartingCharges,

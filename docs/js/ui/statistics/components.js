@@ -1,3 +1,4 @@
+import { renderMovementCounter } from "../../rendering/hud.js";
 import { clockNow, setInterval, clearInterval, isCombatPaused } from "../../combat/clock.js";
 import { getStatSystemResult } from "../../entities/statSystem.js";
 import { STAT_EFFECT_HELPERS, buildStatCurseHelper, buildEntityRateHelper } from "../../data/helpers.js";
@@ -32,11 +33,11 @@ import {
   calculateOccultismDodgeBonus, calculateOccultismCritChanceBonus,
   calculateOccultismShadowFragilityPercent, calculateMovementMaxCharges,
   calculateMovementStartingChargePercent, calculateMovementStartingCharges,
-  calculateMovementMarathonChance, renderMovementCounter, calculateWeaponOrfevreWeaponMastery,
-  calculateWeaponOrfevreStrength, getFinalWeaponOrfevreBonus, getFinalWeaponCollectorBonus,
-  calculateChargeEquipmentSlots, calculateWeaponMasteryTotalChargeBonus,
-  calculateWeaponMasteryTrophyChance, getMarathonChance, getTrailerChance, calculateEntityPower,
-  calculateEntityRates, calculateAttackPower, calculateArmyPower, getPowerConfigurationSignature,
+  calculateMovementMarathonChance, calculateWeaponOrfevreWeaponMastery, calculateWeaponOrfevreStrength,
+  getFinalWeaponOrfevreBonus, getFinalWeaponCollectorBonus, calculateChargeEquipmentSlots,
+  calculateWeaponMasteryTotalChargeBonus, calculateWeaponMasteryTrophyChance, getMarathonChance,
+  getTrailerChance, calculateEntityPower, calculateEntityRates, calculateAttackPower,
+  calculateArmyPower, getPowerConfigurationSignature,
 } from "../../combat/statistics.js";
 import { isDisplayableStatContribution, calculateStatsDisplay, getStatImprovement } from "./details.js";
 import { stats } from "../../data/statsData.js";

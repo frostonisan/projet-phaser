@@ -33,7 +33,7 @@ try {
     const State = await import("/js/app/state.js");
     const M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js');
-    const D = await import("/js/combat/statistics.js");
+    const D = await Promise.all([import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts));
     const G = await import("/js/app/stages.js");
     const { saveEntityMovementState } = await import("/js/storage/entityStorage.js");
     const { createMovementCounter } = await import("/js/rendering/entities.js");
@@ -273,6 +273,38 @@ try {
     }
     slot.remove();
     hud.remove();
+    // Presentation must also accept frozen, unnormalized reserves without changing them.
+    const views = await import('/js/rendering/hud.js');
+    const movement = await import('/js/board/deployment.js');
+    const frozen = Object.freeze({ id: 'frozen-movement', stats: Object.freeze({
+      shift: Object.freeze({ current: -2.6, max: 8.4 })
+    }) });
+    const frozenBefore = JSON.stringify(frozen);
+    const frozenView = views.createMovementDisplay(frozen);
+    document.body.appendChild(frozenView);
+    for (let i = 0; i < 3; i++) views.updateMovementDisplay(frozen);
+    equal(JSON.stringify(frozen), frozenBefore, 'Repeated rendering preserves frozen fractional movement values');
+    equal(frozenView.querySelector('.current').textContent, '-3', 'The view rounds movement debt without rewriting it');
+    check(!('_lastDisplayedCurrent' in frozen.stats.shift), 'Animation memory stays outside saved movement data');
+    frozenView.remove();
+    const probe = { id: 'movement-application', name: 'Movement application', statut: ['alive'],
+      stats: { movement: 8, shift: { current: 2, max: 8 }, trailer: 0, marathon: 0 } };
+    const probeView = views.createMovementDisplay(probe);
+    document.body.appendChild(probeView);
+    const viewBefore = probeView.innerHTML;
+    const beforeRefill = probe.stats.shift.current;
+    movement.refillEntityMovement(probe);
+    equal(probe.stats.shift.current, 3, 'Refill applies to the reserve before presentation');
+    equal(probeView.innerHTML, viewBefore, 'Refill does not redraw the counter');
+    views.presentMovementRefill(probe, beforeRefill);
+    equal(probeView.querySelector('.current').textContent, '3', 'Explicit presentation displays the applied refill');
+    const beforeConsumeView = probeView.innerHTML;
+    check(movement.consumeEntityMovement(probe).allowed, 'A normal movement is accepted');
+    equal(probe.stats.shift.current, 2, 'Consumption changes the reserve');
+    equal(probeView.innerHTML, beforeConsumeView, 'Consumption does not redraw the counter');
+    views.updateMovementDisplay(probe);
+    equal(probeView.querySelector('.current').textContent, '2', 'Explicit presentation displays the consumed reserve');
+    probeView.remove();
     return { count: checks.length, checks, id: actor.id };
   });
   for (const viewport of [{ width: 1600, height: 950 }, { width: 390, height: 844 }]) {

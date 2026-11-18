@@ -1,3 +1,5 @@
+import { createMovementDisplay } from "../../rendering/hud.js";
+import { ensureMovementState } from "../../board/deployment.js";
 import { cachedResourceUrl } from "../../data/loaderList.js";
 import { getScoredItemQuality } from "../../procedural/proc-bareme.js";
 import { loadFromLocalStorage, getEquippedItemById } from "../../storage/gameStorage.js";
@@ -17,7 +19,7 @@ import { attackDetails } from "../../data/attackList.js";
 import {
   getAttackResolutionFlags, getAttackNatureRules, resolveAttackDefinitionForEntity,
 } from "../../combat/attackResolution.js";
-import { createMovementDisplay, ensureMovementState } from "../../combat/statistics.js";
+
 import { calculateStatsDisplay } from "../statistics/details.js";
 import { getEntityCombatDetails, COMBAT_ROLES } from "../../storage/entityStorage.js";
 import { createNicknameForm } from "../../entities/progression.js";

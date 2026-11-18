@@ -1,3 +1,6 @@
+import { getStatSystemResult } from "../entities/statSystem.js";
+import { getEquipmentResourceCurrent } from "../items/resourceStocks.js";
+
 import { showDamagePopup } from "./popups.js";
 import { setTimeout } from "../combat/clock.js";
 import { entites } from "../entities/runtime.js";
@@ -317,7 +320,6 @@ if (prepSpan && execSpan) {
 }
 }
 
-
 const levelBattleStarts = new WeakMap();
 const levelBattleDetailStarts = new WeakMap();
 const battleTotalKeys = [
@@ -482,8 +484,6 @@ export function createAttackElementsForEntity(entites) {
     });
 }
 
-
-
 export let dotNameElement;
 
 export function PopUpDamages(
@@ -595,4 +595,126 @@ export function deductScore(target, points) {
     scoreSideB -= points;
   }
   updateScoreDisplay();
+}
+
+// Compteurs de deplacement : lecture des ressources, mise en forme et animations.
+function getMovementCounterState(entite) {
+  const current = Math.round(Number(entite?.stats?.shift?.current) || 0);
+  const max = Math.max(0, Math.round(Number(entite?.stats?.shift?.max) || 0));
+  const durable = entite?.modifierStats?.durable;
+  // Keep progression, but exclude equipment and temporary effects from the comparison.
+  const native = entite?.baseStats ? getStatSystemResult({
+    ...entite,
+    modifierStats: { durable: { ...durable, stuff: { byId: {} } } },
+    battleBoosts: {},
+    _statSystemOverrides: undefined,
+  }, 'shift') : null;
+  const delta = entite?.baseStats ? max - (native?.value ?? 1) : 0;
+  const extra = getEquipmentResourceCurrent(entite, 'shift')
+    + Math.max(0, Number(entite?.resourceStocks?.shift?.temporary) || 0)
+    + Math.max(0, Number(entite?.resourceStocks?.shift?.spell) || 0);
+  return { current, max, delta, extra };
+}
+
+export function renderMovementCounter(node, entite, state = getMovementCounterState(entite)) {
+  const { current, max, delta, extra } = state;
+  let text = node;
+  if (node.classList.contains('movement-counter')) {
+    text = node.querySelector('.counter-shift');
+    if (!text) {
+      text = document.createElement('span');
+      text.className = 'counter-shift hu';
+      node.appendChild(text);
+    }
+  }
+  text.innerHTML = `${text !== node ? ': ' : ''}<span class="current-shift current">${current}</span> / <span class="current-shift max">${max}</span>`;
+  const currentSpan = text.querySelector('.current');
+  const maxSpan = text.querySelector('.max');
+  currentSpan.classList.toggle('negative-shift', current < 0);
+  currentSpan.classList.toggle('movement-reduced', delta < 0 || current < 0);
+  currentSpan.classList.toggle('movement-overflow', delta >= 0 && current > max);
+  currentSpan.classList.toggle('movement-buffed', delta >= 0 && current >= 0 && current <= max && (delta > 0 || extra > 0));
+  maxSpan.classList.toggle('movement-reduced', delta < 0);
+  maxSpan.classList.toggle('movement-buffed', delta > 0);
+  node.classList.toggle('empty', current <= 0);
+  node.classList.toggle('full', current >= max && max > 0);
+  return currentSpan;
+}
+
+// Animation memory belongs to the view, never to the saved movement reserve.
+const displayedMovement = new WeakMap();
+
+export function updateMovementDisplay(entite, { animate = true } = {}) {
+  if (!entite?.id) return;
+
+  const rawMovement = entite?.stats?.shift;
+  if (!rawMovement || typeof rawMovement !== "object") return;
+
+  const previousCurrent = Number(displayedMovement.get(rawMovement) ?? rawMovement.current);
+
+  const current = Math.round(Number(rawMovement.current) || 0);
+  const max = Math.max(0, Math.round(Number(rawMovement.max) || 0));
+
+  const hasGeneratedMove =
+    animate &&
+    current > previousCurrent &&
+    previousCurrent < max &&
+    current <= max;
+
+  const state = getMovementCounterState(entite);
+  document
+    .querySelectorAll(`[data-movement-entity-id="${entite.id}"]`)
+    .forEach(el => {
+      const currentSpan = renderMovementCounter(el, entite, state);
+
+      if (hasGeneratedMove && currentSpan) {
+        currentSpan.classList.remove("bounce-shift");
+        void currentSpan.offsetWidth;
+        currentSpan.classList.add("bounce-shift");
+
+        setTimeout(() => {
+          currentSpan.classList.remove("bounce-shift");
+        }, 500);
+      }
+
+    });
+
+  displayedMovement.set(rawMovement, current);
+}
+
+export function createMovementDisplay(entite) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "movement-charge-display";
+  wrapper.setAttribute("data-movement-entity-id", entite.id);
+  renderMovementCounter(wrapper, entite);
+
+  return wrapper;
+}
+
+export function animateMoveCounter(counterElement) {
+    if (!counterElement) return;
+
+    counterElement.classList.remove("counter-pop");
+    void counterElement.offsetWidth;
+    counterElement.classList.add("counter-pop");
+}
+
+// Present the already applied refill, including the trailer proc highlight.
+export function presentMovementRefill(entite, before) {
+  updateMovementDisplay(entite);
+  const movement = entite.stats.shift;
+  const trailer = movement.trailer || {};
+  if (movement.current !== before && trailer.success) {
+    document
+      .querySelectorAll(`[data-movement-entity-id="${entite.id}"] .counter-shift.hu`)
+      .forEach(currentValue => {
+        currentValue.classList.remove("trailer-proc-highlight");
+        void currentValue.offsetWidth;
+        currentValue.classList.add("trailer-proc-highlight");
+
+        setTimeout(() => {
+          currentValue.classList.remove("trailer-proc-highlight");
+        }, 1000);
+      });
+  }
 }

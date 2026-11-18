@@ -1,19 +1,26 @@
-import { presentEntityVitals, presentSupportHealing, presentDamageOutcome, presentExecutionHealing,
-  presentVitalImpact, presentBloodCrazyGain, presentBloodCrazyConsumption, presentVitalSummary,
-  presentDamageResolution } from "../rendering/vitalFeedback.js";
+import {
+  updateBonusLifeCounters, updateHealthBar, updateHPCounters, presentEntityVitals,
+  presentSupportHealing, presentDamageOutcome, presentExecutionHealing, presentVitalImpact,
+  presentBloodCrazyGain, presentBloodCrazyConsumption, presentVitalSummary, presentDamageResolution,
+} from "../rendering/vitalFeedback.js";
+
 import { calculateHpDamage, finalizeHpDamage, calculateHpHealing, calculateFullHpRestoration,
   calculateDamageAccounting, calculateArmorBypass, calculateArmorGate, calculateResilienceSources,
   calculateEsoterismSources, calculateFragilitySources, calculateDefensiveHpTotal } from "./vitalRules.js";
 import { applyHpChange, applyArmorDamage, applySupportHealing, recordDamageResolution } from "./vitalApplication.js";
 import { effectProvenance } from './effectRules.js';
 import { evaluateAttackEffect } from './effectParameters.js';
-import { getAttackEffect } from "../data/attackEffects.js";
+import {
+  getAttackEffect, attackEffects,
+} from "../data/attackEffects.js";
 import {
   getActionElapsed, getMovementElapsed, getPhaseElapsed, isEntityActionPaused,
   isEntityMovementBlocked
 } from "./control.js";
-import { removeCombatVisualAfter } from "./clock.js";
-import { setTimeout, requestAnimationFrame, clockNow } from "./clock.js";
+import {
+  removeCombatVisualAfter, setTimeout, requestAnimationFrame, clockNow,
+} from "./clock.js";
+
 import { combatNow, combatDelay, deferCombatDeath } from "./timeline.js";
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import { cachedResourceUrl } from "../data/loaderList.js";
@@ -46,7 +53,7 @@ import {
   updateScore,
   deductScore,
 } from "../rendering/hud.js";
-import { updateHealthBar, updateHPCounters } from "../entities/progression.js";
+
 import {
   EffectMessage, blocksAstralSpell, startAstralReturn,
   toggleEffectClass,
@@ -61,7 +68,7 @@ import {
   withSleepImpact, deferSleepImpactEffect as deferCombatEffect,
 } from "./effects.js";
 import { summonJarret, summonProfanation } from "./summons.js";
-import { attackEffects } from "../data/attackEffects.js";
+
 import { attackDetails } from "../data/attackList.js";
 import { updateCombatantRoleIndex, updateCombatantTargetZones } from "../board/deployment.js";
 import { entiteCamp } from "./loop.js";
@@ -92,12 +99,7 @@ import {
   animateRecuperation,
 } from "../rendering/animations.js";
 import { getSafe, getBattleEntityElement } from "../entities/rules.js";
-import {
-  createExtraLifeCounter,
-  createArmorCounter,
-  createFadedLifeCounter,
-  stabilizeDeadEntityVisual,
-} from "../rendering/entities.js";
+import { stabilizeDeadEntityVisual } from "../rendering/entities.js";
 import {
   getAttackResolutionFlags,
   getAttackNatureRules,
@@ -289,7 +291,6 @@ if (!entite.hasDeathBeenLogged) {
     battleEntityElement.classList.remove("dead", "hbox");
   }
 }
-
 
 function getLifePoolCurrent(raw) {
   const value = raw && typeof raw === "object" ? raw.current : raw;
@@ -495,171 +496,13 @@ export function attemptExtraLife(entite, {
   return true;
 }
 
-export function updateBonusLifeCounters(entite) {
-  if (!entite?.id) return;
-  ensureExtraLifeCounter(entite);
-  ensureFadedLifeCounter(entite);
 
-  const id = entite.id;
 
-  // ---- fadedLife (nombre, legacy objet toléré) ----
-  const rawF = entite?.stats?.fadedLife;
-  const faded = Math.max(
-    0,
-    Number(typeof rawF === "object" ? (rawF?.current ?? 0) : (rawF ?? 0)) || 0
-  );
 
-  const fadedContainers = document.querySelectorAll(`.fadedLife-counter[data-entity-id="${id}"]`);
-  const fadedValues     = document.querySelectorAll(`.fadedLife-value[data-entity-id="${id}"]`);
 
-  fadedContainers.forEach(node => {
-    node.style.display = faded > 0 ? "" : "none";
-  });
-  fadedValues.forEach(node => {
-    node.textContent = faded > 0 ? `: ${faded}` : "";
-  });
 
-// ---- eternalLife (objet {current,max}) ----
-const et = entite?.stats?.eternalLife;
-const etCurrent = et && typeof et === "object" ? (Number(et.current ?? 0) || 0) : 0;
-const etMax     = et && typeof et === "object" ? (Number(et.max ?? 0) || 0) : 0;
 
-const showEternal = etMax > 0;
 
-const eternalContainers = document.querySelectorAll(`.eternalLife-counter[data-entity-id="${id}"]`);
-const eternalValues     = document.querySelectorAll(`.eternalLife-value[data-entity-id="${id}"]`);
-
-eternalContainers.forEach(node => {
-  node.style.display = showEternal ? "" : "none";
-});
-
-eternalValues.forEach(node => {
-  node.textContent = showEternal ? `: ${etCurrent}/${etMax}` : "";
-});
-
-  // ---- extraLife (objet {current,max} ; tolérance si nombre) ----
-  const ex = entite?.stats?.extraLife;
-  const exCurrent =
-    ex && typeof ex === "object" ? (Number(ex.current ?? 0) || 0) :
-    (typeof ex === "number" ? ex : 0);
-
-  const exMax =
-    ex && typeof ex === "object" ? (Number(ex.max ?? 0) || 0) : 0;
-
-  const showExtra = exCurrent > 0 || exMax > 0;
-
-  const extraContainers = document.querySelectorAll(`.extraLife-counter[data-entity-id="${id}"]`);
-  const extraValues     = document.querySelectorAll(`.extraLife-value[data-entity-id="${id}"]`);
-
-  extraContainers.forEach(node => {
-    node.style.display = showExtra ? "" : "none";
-  });
-
-  extraValues.forEach(node => {
-    if (!showExtra) {
-      node.textContent = "";
-      return;
-    }
-    if (exMax > 0) node.textContent = `: ${exCurrent}/${exMax}`;
-    else node.textContent = `: ${exCurrent}`;
-  });
-  document.querySelectorAll('.codex-colomn-5[data-entity-id]').forEach(column => {
-    if (column.dataset.entityId === String(id)) column._refreshLives?.(entite);
-  });
-  syncEntityAuras(entite, 'battle', { lifeOnly: true });
-  syncEntityAuras(entite, 'codex', { lifeOnly: true });
-}
-function getLifeCounterContainer(entite) {
-  return document.querySelector(`.life-bar-counter[data-entity-id="${entite.id}"]`);
-}
-
-// ---- ARMOR ----
-function ensureArmorCounter(entite) {
-  if (!entite?.id) return null;
-
-  const id = entite.id;
-
-  // Si le counter existe déjà, on le récupère.
-  // Attention : il peut être au mauvais endroit, donc on ne return pas tout de suite.
-  let node = document.querySelector(`.armor-counter[data-entity-id="${id}"]`);
-
-  // ✅ Exception Codex :
-  // Dans le codex, armor-counter doit être enfant direct de .codex-entite-infos,
-  // placé avant .headsup-HP-container.
-  const codexInfos = document
-    .querySelector(
-      `.codex-entite-infos #headsup-HP-container_${id},
-       .codex-entite-infos .headsup-HP-container[data-entity-id="${id}"]`
-    )
-    ?.closest(".codex-entite-infos");
-
-  if (codexInfos) {
-    if (!node) {
-      node = createArmorCounter(entite);
-      if (!node) return null;
-    }
-
-    node.classList.add("hu");
-    node.dataset.stat = "armor";
-    node.dataset.entityId = id;
-
-    const hpContainer = codexInfos.querySelector(
-      `#headsup-HP-container_${id},
-       .headsup-HP-container[data-entity-id="${id}"]`
-    );
-
-    if (node.parentElement !== codexInfos) {
-      if (hpContainer) codexInfos.insertBefore(node, hpContainer);
-      else codexInfos.appendChild(node);
-    }
-
-    return node;
-  }
-
-  // ✅ Cas normal : combat / HUD
-  const wrap = getLifeCounterContainer(entite);
-  if (!wrap) return node;
-
-  // Si déjà dans le bon wrap, rien à faire
-  if (wrap.querySelector(`.armor-counter[data-entity-id="${id}"]`)) {
-    return wrap.querySelector(`.armor-counter[data-entity-id="${id}"]`);
-  }
-
-  if (!node) {
-    node = createArmorCounter(entite);
-    if (!node) return null;
-  }
-
-  node.classList.add("hu");
-  node.dataset.stat = "armor";
-  node.dataset.entityId = id;
-
-  // insertion après HP si possible
-  const hpNode = wrap.querySelector(`.HP-counter[data-entity-id="${id}"]`);
-
-  if (hpNode) {
-    hpNode.insertAdjacentElement("afterend", node);
-  } else {
-    wrap.prepend(node);
-  }
-
-  return node;
-}
-
-export function updateArmorCounter(entite) {
-  if (!entite?.id) return;
-
-  ensureArmorCounter(entite);
-
-  const id = entite.id;
-  const currentArmor = entite?.stats?.armor?.current ?? 0;
-  const show         = currentArmor > 0;
-
-  document.querySelectorAll(`.armor-counter[data-entity-id="${id}"]`).forEach(node => {
-    node.style.display = show ? "" : "none";
-    if (show) node.textContent = `🛡️ ${currentArmor}`;
-  });
-}
 export function extraLifeConsumption(entite) {
   ensureExtraLifeRegen(entite, entite.stats?.extraLife);
   updateExtraLifeRegenOrders(entite);
@@ -679,36 +522,11 @@ export function eternalLifeConsumption(entite) {
 }
 
 
-// ---- EXTRA LIFE ----
-function ensureExtraLifeCounter(entite) {
-  const wrap = getLifeCounterContainer(entite);
-  if (!wrap) return;
 
-  const id = entite.id;
-  if (wrap.querySelector(`.extraLife-counter[data-entity-id="${id}"]`)) return;
 
-  const node = createExtraLifeCounter(entite); // ✅ réutilise ta factory
-  if (!node) return; // extraLife pas encore "showable"
 
-  // Order : avant fadedLife si déjà présent
-  const fadedNode = wrap.querySelector(`.fadedLife-counter[data-entity-id="${id}"]`);
-  if (fadedNode) wrap.insertBefore(node, fadedNode);
-  else wrap.appendChild(node);
-}
 
-// ---- FADED LIFE ----
-function ensureFadedLifeCounter(entite) {
-  const wrap = getLifeCounterContainer(entite);
-  if (!wrap) return;
 
-  const id = entite.id;
-  if (wrap.querySelector(`.fadedLife-counter[data-entity-id="${id}"]`)) return;
-
-  const node = createFadedLifeCounter(entite); // ✅ réutilise ta factory
-  if (!node) return; // fadedLife pas encore "showable"
-
-  wrap.appendChild(node);
-}
 
 export function loadEntitiesStatus() {
     const selectedArmy = loadFromLocalStorage('selectedArmyA', []);
@@ -886,7 +704,6 @@ export async function runEntityRecovery(attacker, duration, {
 function hasActiveArmor(target) {
   return !!(target?.stats?.armor && target.stats.armor.current > 0);
 }
-
 
 function applyMysticismBonusToSources(sources, attacker, currentAttack) {
     if (!currentAttack?.isLaunchedUnderMysticism) {
@@ -2143,7 +1960,6 @@ export function applySelfEffects(attacker, totalReducedDamage, selfEffects = [],
     else applyEffect(attacker, effectName, attacker, attack, { ...effectData, selfApplication: true });
   });
 }
-
 
 export async function applyDamageToDead(target, damage, attacker, currentAttack) {
     if (!target?.isDEAD || target.corpseConsumed) return 'miss';

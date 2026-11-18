@@ -111,6 +111,24 @@ try {
   await page.evaluate(()=>{audit.mode('Level up');audit.open('robustness');});
   assert.equal(await root.locator('[data-umbra-passive="solarArmor"]').count(),1);
   checks.push('Codex / level-up card, nested precise ratios, solar helper and mobile layout');
+  const renderOnly = await page.evaluate(async () => {
+    const views = await import('/js/rendering/vitalFeedback.js');
+    const entity = audit.entity;
+    const resources = () => JSON.stringify({ stats: entity.stats, armor: entity.armorLayers, stocks: entity.resourceStocks });
+    const storage = () => JSON.stringify(Object.entries(localStorage).sort(([a], [b]) => a.localeCompare(b)));
+    const before = resources(), saved = storage();
+    for (let i = 0; i < 3; i++) {
+      views.updateHealthBar(20, 100, 4, 10, entity.id);
+      views.updateHPCounters(entity.id, 20, 100);
+      views.updateArmorCounter(entity);
+      views.updateBonusLifeCounters(entity);
+    }
+    const unchanged = before === resources() && saved === storage();
+    views.presentEntityVitals(entity);
+    return unchanged;
+  });
+  assert.ok(renderOnly, 'Repeated HP/armor/life presentation changes neither resources nor storage');
+  checks.push('Resource presentation is read-only even with display values different from the entity');
   const lab=await browser.newPage();lab.on('pageerror',error=>errors.push(error.message));
   await lab.goto(`http://127.0.0.1:${server.address().port}/index-14.html`);
   await lab.locator('[data-catalog="umbras"]>summary').click();await lab.locator('[data-add="umbra-robustness"]').click();

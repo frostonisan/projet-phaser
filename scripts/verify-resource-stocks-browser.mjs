@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js");
-    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js")]).then(parts => Object.assign({}, ...parts)), DDisplay = await import("/js/ui/statistics/details.js");
     const R = await import('/js/items/resourceStocks.js');
     const S = await import("/js/storage/gameStorage.js");
     const U = await import("/js/storage/entityStorage.js");
@@ -443,7 +443,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const colorChecks = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js");
-    const D = await import("/js/combat/statistics.js");
+    const D = await import("/js/rendering/hud.js");
     const P = await import("/js/entities/progression.js");
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import("/js/storage/gameStorage.js");
@@ -735,9 +735,9 @@ try {
   const liveEquipmentChecks = await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"), C = await import("/js/rendering/entities.js");
     const S = await import("/js/storage/gameStorage.js"), U = await import("/js/storage/entityStorage.js");
-    const D = await import("/js/combat/statistics.js"), R = await import('/js/items/resourceStocks.js');
+    const D = await import("/js/board/deployment.js"), R = await import('/js/items/resourceStocks.js');
     const A = await import('/js/items/armor.js'), M = await import('/js/items/itemManager.js');
-    const P = await import("/js/entities/progression.js");
+    const P = await import("/js/rendering/vitalFeedback.js");
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const { ItemDetails } = await import('/js/data/itemList.js');
     const checks = [];

@@ -1,14 +1,21 @@
+import {
+  consumeEntityMovement, ensureMovementState, updateRoleInDOM,
+} from "./deployment.js";
+import { updateMovementDisplay } from "../rendering/hud.js";
 import { getFootprintOccupant, planEntityPlacements, commitEntityPlacements, calculateHexes } from "./controller.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 import { setTimeout, isCombatPaused, isCombatInteractionBlocked, notifyCombatAction } from "../combat/clock.js";
 import { generateUniqueID, entites, enrichEntityStats } from "../entities/runtime.js";
-import { updateRoleInDOM } from "./deployment.js";
+
 import { soclesVisible } from "../ui/display.js";
 import { spawnEntiteIngame } from "../entities/spawn.js";
-import { consumeEntityMovement, ensureMovementState, updateMovementDisplay } from "../combat/statistics.js";
+
 import { EffectMessage } from "../combat/effects.js";
 import { applyEntityTint, releaseEntityTint, notifyProjectileTargetMoved } from "../rendering/animations.js";
-import { saveEntityMovementState, saveEntityPositionState, recordEntityCombatMovement, recordEntityCombatAmount, recordEntityCombatProc } from "../storage/entityStorage.js";
+import {
+  saveEntityMovementState, saveEntityPositionState, recordEntityCombatMovement,
+  recordEntityCombatAmount, recordEntityCombatProc,
+} from "../storage/entityStorage.js";
 import { battleLogs } from "../combat/journal.js";
 import { gameStarted } from "../app/state.js";
 import { isAdminMode as isGameAdminMode } from "../storage/gameStorage.js";
@@ -310,6 +317,7 @@ if (isEffectiveHexMove && !isAdminMode) {
         EffectMessage(entite, 'Déplacement impossible !'); return;
     }
     movementCheck = consumeEntityMovement(entite, 1);
+    if (movementCheck.allowed) updateMovementDisplay(entite);
     if (!movementCheck.allowed) { EffectMessage(entite, 'Déplacement impossible !'); return; }
     if (gameStarted && movementCheck.weightResistance?.canceled) recordEntityCombatProc(entite, movementCheck.weightResistance.kind);
 }

@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import("../docs/js/entities/runtime.js"),D=await import("../docs/js/combat/statistics.js"), DRules = await import('../docs/js/combat/damageRules.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
+const E=await import("../docs/js/entities/runtime.js"),D=await Promise.all([import("../docs/js/combat/statistics.js"), import("../docs/js/board/deployment.js"), import("../docs/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)), DRules = await import('../docs/js/combat/damageRules.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
 const S=await import("../docs/js/entities/statSystem.js"),Items=await import('../docs/js/items/permanentItems.js');
 const P=globalThis.umbraProgression;
 let checks=0;

@@ -466,7 +466,7 @@ try {
       }
     } finally { Object.assign(armorConfig.ratios, savedRatios); armorConfig.flatPerPoint = savedGift; }
     const Armor = await import('/js/items/armor.js');
-    const Upgrade = await import("/js/entities/progression.js");
+    const Upgrade = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const makeArmorEntity = () => {
       const entity = { id: 987101, name: 'Armor audit', type: 'sbire', side: 'A', level: { current: 1, max: 250 },
         baseStats: { HP: 100, strength: 100, robustness: 150, will: 250, charge: 5 }, attacks: ['autoAttack'] };
@@ -1112,7 +1112,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#armor-bars-regression').screenshot({ path: resolve(output, 'armor-bars-mobile.png') });
   const layeredChecks = await page.evaluate(async () => {
-    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)), DDisplay = await import("/js/ui/statistics/details.js");
     const Rules = await import("/js/entities/rules.js");
     const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');

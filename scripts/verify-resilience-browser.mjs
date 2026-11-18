@@ -25,7 +25,7 @@ try{
   });
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
-    const E=await import("/js/entities/runtime.js"),D=await import("/js/combat/statistics.js"),A=await import("/js/combat/vitals.js");
+    const E=await import("/js/entities/runtime.js"),D=await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js")]).then(parts => Object.assign({}, ...parts)),A=await import("/js/combat/vitals.js");
     const UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import("/js/app/state.js");
     const Fx=await import("/js/combat/effects.js"),G=await import("/js/storage/gameStorage.js"),U=await import("/js/entities/progression.js");
     const Summon=await import("/js/combat/summons.js"),SummonData=await import('/js/data/summons.js');

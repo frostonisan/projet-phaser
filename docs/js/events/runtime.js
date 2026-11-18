@@ -1,6 +1,9 @@
+import { updateHealthBar } from "../rendering/vitalFeedback.js";
 import { planEntityPlacements, commitEntityPlacements, hexCoordonne } from "../board/controller.js";
-import { registerCombatState } from "../combat/clock.js";
-import { setTimeout, clearTimeout, requestAnimationFrame, clockNow } from "../combat/clock.js";
+import {
+  registerCombatState, setTimeout, clearTimeout, requestAnimationFrame, clockNow,
+} from "../combat/clock.js";
+
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import { playCachedGif, cachedResourceUrl } from "../data/loaderList.js";
 import { entites, entitesNestUp, RemoveEntite } from "../entities/runtime.js";
@@ -32,7 +35,7 @@ import { eventList, getEventDefinition as getListedEventDefinition } from "../da
 import { closeDialogue as closeDialogueWindowRaw, renderDialogueScreen } from "../ui/dialogue.js";
 import { LifeandDeath } from "../combat/vitals.js";
 import { PopUpDamages } from "../rendering/hud.js";
-import { updateHealthBar } from "../entities/progression.js";
+
 import { saveEntityArmorState, saveEntityHPToStorage } from "../storage/entityStorage.js";
 import {
   damageImpact,

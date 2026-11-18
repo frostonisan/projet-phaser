@@ -5,9 +5,9 @@ const environment = await installEntityTestEnvironment([['playerExperience', '10
 const { storage } = environment;
 
 const statsApi = await import("../docs/js/entities/runtime.js");
-const resetApi = await import("../docs/js/entities/progression.js");
+const resetApi = await Promise.all([import("../docs/js/entities/progression.js"), import("../docs/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
 const storageApi = await import("../docs/js/storage/gameStorage.js");
-const xpApi = await import("../docs/js/entities/progression.js");
+const xpApi = await Promise.all([import("../docs/js/entities/progression.js"), import("../docs/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
 const { entitesNest } = await import("../docs/js/data/entityTemplates.js");
 const { createLinkedEssenceItem } = await import("../docs/js/items/essenceInventory.js");
 const { addFadedLife, consumeFadedLife, consumeRechargeableLife } = await import('../docs/js/items/resourceStocks.js');

@@ -28,9 +28,9 @@ async function fixture(side, withOthers = true, expiry = false, group = false) {
     const E = await import("/js/entities/runtime.js"), Create = await import("/js/rendering/entities.js");
     const Storage = await import("/js/storage/gameStorage.js");
     const G = await import("/js/app/state.js"), F = await import("/js/combat/loop.js");
-    const A = await import("/js/combat/vitals.js"), Fx = await import("/js/combat/effects.js");
+    const A = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts)), Fx = await import("/js/combat/effects.js");
     const Control = await import("/js/combat/control.js"), Attacks = await import('/js/combat/attacks.js');
-    const D = await import("/js/combat/statistics.js"), Sim = await import("/js/debug/simulation.js");
+    const D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)), Sim = await import("/js/debug/simulation.js");
     const { balanceData } = await import('/js/data/balanceData.js');
     balanceData.brokenSpell.chance.basePercent = 0;
     UI.createGameContainer(); UI.GameUi(); Storage.setAdminMode(true); window.levelRunning = 'admin';

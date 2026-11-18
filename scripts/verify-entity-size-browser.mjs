@@ -114,7 +114,7 @@ async function spatialAudit() {
     const beforeDistance=P.groupedHexDistance(cell(2,1),cell(4,6));
     check(M.pullEntityToward(a,c,5),'Grab moves a six-cell entity');
     check(P.groupedHexDistance(document.getElementById(`Box_Entite_${a.id}`).closest('.hex'),cell(4,6))<beforeDistance,'Grab approaches attacker with the whole footprint');invariant();
-    (await import("/js/combat/statistics.js")).ensureMovementState(a,{reset:true});
+    (await import("/js/board/deployment.js")).ensureMovementState(a,{reset:true});
     a.stats.shift.current=10;
     check(M.moveEntityRandomly(a,()=>0),'Random movement accepts a full six-cell destination');invariant();
     reset([6,1,3,2],[[2,1],[6,12],[4,6],[0,9]]);

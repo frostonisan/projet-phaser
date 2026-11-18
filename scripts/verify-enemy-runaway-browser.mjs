@@ -23,7 +23,7 @@ try {
   await page.evaluate(async () => {
     window.U = await import("/js/ui/application.js"); window.E = await import("/js/entities/runtime.js");
     window.G = await import("/js/app/state.js"); window.O = await import("/js/combat/orders.js");
-    window.C = await import("/js/rendering/entities.js"); window.At = await import("/js/combat/vitals.js");
+    window.C = await import("/js/rendering/entities.js"); window.At = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     window.S = await import("/js/storage/gameStorage.js"); window.Sim = await import("/js/debug/simulation.js");
     window.T = await import("/js/storage/entityStorage.js");
     window.template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);

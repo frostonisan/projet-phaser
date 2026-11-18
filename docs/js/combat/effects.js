@@ -1,8 +1,15 @@
-import { syncEntityFootprints, pullEntityToward, moveEntityRandomly, entitySizeInCells, setEntitySizeInCells } from "../board/controller.js";
-import { registerCombatState } from "./clock.js";
-import { combatData } from "./clock.js";
-import { setTimeout, clearTimeout, setInterval, clearInterval } from "./clock.js";
-import { combatNow as clockNow, scheduleCombatTask, scheduleCombatImpactTask, cancelCombatTask, deferCombatEffect } from "./timeline.js";
+import { updateHealthBar } from "../rendering/vitalFeedback.js";
+import {
+  syncEntityFootprints, pullEntityToward, moveEntityRandomly, entitySizeInCells, setEntitySizeInCells,
+} from "../board/controller.js";
+import {
+  registerCombatState, combatData, setTimeout, clearTimeout, setInterval, clearInterval,
+} from "./clock.js";
+
+import {
+  combatNow as clockNow, scheduleCombatTask, scheduleCombatImpactTask, cancelCombatTask,
+  deferCombatEffect,
+} from "./timeline.js";
 import { buildSignatureStackHelper } from "../data/helpers.js";
 import { cachedResourceUrl, playCachedGif } from "../data/loaderList.js";
 import { entites, removedEntities, getMovementWeightMalus, recomputeEntityStats } from "../entities/runtime.js";
@@ -16,19 +23,29 @@ import {
   updateScore,
   deductScore,
 } from "../rendering/hud.js";
-import { attackEffects } from "../data/attackEffects.js";
+import {
+  attackEffects, describeAttackEffect,
+} from "../data/attackEffects.js";
 import { applyDamage } from "./vitals.js";
-import { getAlterationTiming, calculateResilienceEffectIntensity } from "./statistics.js";
+import {
+  getAlterationTiming, calculateResilienceEffectIntensity, attemptAlterationResistance,
+  prepareResilienceEffect, calculateControlledSpeed,
+} from "./statistics.js";
 import { escape } from "../ui/statistics/helpers.js";
 import { setEntityEffectView, removeEntityEffectView, refreshEntityEffectViews } from "../ui/statistics/components.js";
-import { addEntityControl, endEntityControl, getControlState, getControlStates, getCombatSide, updateCharmedSide, advanceInsolence, applyControlRecoil, getMovementElapsed, getSleepElapsed, isEntityAsleep, notifyPreparationInterrupted, canEntityProc } from "./control.js";
-import { effectProvenance, effectRuntimeKey, burnRules, feedBurn, decayBurn, burnPower, burnExpiresAt } from './effectRules.js';
+import {
+  addEntityControl, endEntityControl, getControlState, getControlStates, getCombatSide,
+  updateCharmedSide, advanceInsolence, applyControlRecoil, getMovementElapsed, getSleepElapsed,
+  isEntityAsleep, notifyPreparationInterrupted, canEntityProc,
+} from "./control.js";
+import {
+  effectProvenance, effectRuntimeKey, burnRules, feedBurn, decayBurn, burnPower, burnExpiresAt,
+} from "./effectRules.js";
 import { attackDetails } from "../data/attackList.js";
 import { attemptEffectRunaway } from "./orders.js";
 import { defaultEffect } from './effectParameters.js';
-import { attemptAlterationResistance, prepareResilienceEffect, calculateControlledSpeed } from "./statistics.js";
-import { describeAttackEffect } from "../data/attackEffects.js";
-import { updateHealthBar } from "../entities/progression.js";
+
+
 import {
   saveEntityHPToStorage,
   recordEntityCombatStat, recordEntityCombatProc,
@@ -40,7 +57,10 @@ import { createEntiteInDOM } from "../rendering/entities.js";
 import { entiteTurn } from "./loop.js";
 import { gameStarted, isBattleFinished } from "../app/state.js";
 import { getSafe, entityBattleBooste } from "../entities/rules.js";
-import { getAttackNatureRules, notifyAttackSelection, readAttackDefinitionsForEntity, attackSelectionKey, normalizeAttackSelection } from './attackResolution.js';
+import {
+  getAttackNatureRules, notifyAttackSelection, readAttackDefinitionsForEntity, attackSelectionKey,
+  normalizeAttackSelection,
+} from "./attackResolution.js";
 import { EffectMessage, showHealingFeedback } from "../ui/display.js";
 export { EffectMessage, showHealingFeedback } from "../ui/display.js";
 

@@ -1,10 +1,14 @@
-import { registerCombatState, notifyCombatAction } from "../combat/clock.js";
-import { clockNow } from "../combat/clock.js";
+import { updateMovementDisplay } from "../rendering/hud.js";
+import { updateHealthBar } from "../rendering/vitalFeedback.js";
+import {
+  registerCombatState, notifyCombatAction, clockNow,
+} from "../combat/clock.js";
+
 import { saveToLocalStorage, loadFromLocalStorage, saveCurrentGameData, loadEquippedItems } from "./gameStorage.js";
 import { showHealingFeedback, toggleEffectClass } from "../combat/effects.js";
-import { updateHealthBar } from "../entities/progression.js";
+
 import { toNonNegInt } from "../ui/display.js";
-import { calculateShiftDailyStartingCharges, calculateHpBattleRegenAmount, updateMovementDisplay } from "../combat/statistics.js";
+import { calculateShiftDailyStartingCharges, calculateHpBattleRegenAmount } from "../combat/statistics.js";
 import { attemptBattleRegen } from "../rendering/damageFeedback.js";
 import { battleLogs } from "../combat/journal.js";
 import { syncEntityAuras } from "../rendering/auras.js";
@@ -14,7 +18,9 @@ import {
   applyArmorLayersToEquippedItems,
   resetEntityRegenerableArmor,
 } from "../items/armor.js";
-import { applyResourceStocksToEquippedItems, syncEntityResourceStocks, resetDailyMovement } from "../items/resourceStocks.js";
+import {
+  applyResourceStocksToEquippedItems, syncEntityResourceStocks, resetDailyMovement,
+} from "../items/resourceStocks.js";
 
 const combatNatureKeys = new Set([
     'physicalDamage', 'magicalDamage', 'transpiercingDamage', 'hybridalDamage',

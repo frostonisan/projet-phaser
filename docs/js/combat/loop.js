@@ -1,21 +1,35 @@
+import {
+  presentMovementRefill, updateTimerDisplay,
+} from "../rendering/hud.js";
+import {
+  refillEntityMovement, updateEntityAttackTargetDisplay,
+} from "../board/deployment.js";
 import { ensureAstralityEffects } from "./effects.js";
-import { isEntityActionPaused, isEntityAsleep, getControlState, getCombatSide, getOriginalCombatSide, isCombatEnemy, isCharmedEnemyTarget, isEntitySilenced, waitForEntityControl, waitForEntitySilence, notifyPreparationInterrupted } from "./control.js";
-import { setTimeout, clearTimeout, clockNow } from "./clock.js";
+import {
+  isEntityActionPaused, isEntityAsleep, getControlState, getCombatSide, getOriginalCombatSide,
+  isCombatEnemy, isCharmedEnemyTarget, isEntitySilenced, waitForEntityControl, waitForEntitySilence,
+  notifyPreparationInterrupted,
+} from "./control.js";
+import {
+  setTimeout, clearTimeout, clockNow, registerCombatState, waitForCombatResume, isCombatPaused,
+  combatTarget,
+} from "./clock.js";
 import { combatNow, combatDelay, atCombatStart, scheduleCombatTask, cancelCombatTask } from "./timeline.js";
-import { registerCombatState, waitForCombatResume, isCombatPaused } from "./clock.js";
-import { combatTarget } from "./clock.js";
+
 import { gameStarted, checkGameOver, stopAllIntervals, OrderEntity, getOrderSide, isBattleFinished } from "../app/state.js";
 import { createOrderButton, createQuitButton } from "../app/stages.js";
 import { entites } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
-import { executeAttack, buildAttackTimingsWithHaste, cancelEntityAttackAction, getAttackTransportDeadline } from "./attackExecution.js";
+import {
+  executeAttack, buildAttackTimingsWithHaste, cancelEntityAttackAction, getAttackTransportDeadline,
+} from "./attackExecution.js";
 import { acceptsSelectedTarget, isAttackEntityAlive } from "./targeting.js";
 import { isHexTarget } from "../board/targets.js";
 import { runPhaseTimer, runEntityRecovery, updateCurrentAttackDisplay } from "./vitals.js";
 import { sbireEnemyTarget, sbireAllyTarget, invokerHexTarget } from "./minionTurn.js";
 import { lordEnemyTarget } from "./lordTurn.js";
 import { calculateHexes } from "../board/controller.js";
-import { clearForcedInvisibleTargetAccuracy, refillEntityMovement } from "./statistics.js";
+import { clearForcedInvisibleTargetAccuracy } from "./statistics.js";
 import { getSafe, isLord, isNonLordCombatant } from "../entities/rules.js";
 import {
   saveEntityMovementState,
@@ -40,8 +54,7 @@ import {
   resetAttackSelectionRuntime,
 } from "./attackResolution.js";
 import { createCooldownWaitView } from "../ui/attacks.js";
-import { updateEntityAttackTargetDisplay } from "../board/deployment.js";
-import { updateTimerDisplay } from "../rendering/hud.js";
+
 
 const TARGET_SEARCH_INTERVAL = 1000;
 const targetSearchCycles = new Map();
@@ -569,6 +582,7 @@ async function runEntityTurn(attacker, { resume = false, canContinue } = {}) {
         if (startup) startup.started = true;
         const movementBeforeRefill = attacker?.stats?.shift?.current;
         const movementAfterRefill = refillEntityMovement(attacker, 1);
+        presentMovementRefill(attacker, movementBeforeRefill);
         if (movementAfterRefill?.trailer?.success && movementAfterRefill.current > movementBeforeRefill) {
             recordEntityCombatProc(attacker, 'trailer');
             recordEntityCombatAmount(attacker, 'trailerCharges', Math.max(0, movementAfterRefill.current - movementBeforeRefill - 1));

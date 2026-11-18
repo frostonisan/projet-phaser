@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
 const E = await import("../docs/js/entities/runtime.js");
-const D = await import("../docs/js/combat/statistics.js"), DDisplay = await import("../docs/js/ui/statistics/details.js");
+const D = await Promise.all([import("../docs/js/combat/statistics.js"), import("../docs/js/board/deployment.js"), import("../docs/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)), DDisplay = await import("../docs/js/ui/statistics/details.js");
 const S = await import("../docs/js/entities/statSystem.js");
 const P = await import('../docs/js/items/permanentItems.js');
 const live = globalThis.umbraProgression;

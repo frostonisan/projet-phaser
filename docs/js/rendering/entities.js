@@ -1,3 +1,7 @@
+import {
+  renderMovementCounter, getLevelBattleStats,
+} from "./hud.js";
+import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
 import { calibrateEntityVisuals } from "./popups.js";
 import { setTimeout, requestAnimationFrame } from "../combat/clock.js";
@@ -17,8 +21,7 @@ import { entites } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
 import { resolveAttackDefinitionForEntity } from "../combat/attackResolution.js";
 import { adjustFontSize } from "../ui/display.js";
-import { updateHealthBar } from "../entities/progression.js";
-import { renderMovementCounter } from "../combat/statistics.js";
+
 import { syncEntityAuras, cleanupEntityAuras, getAuraPoolCurrent } from "./auras.js";
 import {
   getSafe,
@@ -27,7 +30,6 @@ import {
   getBattleEntityElement,
   isLord,
 } from "../entities/rules.js";
-import { getLevelBattleStats } from "./hud.js";
 
 export function createHPCounter(entite) {
   if (!entite?.stats?.HP) return null;

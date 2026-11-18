@@ -1,3 +1,7 @@
+import { updateMovementDisplay } from "../rendering/hud.js";
+import {
+  consumeEntityMovement, positionnerEntites, updateRoleInDOM,
+} from "./deployment.js";
 import { ENTITY_SIZE_OPTIONS, entitySizeInCells, createBoardState, footprintCells, chooseFootprintRole,
   putBoardOccupant, removeBoardOccupant, boardOccupantsAt, applyBoardPlacements,
   snapshotBoardState, offsetToAxial, axialDistance } from "./model.js";
@@ -8,18 +12,22 @@ import { getBoardGeometry as geometry, gridForHex as gridFor, invalidateBoardGeo
 import { registerCombatState, notifyCombatAction } from "../combat/clock.js";
 import { scenarios } from "../data/boardList.js";
 import { cachedResourceUrl } from "../data/loaderList.js";
-import { positionnerEntites, updateRoleInDOM } from "./deployment.js";
+
 import { hexRoles } from "../combat/roles.js";
 import { levelBiome } from "../biome/level.js";
-import { LevelUi } from "../ui/display.js";
-import { clearBiomeEffects, initCanvas, initDroplet, initSunray, initSnowstorm, handleMeteo, handleGroundFx } from "../biome/meteo.js";
+import {
+  LevelUi, getOrCreateGameContainer,
+} from "../ui/display.js";
+import {
+  clearBiomeEffects, initCanvas, initDroplet, initSunray, initSnowstorm, handleMeteo, handleGroundFx,
+} from "../biome/meteo.js";
 import { createSoundManager } from "../rendering/sound.js";
-import { getOrCreateGameContainer } from "../ui/display.js";
+
 import { entites } from "../entities/runtime.js";
 import { saveEntityPositionState, recordEntityCombatMovement, recordEntityCombatProc } from "../storage/entityStorage.js";
 import { notifyProjectileTargetMoved } from "../rendering/animations.js";
 import { findNearestAvailableHex } from "../rendering/boardElements.js";
-import { attemptAlterationResistance, consumeEntityMovement } from "../combat/statistics.js";
+import { attemptAlterationResistance } from "../combat/statistics.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 
 let hexesSideA = [];
@@ -1015,6 +1023,7 @@ export function moveEntityRandomly(entity, random = Math.random, effect = null) 
   const cells = [...grid.querySelectorAll('.hex[data-position]')].filter(hex =>
     hexDistance(origin, hex) === 1 && planEntityPlacements([{entity,hex}]).valid);
   if (!cells.length || !consumeEntityMovement(entity).allowed) return false;
+  updateMovementDisplay(entity);
   return commitPositions([{ entity, hex: cells[Math.min(cells.length-1, Math.floor(random()*cells.length))] }], effect);
 }
 

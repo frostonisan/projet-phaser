@@ -35,7 +35,7 @@ try {
     const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const { attackDetails } = await import('/js/data/attackList.js');
     const { createLifeBars, CreateATBEntity } = await import("/js/rendering/entities.js");
-    const { updateHealthBar } = await import("/js/entities/progression.js");
+    const { updateHealthBar } = await import("/js/rendering/vitalFeedback.js");
     const { updateTimerDisplay } = await import("/js/rendering/hud.js");
     const reports = [];
     const check = (condition, label) => { if (!condition) throw Error(label); reports.push(label); };

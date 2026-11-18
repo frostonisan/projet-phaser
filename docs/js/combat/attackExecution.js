@@ -1,3 +1,4 @@
+import { updateBonusLifeCounters, updateHealthBar } from "../rendering/vitalFeedback.js";
 import { DAMAGE_SOURCE_KEYS, buildScaledDamageSources } from './damageRules.js';
 import { cloneCombatSnapshot } from './snapshot.js';
 import { createAttackFlight } from './attackFlight.js';
@@ -14,10 +15,11 @@ import {
   isEntitySilenced,
   waitForEntityControl
 } from "./control.js";
-import { setTimeout, clearTimeout } from "./clock.js";
+import {
+  setTimeout, clearTimeout, registerCombatState, combatData, combatReference, combatTarget,
+} from "./clock.js";
 import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask } from "./timeline.js";
-import { registerCombatState } from "./clock.js";
-import { combatData, combatReference, combatTarget } from "./clock.js";
+
 import {
   getAttackResolutionFlags, splitDodgeDamageSources, normArr, awardAttackMastery,
   startAttackCooldown
@@ -37,25 +39,18 @@ import { OrderEntity, checkGameOver, isBattleFinished } from "../app/state.js";
 import { entites } from "../entities/runtime.js";
 import { updateTimerDisplay } from "../rendering/hud.js";
 import {
-  runEntityRecovery,
-  LifeandDeath,
-  applyDamage,
-  applyDamageToDead,
-  applyDamageToHex,
-  updateBonusLifeCounters,
-  estimateCancelledAttackHp
+  runEntityRecovery, LifeandDeath, applyDamage, applyDamageToDead, applyDamageToHex,
+  estimateCancelledAttackHp,
 } from "./vitals.js";
 import { updateTargetStatut } from "./loop.js";
 import { animatePreparation, mysticismBoostedAttackAnimation, mysticismAttackGif } from "../rendering/animations.js";
-import { updateHealthBar } from "../entities/progression.js";
+
 import { EffectMessage } from "./effects.js";
 import { battleLogs } from "./journal.js";
 
 import { isLord } from "../entities/rules.js";
 
-
 // Attack preparation, execution and recovery.
-
 
 
 

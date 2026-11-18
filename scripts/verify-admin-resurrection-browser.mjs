@@ -32,7 +32,7 @@ async function fixture(count = 3) {
     window.pauseEvents = [];
     for (const type of ['combatPaused', 'combatResumed']) window.addEventListener(type, () => pauseEvents.push({ type, at: Date.now(), reasons: P.getCombatPauseReasons(), stack: new Error().stack }));
     document.addEventListener('visibilitychange', () => pauseEvents.push({ visibility: document.visibilityState }));
-    window.Damage = await import("/js/combat/vitals.js"); window.C = await import("/js/rendering/entities.js");
+    window.Damage = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts)); window.C = await import("/js/rendering/entities.js");
     window.Loot = await import("/js/items/loot.js");
     S.setAdminMode(true); window.levelRunning = 'admin'; window.currentStageId = 'resurrection-test';
     S.setCurrentLevel('resurrection-test'); (await import("/js/storage/sessionStorage.js")).beginAdminSession();

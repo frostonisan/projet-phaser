@@ -210,7 +210,7 @@ try {
   await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js"); const S = await import("/js/storage/gameStorage.js");
     const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)); const M = await import('/js/items/itemManager.js');
-    const Gear = await import('/js/items/equipement.js'); const A = await import("/js/combat/vitals.js");
+    const Gear = await import('/js/items/equipement.js'); const A = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const { ItemDetails } = await import('/js/data/itemList.js');
     window.levelRunning = 'worldmap'; S.setAdminMode(true);
     const entity = structuredClone(E.entitesNestUp[0]);

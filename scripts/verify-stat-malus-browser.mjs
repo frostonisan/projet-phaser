@@ -31,10 +31,10 @@ try {
   await dismissStarterForFixture(page);
   checks.push(...await page.evaluate(async () => {
     const E = await import("/js/entities/runtime.js");
-    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)), DDisplay = await import("/js/ui/statistics/details.js");
     const S = await import("/js/entities/statSystem.js");
     const H = await import('/js/data/helpers.js');
-    const U = await import("/js/entities/progression.js");
+    const U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const passed = [];
     const check = (ok, label) => { if (!ok) throw new Error(label); passed.push(label); };
     for (const [key, origin] of Object.entries(S.STAT_SYSTEM_ORIGINS)) for (const points of [10, 500]) {

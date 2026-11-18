@@ -33,7 +33,7 @@ try {
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js');
-    const A = await import("/js/combat/vitals.js");
+    const A = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const R = await import('/js/items/resourceStocks.js');
     const Aura = await import("/js/rendering/auras.js");
     const U = await import("/js/entities/progression.js");

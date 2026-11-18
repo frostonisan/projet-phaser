@@ -59,3 +59,7 @@ Le projet compte 117 modules au lieu de 120.
 Un module doit être importé depuis son dossier propriétaire. Les anciens chemins ne
 contiennent pas de fichiers relais. Les gros modules encore à séparer sont recensés
 dans [ARCHITECTURE.md](ARCHITECTURE.md).
+
+Les barres de PV/armure sont dans `rendering/vitalFeedback.js`. Pour les déplacements,
+les formules sont dans `combat/statistics.js`, l'application des charges dans
+`board/deployment.js` et leur affichage dans `rendering/hud.js`.

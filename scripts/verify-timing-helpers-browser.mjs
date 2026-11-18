@@ -28,9 +28,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
-    const D = await import("/js/combat/statistics.js"), DDisplay = await import("/js/ui/statistics/details.js");
+    const D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts)), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import("/js/entities/runtime.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const R = await import("/js/entities/rules.js");
     const keys = ['attackCooldownReduc', 'attackPreparationReduc', 'attackExecutionReduc', 'attackRecoveryReduc', 'attackProjectileSpeed'];
     const fixture = (amount = 2, haste = 25) => {

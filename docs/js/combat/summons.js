@@ -1,13 +1,16 @@
+import { updateHealthBar } from "../rendering/vitalFeedback.js";
 import { syncEntityFootprints, refreshHexOccupancy } from "../board/controller.js";
-import { removeCombatVisualAfter } from "./clock.js";
-import { registerCombatState, isCombatInteractionBlocked, trackCombatOperation, notifyCombatAction } from "./clock.js";
-import { combatData, combatReference, combatTarget } from "./clock.js";
-import { setTimeout, clearTimeout, clockNow } from "./clock.js";
+import {
+  removeCombatVisualAfter, registerCombatState, isCombatInteractionBlocked, trackCombatOperation,
+  notifyCombatAction, combatData, combatReference, combatTarget, setTimeout, clearTimeout, clockNow,
+} from "./clock.js";
+
+
 import { cachedResourceUrl } from "../data/loaderList.js";
 import { entites, removedEntities, RemoveEntite } from "../entities/runtime.js";
 import { summons } from "../data/summons.js";
 import { getProfanationTemplate } from "../procedural/proc-bareme.js";
-import { updateHealthBar } from "../entities/progression.js";
+
 import { applyDamage } from "./vitals.js";
 import { createEntityIngame } from "../entities/spawn.js";
 import { entiteTurn } from "./loop.js";
@@ -29,7 +32,9 @@ import { showHealingFeedback, applyAttackNatureEffect, scheduleAlterationTicks }
 import { getAttackNatureRules, readAttackDefinitionsForEntity, splitAttackNatureAmount } from './attackResolution.js';
 import { attackDetails } from "../data/attackList.js";
 import { glitterLoot, disperseLootGlitter } from "../biome/meteo.js";
-import { calculateProfanationSummonLevel, calculateResilienceEffectDuration, attemptResilienceCancel } from "./statistics.js";
+import {
+  calculateProfanationSummonLevel, calculateResilienceEffectDuration, attemptResilienceCancel,
+} from "./statistics.js";
 import { PERMANENT_CRYSTAL_LEVELS } from "../data/permanentCrystalData.js";
 import { getPermanentStatGrant } from "../items/permanentItems.js";
 

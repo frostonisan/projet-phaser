@@ -41,7 +41,7 @@ try {
   await page.evaluate(async () => {
     const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), E = await import("/js/entities/runtime.js");
     const S = await import("/js/storage/gameStorage.js"), G = await import("/js/app/state.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     window.levelRunning = 'worldmap'; G.setGameOver(false);
     const template = E.entitesNestUp.find(e => /mouche astic/i.test(e.name));
     const actor = structuredClone(template);

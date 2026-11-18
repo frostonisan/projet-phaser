@@ -5,9 +5,11 @@ import {
   DAMAGE_SOURCE_KEYS, roundAttackDamageSources, calculateDamageComposition, reduceCriticalSupplement,
   resolveCriticalDamage
 } from "./damageRules.js";
-import { removeCombatVisualAfter } from "./clock.js";
-import { isEntityMovementBlocked, isCombatEnemy, getControlState, canEntityProc } from "./control.js";
-import { setTimeout, clockNow } from "./clock.js";
+import {
+  removeCombatVisualAfter, setTimeout, clockNow,
+} from "./clock.js";
+import { isCombatEnemy, getControlState, canEntityProc } from "./control.js";
+
 import { POWER_RATE_HELPER_TEXT, buildPowerRateAssumption } from "../data/helpers.js";
 import {
   calculateStatSources, getStatSystemResult, STAT_SYSTEM_ORIGINS, getProgressiveRatio,
@@ -44,7 +46,7 @@ import { calculateCognitiveEssenceCount } from "../items/essenceInventory.js";
 import { EffectMessage, isAstralReturnActive, astralCooldownRemaining, startAstralCooldown } from "./effects.js";
 import { animateAstrality, animateMysticism, animateOccultism } from "../rendering/animations.js";
 import { battleLogs } from "./journal.js";
-import { refillNaturalMovement, spendMovementCharges, getEquipmentResourceCurrent } from "../items/resourceStocks.js";
+
 import { attackEffects } from "../data/attackEffects.js";
 
 // Attack stat contributions and essence affinity.
@@ -300,7 +302,6 @@ export function attemptResilience(attacker, target, attackDetail) {
   console.log(`⛨ ${target.name} → Résilience altérations (base + INT) : ${percent}%`);
   return { enabled: true, percent };
 }
-
 
 export function calculateTotalDodgeBonus(entite) {
   const system = getStatSystemResult(entite, 'dodge');
@@ -722,7 +723,6 @@ export function calculateBloodThirstyPercent(entiteOrValue, strengthValue = null
   );
 }
 
-
 export function calculateBloodFuryBFtRatio(bloodFury) {
   const cfg = balanceData.blood.furyExecution;
   const bf = Math.max(0, Number(bloodFury) || 0);
@@ -754,7 +754,6 @@ export function calculateBloodFuryExecutionPercent(entite) {
 
   return round1(Math.min(100, direct + Math.ceil((bfRatio + strRatio) * 100) / 100));
 }
-
 
 export function calculateBloodFuryExecStrengthRatio(strength) {
   const cfg = balanceData.blood.furyExecution;
@@ -857,7 +856,6 @@ export function calculateAmbidextryDamageBonus(entite) {
   const ambidextryAgiRatioBonus = calculateAmbidextryAgiRatioBonus(entite);
   return cfg.secondHitBaseDamagePercent + ambidextryRatioBonus + ambidextryAgiRatioBonus;
 }
-
 
 export function calculateInvisibleTargetAvoidChance(attacker) {
   const precision = calculatePrecisionPercent(Number(getSafe(attacker, 'precision', 0)) || 0);
@@ -1085,7 +1083,6 @@ export function attemptResilienceCancel(attacker, target, effect) {
   return success;
 }
 
-
 export function attemptResilienceCritReduction(attacker, target, damage, normalDamage = damage) {
   return reduceCriticalSupplement(damage, normalDamage, calculateResilienceCritTotalBonus(target));
 }
@@ -1241,7 +1238,6 @@ export function calculateProjectilSpeedPercent(entite) {
   const totalPct = cfg.projectileSpeedBasePercent + bonusPct;
   return roundBalance(totalPct, cfg.projectileSpeedDecimals);
 }
-
 
 export function calculateIntelligence(entite) {
   return parseFloat((getSafe(entite, "intelligence") ?? 0).toFixed(2));
@@ -1874,7 +1870,6 @@ export function calculatewillAwakeBonus(value, config = {}) {
   return clamped;
 }
 
-
 const LEVEL_WEIGHTS = balanceData.statGraph.levelWeights;
 
 function normalizeNumber(v) {
@@ -2225,7 +2220,6 @@ export function totalMeleeExecReduction(entite, ctx = null) {
 
   return clampPercent(attackExecutionReduc + meleeReduc + strengthReduc, 0, balanceData.attackTime.reductionCapPercent);
 }
-
 
 export function attemptMeleeExecBonus(attacker, attack, baseExecMs) {
   const base = Number(baseExecMs) || 0;
@@ -3252,266 +3246,6 @@ export function calculateMovementTrailerChance(entite) {
   return Math.min(cfg.chanceMaxPercent, Math.floor(cfg.trailerBasePercent + movementValue * cfg.trailerMovementRatio));
 }
 
-export function ensureMovementState(entite, { reset = false } = {}) {
-  if (!entite) return { current: 0, max: 0 };
-  if (!entite.stats) entite.stats = {};
-
-  const rawShift = entite.stats.shift;
-  const hasShiftObject = rawShift && typeof rawShift === "object";
-
-  const movementMax = Math.max(0, Math.round(calculateMovementMaxCharges(entite)));
-
-  const max = hasShiftObject
-    ? Math.max(0, Math.round(Number(rawShift.max) || 0))
-    : movementMax;
-
-  if (reset || !hasShiftObject) {
-    entite.stats.shift = {
-      ...(rawShift?.baseDefault ? { baseDefault: true } : {}),
-      current: hasShiftObject
-  ? Math.round(Number(rawShift.current) || 0)
-  : calculateMovementStartingCharges(entite),
-      max,
-    };
-
-    return entite.stats.shift;
-  }
-
-  entite.stats.shift.max = max;
-entite.stats.shift.current = Math.round(Number(entite.stats.shift.current) || 0);
-  return entite.stats.shift;
-}
-
- function initializeMovementStateAtBattleStart(entite) {
-  const movement = ensureMovementState(entite, { reset: true });
-  updateMovementDisplay(entite);
-  return movement;
-}
-
-export function initializeAllMovementStatesAtBattleStart(entityList = entites) {
-  if (!Array.isArray(entityList)) return [];
-  return entityList.map(entite => initializeMovementStateAtBattleStart(entite));
-}
-
-function getMovementCounterState(entite) {
-  const current = Math.round(Number(entite?.stats?.shift?.current) || 0);
-  const max = Math.max(0, Math.round(Number(entite?.stats?.shift?.max) || 0));
-  const durable = entite?.modifierStats?.durable;
-  // Keep progression, but exclude equipment and temporary effects from the comparison.
-  const native = entite?.baseStats ? getStatSystemResult({
-    ...entite,
-    modifierStats: { durable: { ...durable, stuff: { byId: {} } } },
-    battleBoosts: {},
-    _statSystemOverrides: undefined,
-  }, 'shift') : null;
-  const delta = entite?.baseStats ? max - (native?.value ?? 1) : 0;
-  const extra = getEquipmentResourceCurrent(entite, 'shift')
-    + Math.max(0, Number(entite?.resourceStocks?.shift?.temporary) || 0)
-    + Math.max(0, Number(entite?.resourceStocks?.shift?.spell) || 0);
-  return { current, max, delta, extra };
-}
-
-export function renderMovementCounter(node, entite, state = getMovementCounterState(entite)) {
-  const { current, max, delta, extra } = state;
-  let text = node;
-  if (node.classList.contains('movement-counter')) {
-    text = node.querySelector('.counter-shift');
-    if (!text) {
-      text = document.createElement('span');
-      text.className = 'counter-shift hu';
-      node.appendChild(text);
-    }
-  }
-  text.innerHTML = `${text !== node ? ': ' : ''}<span class="current-shift current">${current}</span> / <span class="current-shift max">${max}</span>`;
-  const currentSpan = text.querySelector('.current');
-  const maxSpan = text.querySelector('.max');
-  currentSpan.classList.toggle('negative-shift', current < 0);
-  currentSpan.classList.toggle('movement-reduced', delta < 0 || current < 0);
-  currentSpan.classList.toggle('movement-overflow', delta >= 0 && current > max);
-  currentSpan.classList.toggle('movement-buffed', delta >= 0 && current >= 0 && current <= max && (delta > 0 || extra > 0));
-  maxSpan.classList.toggle('movement-reduced', delta < 0);
-  maxSpan.classList.toggle('movement-buffed', delta > 0);
-  node.classList.toggle('empty', current <= 0);
-  node.classList.toggle('full', current >= max && max > 0);
-  return currentSpan;
-}
-
-export function updateMovementDisplay(entite, { animate = true } = {}) {
-  if (!entite?.id) return;
-
-  const rawMovement = entite?.stats?.shift;
-  if (!rawMovement || typeof rawMovement !== "object") return;
-
-  const previousCurrent = Number(rawMovement._lastDisplayedCurrent ?? rawMovement.current);
-
-  const current = Math.round(Number(rawMovement.current) || 0);
-  const max = Math.max(0, Math.round(Number(rawMovement.max) || 0));
-
-  rawMovement.current = current;
-  rawMovement.max = max;
-
-  const hasGeneratedMove =
-  animate &&
-  current > previousCurrent &&
-  previousCurrent < max &&
-  current <= max;
-
-  const state = getMovementCounterState(entite);
-  document
-    .querySelectorAll(`[data-movement-entity-id="${entite.id}"]`)
-    .forEach(el => {
-      const currentSpan = renderMovementCounter(el, entite, state);
-
-      if (hasGeneratedMove && currentSpan) {
-        battleLogs("trail_move_generated", {
-          entity: entite
-        });
-
-        currentSpan.classList.remove("bounce-shift");
-        void currentSpan.offsetWidth;
-        currentSpan.classList.add("bounce-shift");
-
-        setTimeout(() => {
-          currentSpan.classList.remove("bounce-shift");
-        }, 500);
-      }
-
-    });
-
-  rawMovement._lastDisplayedCurrent = current;
-}
-export function createMovementDisplay(entite) {
-  ensureMovementState(entite);
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "movement-charge-display";
-  wrapper.setAttribute("data-movement-entity-id", entite.id);
-  renderMovementCounter(wrapper, entite);
-
-  return wrapper;
-}
-export function animateMoveCounter(counterElement) {
-    if (!counterElement) return;
-
-    counterElement.classList.remove("counter-pop");
-    void counterElement.offsetWidth;
-    counterElement.classList.add("counter-pop");
-}
-export function refillEntityMovement(entite, amount = balanceData.movement.charges.refillBaseAmount) {
-  const movement = ensureMovementState(entite);
-
-  if (movement.max <= 0) {
-    updateMovementDisplay(entite);
-    return movement;
-  }
-
-  const before = movement.current;
-
-const isAlreadyFull = movement.current >= movement.max;
-
-const trailer = isAlreadyFull
-  ? { success: false, chance: 0, roll: null, disabled: true, reason: "movement-full" }
-  : attemptMovementTrailer(entite);
-
-const refillAmount = trailer.success
-  ? balanceData.movement.charges.trailerRefillAmount
-  : Math.max(0, Math.round(Number(amount) || 0));
-refillNaturalMovement(entite, refillAmount);
-
-movement.trailer = trailer;
-
-  updateMovementDisplay(entite);
-
-if (movement.current !== before && trailer.success) {
-  document
-    .querySelectorAll(`[data-movement-entity-id="${entite.id}"] .counter-shift.hu`)
-    .forEach(currentValue => {
-      currentValue.classList.remove("trailer-proc-highlight");
-      void currentValue.offsetWidth;
-      currentValue.classList.add("trailer-proc-highlight");
-
-      setTimeout(() => {
-        currentValue.classList.remove("trailer-proc-highlight");
-      }, 1000);
-    });
-}
-  console.log(
-    `👣 Recharge mouvement : ${entite.name} ${before}/${movement.max} → ${movement.current}/${movement.max}`
-  );
-
-  return movement;
-}
-export function attemptMovementMarathon(entite) {
-  if (!canEntityProc(entite)) return { success: false, chance: 0, roll: null };
-  // const chance = Math.max(
-    // 0,
-    // Math.min(100, Number(calculateMovementMarathonChance(entite)) || 0)
-  // );
-const chance = Math.max(
-  0,
-  Math.min(balanceData.movement.charges.chanceMaxPercent, Number(getMarathonChance(entite)) || 0)
-);
-  if (chance <= 0) {
-    return {
-      success: false,
-      chance,
-      roll: null,
-    };
-  }
-
-  const roll = Math.random() * 100;
-  const success = roll < chance;
-
-  console.log(
-    `🏃 Marathonien : ${entite.name} | ${chance}% | roll ${roll.toFixed(2)} → ${
-      success ? "✅ déplacement gratuit" : "❌ charge consommée"
-    }`
-  );
-
-  return {
-    success,
-    chance,
-    roll: Number(roll.toFixed(2)),
-  };
-}
-
-
-export function attemptMovementTrailer(entite) {
-  if (!canEntityProc(entite)) return { success: false, chance: 0, roll: null };
-  const movementValue = getMovementValue(entite);
-
-  if (movementValue <= 0) {
-    return {
-      success: false,
-      chance: 0,
-      roll: null,
-      disabled: true,
-    };
-  }
-
-const chance = Math.max(
-  0,
-  Math.min(balanceData.movement.charges.chanceMaxPercent, Number(getTrailerChance(entite)) || 0)
-);
-
-  if (chance <= 0) {
-    return {
-      success: false,
-      chance,
-      roll: null,
-    };
-  }
-
-  const roll = Math.random() * 100;
-  const success = roll < chance;
-
-  return {
-    success,
-    chance,
-    roll: Number(roll.toFixed(2)),
-  };
-}
-
 export function getMarathonChance(entiteOrValue) {
   return Number(
     typeof entiteOrValue === "number"
@@ -3528,66 +3262,6 @@ export function getTrailerChance(entiteOrValue) {
   ) || 0;
 }
 
-export function consumeEntityMovement(entite, amount = 1) {
-  const rawMovement = entite?.stats?.shift;
-  if (isEntityMovementBlocked(entite)) return { allowed: false, consumed: false, reason: 'immobilised', movement: rawMovement };
-
-  if (
-    !rawMovement ||
-    typeof rawMovement !== "object" ||
-    rawMovement.current == null ||
-    Number(rawMovement.current) < 1
-  ) {
-    return {
-      allowed: false,
-      consumed: false,
-      reason: "not-enough-current-movement",
-      movement: rawMovement || { current: 0, max: 0 },
-    };
-  }
-
-  const movement = ensureMovementState(entite);
-
-  const marathon = attemptMovementMarathon(entite);
-
-  if (marathon.success) {
-    updateMovementDisplay(entite);
-
-    return {
-      allowed: true,
-      consumed: false,
-      reason: "marathon",
-      movement,
-      marathon,
-    };
-  }
-
-  const weight = getMovementWeightMalus(entite);
-  const weightResistance = weight.shiftCostModifier > 0
-    ? attemptAlterationResistance(entite, entite, { type: ['entrave'], effectName: 'weight', increasesMovementCost: true }) : null;
-  const cost = Math.max(1, Math.round(Number(amount) || 1))
-    + (weightResistance?.canceled ? 0 : Number(weight?.shiftCostModifier || 0));
-
-  const before = movement.current;
-  spendMovementCharges(entite, cost);
-
-  updateMovementDisplay(entite);
-
-  console.log(
-    `👣 Mouvement consommé : ${entite.name} ${before}/${movement.max} → ${movement.current}/${movement.max} coût ${cost}`
-  );
-
-  return {
-    allowed: true,
-    consumed: true,
-    reason: "consumed",
-    movement,
-    marathon,
-    cost,
-    weight,
-    weightResistance,
-  };
-}
 export function calculateWeaponOrfevreWeaponMastery(entite, value) {
   const cfg = balanceData.weaponOrfevre.fromWeaponMastery;
   const weaponMastery = Math.max(

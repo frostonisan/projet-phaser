@@ -26,8 +26,8 @@ const installProbe = async () => page.evaluate(async () => {
   const G = await import("/js/app/stages.js"), State = await import("/js/app/state.js");
   const F = await import("/js/combat/loop.js"), M = await import('/js/items/itemManager.js');
   const Gear = await import('/js/items/equipement.js'), R = await import('/js/items/resourceStocks.js');
-  const A = await import("/js/combat/vitals.js"), U = await import("/js/storage/entityStorage.js");
-  const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts)), D = await import("/js/combat/statistics.js");
+  const A = await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts)), U = await import("/js/storage/entityStorage.js");
+  const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts)), D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts));
   const checks = [];
   const check = (ok, text) => { if (!ok) throw Error(text); checks.push(text); };
   const actor = id => E.entites.find(entity => entity.id === id)

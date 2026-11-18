@@ -1,3 +1,7 @@
+import { createMovementDisplay } from "../rendering/hud.js";
+import {
+  ensureMovementState, applyCombatProfileView,
+} from "../board/deployment.js";
 // Application shell, starter selection, settings and stage menu lifecycle.
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import { cachedResourceUrl } from '../data/loaderList.js';
@@ -13,7 +17,7 @@ import {
 import { assertEntityType, isLord, getSafe } from "../entities/rules.js";
 import { generateUniqueID, entitesNestUp, enrichEntityStats } from "../entities/runtime.js";
 import { hideCombatAttackControlPanel, createEntityAttackDisplay } from "./attacks.js";
-import { createMovementDisplay, ensureMovementState } from "../combat/statistics.js";
+
 import { createSoundControls } from "../rendering/sound.js";
 import { generateArmyA } from "../entities/armies.js";
 import { updateExperienceDisplay } from "../entities/progression.js";
@@ -29,11 +33,12 @@ import { endDragHelperCleanup } from "./drag.js";
 import { closeAttackEssenceSocketPopups } from "../items/essences.js";
 import { getStageAccess, refreshStageAccess, requireSafeMenuAccess } from "../app/state.js";
 import { createBattleSatchelView, PlayerInventory, MapShop } from './inventory.js';
-import { createEntityPowerValue } from "./statistics/components.js";
-import { createUmbraBlock } from "./statistics/components.js";
+import {
+  createEntityPowerValue, createUmbraBlock,
+} from "./statistics/components.js";
+
 import { PlayerEssenceur } from "./essences.js";
 import { PlayerArmyCodex } from "./codex/index.js";
-import { applyCombatProfileView } from "../board/deployment.js";
 
 function detectPageReload() {
     let isTrueReload = false;

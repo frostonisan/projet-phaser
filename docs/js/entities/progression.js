@@ -1,32 +1,21 @@
+import { renderMovementCounter, updateMovementDisplay } from "../rendering/hud.js";
+import {
+  ensureHPDom, updateHPCounters, updateHealthBar, updateBonusLifeCounters, updateArmorCounter,
+} from "../rendering/vitalFeedback.js";
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import { buildStatGraphHelper, buildMilestoneEssenceHelper } from "../data/helpers.js";
 import { applyStatSystemTotals, STAT_SYSTEM_ORIGINS, getPointLimitedStatKeys } from "./statSystem.js";
-import { getStatSystemInputs } from "./runtime.js";
-import { getEquipmentResourceCurrent, syncLifeCurrent } from "../items/resourceStocks.js";
 import {
-  entites,
-  recomputeEntityStats,
-  updateExtraLifeRegenOrders,
-  updateEternalLifeRegenOrders,
-  rescaleHPCurrent,
-  getStatMalusSources,
-  levelDetails,
-  calculateVitalityBonus,
-  calculateVelocityReduction,
-  calculateRobustnessBonus,
-  calculateTranscendenceExtraLife,
-  maxLevel as MAX_LEVEL,
-  BaseDayHpRegen,
-  calculateWeaponMasteryCharge,
-  calculateBloodThirstyFromBloodFury,
-  calculateGeneratedWeight,
-  getWeaponOrfevrePreviewActivePercent,
-  getWeaponOrfevreStuffPreviewDelta,
-  calculatePhysicalPenPercent,
-  calculateMagicalPenPercent,
-  calculateEsoterismPercent,
-  getBloodThirstyPercent,
+  getStatSystemInputs, entites, recomputeEntityStats, updateExtraLifeRegenOrders,
+  updateEternalLifeRegenOrders, rescaleHPCurrent, getStatMalusSources, levelDetails,
+  calculateVitalityBonus, calculateVelocityReduction, calculateRobustnessBonus,
+  calculateTranscendenceExtraLife, maxLevel as MAX_LEVEL, BaseDayHpRegen, calculateWeaponMasteryCharge,
+  calculateBloodThirstyFromBloodFury, calculateGeneratedWeight, getWeaponOrfevrePreviewActivePercent,
+  getWeaponOrfevreStuffPreviewDelta, calculatePhysicalPenPercent, calculateMagicalPenPercent,
+  calculateEsoterismPercent, getBloodThirstyPercent,
 } from "./runtime.js";
+import { getEquipmentResourceCurrent, syncLifeCurrent } from "../items/resourceStocks.js";
+
 import {
   loadFromLocalStorage,
   saveToLocalStorage,
@@ -63,31 +52,39 @@ import { toRoman, showStatGainsFromDiff } from "../ui/display.js";
 import { createUmbraBlock, syncStatCurseMarker } from "../ui/statistics/components.js";
 import { bindHelperEntity, closeOpenHelpers } from "../ui/statistics/helpers.js";
 import {
-  toNumber, renderMovementCounter, updateMovementDisplay, calculateVitalityRegenPercent,
-  calculateVitalityRegenAmount, calculateTotalRegenAmount, calculateHpBattleRegenStrengthRatio, calculateHpBattleRegenIndestructibilityRatio,
-  weaponMasteryChargeStrenghtRatioBonus, calculateWeaponOrfevreWeaponMastery, calculateWeaponOrfevreStrength, calculateWeaponMasteryTrophyChance,
-  calculateWeaponMasteryTrophyStrengthBonus, calculateMovementMarathonChance, calculateMovementTrailerChance, getMarathonChance,
-  getTrailerChance, calculateMagicalTotal, calculateCritTotalChance, calculateCritDamageBonus,
-  getFinalCriticalChanceFlat, getFinalCriticalDamageFlat, calculateAmbidextryTotalChance, calculateAmbidextryDamageBonus,
-  calculateBloodFuryExecutionPercent, calculateBloodFuryTargetThreshold, calculateBloodFuryExecChanceBonus, calculateExecutionDamage,
-  calculateBloodThirstyPercent, calculateHypercognitionEssences, calculateCognitiveExplosionTotal, calculateRangeRatio,
-  calculateBullsEyePercent, calculateTotalDodgeBonus, calculateResilienceCritTotalBonus, calculateResilienceTotalCancelBonus,
-  calculateResilienceAlterationTotalBonus, caluclateIndestructibilityReductionTotal, calculateIndestructibilityPercentFromEntity, calculateHpBattleRegenPercent,
-  calculateAstralityTotal, calculateTranscendenceConsoProtectionTotal, getFinalAttackPreparationReduc, getFinalAttackExecutionReduc,
-  getFinalAttackCooldownReduc, getFinalAttackRecoveryReduc, getFinalAttackProjectileSpeed, calculateInvisibleTargetAvoidChance,
-  calculateBrokenSpellChance, calculateBrokenSpellDamage, totalMeleeExecReduction, totalPiercingRecupReductionWithAgi,
-  totalTranspiercingRecupReductionWithAgi, transpiercingAgiRatio, transpiercingTotal, brutalityPercantBonus,
-  psionicPercantBonus, calculateGeneratedUmbraStats, getGeneratedUmbraTargetKeys, calculateMeleeExecBonus,
-  calculateMysticismProcChance, calculateMysticismTranceDuration, calculateMysticismPreparationAcceleration, calculateMysticismTotalDamageBonus,
-  calculateLvlMaxEntiteWithWill, calculateEquilibreAggroReduction, calculateEquilibreInvisibleDetection, calculateEquilibreAttackChance,
-  calculateAgileRetreatChance, calculateOccultismInvisibilityChance, calculateOccultismTargetableChanceDisplay, calculateOccultismDodgeBonus,
-  calculateOccultismCritChanceBonus, calculateOccultismShadowFragilityPercent, calculateMovementMaxCharges, calculateMovementStartingChargePercent,
-  calculateMovementStartingCharges, getFinalWeaponOrfevreBonus, getFinalWeaponCollectorBonus, calculateChargeEquipmentSlots,
-  calculateWeaponMasteryTotalChargeBonus
+  toNumber, calculateVitalityRegenPercent, calculateVitalityRegenAmount, calculateTotalRegenAmount,
+  calculateHpBattleRegenStrengthRatio, calculateHpBattleRegenIndestructibilityRatio,
+  weaponMasteryChargeStrenghtRatioBonus, calculateWeaponOrfevreWeaponMastery,
+  calculateWeaponOrfevreStrength, calculateWeaponMasteryTrophyChance,
+  calculateWeaponMasteryTrophyStrengthBonus, calculateMovementMarathonChance,
+  calculateMovementTrailerChance, getMarathonChance, getTrailerChance, calculateMagicalTotal,
+  calculateCritTotalChance, calculateCritDamageBonus, getFinalCriticalChanceFlat,
+  getFinalCriticalDamageFlat, calculateAmbidextryTotalChance, calculateAmbidextryDamageBonus,
+  calculateBloodFuryExecutionPercent, calculateBloodFuryTargetThreshold,
+  calculateBloodFuryExecChanceBonus, calculateExecutionDamage, calculateBloodThirstyPercent,
+  calculateHypercognitionEssences, calculateCognitiveExplosionTotal, calculateRangeRatio,
+  calculateBullsEyePercent, calculateTotalDodgeBonus, calculateResilienceCritTotalBonus,
+  calculateResilienceTotalCancelBonus, calculateResilienceAlterationTotalBonus,
+  caluclateIndestructibilityReductionTotal, calculateIndestructibilityPercentFromEntity,
+  calculateHpBattleRegenPercent, calculateAstralityTotal, calculateTranscendenceConsoProtectionTotal,
+  getFinalAttackPreparationReduc, getFinalAttackExecutionReduc, getFinalAttackCooldownReduc,
+  getFinalAttackRecoveryReduc, getFinalAttackProjectileSpeed, calculateInvisibleTargetAvoidChance,
+  calculateBrokenSpellChance, calculateBrokenSpellDamage, totalMeleeExecReduction,
+  totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi, transpiercingAgiRatio,
+  transpiercingTotal, brutalityPercantBonus, psionicPercantBonus, calculateGeneratedUmbraStats,
+  getGeneratedUmbraTargetKeys, calculateMeleeExecBonus, calculateMysticismProcChance,
+  calculateMysticismTranceDuration, calculateMysticismPreparationAcceleration,
+  calculateMysticismTotalDamageBonus, calculateLvlMaxEntiteWithWill, calculateEquilibreAggroReduction,
+  calculateEquilibreInvisibleDetection, calculateEquilibreAttackChance, calculateAgileRetreatChance,
+  calculateOccultismInvisibilityChance, calculateOccultismTargetableChanceDisplay,
+  calculateOccultismDodgeBonus, calculateOccultismCritChanceBonus,
+  calculateOccultismShadowFragilityPercent, calculateMovementMaxCharges,
+  calculateMovementStartingChargePercent, calculateMovementStartingCharges, getFinalWeaponOrfevreBonus,
+  getFinalWeaponCollectorBonus, calculateChargeEquipmentSlots, calculateWeaponMasteryTotalChargeBonus,
 } from "../combat/statistics.js";
 import { calculateStatsDisplay } from "../ui/statistics/details.js";
 import { startArchup } from "../biome/meteo.js";
-import { updateBonusLifeCounters, updateArmorCounter } from "../combat/vitals.js";
+
 import { recordEntityProgression, countCompletedArchetypes } from "../storage/entityStorage.js";
 import { grantEntityRobustnessArmor } from "../items/armor.js";
 
@@ -252,7 +249,7 @@ function refreshResetDom(entity, oldStats, entityApi, codexApi) {
     if (String(node.dataset?.entityId) === String(entity.id)) node.textContent = '1';
   });
   syncDOMWithStats(oldStats, entity.stats, entity.id, entity);
-  entityApi.updateBonusLifeCounters(entity);
+  updateBonusLifeCounters(entity);
   entityApi.updateCurrentAttackDisplay(entity);
   const codex = document.getElementById(`codex-entity_${entity.id}`);
   if (codex?.parentElement) {
@@ -776,35 +773,6 @@ function setEntityLevelCurrent(entite, value) {
 
   entite.level.current = clamped;
   return clamped;
-}
-function ensureHPDom(entityId, label = "Points de vie") {
-  const containers = document.querySelectorAll(
-    `.stat-container[data-stat="HP"][data-entity-id="${entityId}"]`
-  );
-  if (!containers.length) return;
-
-  containers.forEach(container => {
-    const existing = container.querySelector(`.entite-stat[data-stat="HP"][data-entity-id="${entityId}"]`);
-    if (existing) return;
-
-    const oldText = container.textContent.trim();
-    container.textContent = "";
-
-    const wrap = document.createElement("div");
-    wrap.className = "stat-picto-valeur HP";
-    wrap.innerHTML = `
-      <div class="picto-stat HP"></div>
-      <div class="stat-name">${label}</div>
-      <div class="entite-stat" data-entity-id="${entityId}" data-stat="HP"></div>
-      <div class="separator-stats-preview">&gt;</div>
-      <div class="entite-stat preview is-hidden" data-entity-id="${entityId}" data-stat="HP"></div>
-    `;
-    container.appendChild(wrap);
-
-    const perm = wrap.querySelector(`.entite-stat[data-stat="HP"][data-entity-id="${entityId}"]:not(.preview)`);
-    const m = oldText.match(/(\d+)\s*\/\s*(\d+)/);
-if (perm && m) perm.textContent = `${m[1]} / ${m[2]}`;
-  });
 }
 
 function containerOf(el) {
@@ -1504,225 +1472,13 @@ function clearEntityStatDeltaClasses(entityId, root = document) {
     });
 }
 
-export function updateHPCounters(entityId, currentHP, maxHP) {
-  if (!entityId) return;
 
-  const cur = Number(currentHP ?? 0);
-  const max = Number(maxHP ?? 0);
 
-  document
-    .querySelectorAll(`.HP-counter[data-stat="HP"][data-entity-id="${entityId}"]`)
-    .forEach(el => {
-      el.textContent = `HP : ${cur} / ${max}`;
-    });
-}
-function ensureArmorBarDom(entityId, initialArmor = 0) {
-  const existingHpBar = document.querySelector(
-    `.health-bar[data-stat="hp-bar"][data-entity-id="${entityId}"]`
-  ) || document.querySelector(`.health-bar[data-entity-id="${entityId}"]`);
-
-  const barsContainer =
-    document.getElementById(`HeadsupLifeBars_${entityId}`) ||
-    document.getElementById(`CodexLifeBars_${entityId}`) ||
-    existingHpBar?.closest?.(".life-bars-container");
-
-  if (!barsContainer) return null;
-
-  let armorBar = barsContainer.querySelector(
-    `.armor-bar[data-stat="armor-bar"][data-entity-id="${entityId}"]`
-  );
-  if (armorBar) return armorBar;
-
-  const hpBar = barsContainer.querySelector(
-    `.health-bar[data-stat="hp-bar"][data-entity-id="${entityId}"]`
-  ) || barsContainer.querySelector(`.health-bar[data-entity-id="${entityId}"]`) || existingHpBar;
-
-  const sideClass =
-    hpBar?.classList.contains("A") ? "A" :
-    hpBar?.classList.contains("B") ? "B" : "";
-
-  armorBar = document.createElement("div");
-  armorBar.className = `armor-bar ${sideClass}`.trim();
-  armorBar.dataset.stat = "armor-bar";
-  armorBar.dataset.entityId = entityId;
-  armorBar.dataset.prevArmor = String(initialArmor);
-
-  const armorFill = document.createElement("div");
-  armorFill.className = "armor-fill";
-  armorFill.style.width = "100%";
-  armorFill.style.transition = "width 0.5s ease";
-
-  armorBar.appendChild(armorFill);
-
-  // insertion après HP bar (HP puis Armor dans la jauge)
-  if (hpBar) hpBar.insertAdjacentElement("afterend", armorBar);
-  else barsContainer.appendChild(armorBar);
-
-  return armorBar;
-}
 
 // Render already applied resources. Combat arithmetic belongs to combat/vitalRules.js.
-export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entityId) {
-  ensureHPDom(entityId);
 
-  // --- 2) Clamp ---
-  const validHP = Math.max(0, Math.min(currentHP, maxHP));
-  const validArmor = Math.max(0, Number(currentArmor) || 0);
 
-  updateHPCounters(entityId, validHP, maxHP);
 
-  // ✅ CRÉATION DOM ARMOR BAR (si elle n’existe pas)
-  // Tu peux mettre la condition que tu veux :
-  // - maxArmor > 0 (armure robuste régénérable)
-  // - validArmor > 0 (armure externe ou stuff, même non régénérable)
-  if (maxArmor > 0 || validArmor > 0) ensureArmorBarDom(entityId, validArmor);
-
-  // --- 3) Calculs de base ---
-  const totalHPArmor = validHP + validArmor;
-  let hpPercent, armorPercent, mode;
-
-  if (totalHPArmor < maxHP) {
-    mode = "absolu";
-    hpPercent = (validHP / maxHP) * 100;
-    armorPercent = (validArmor / maxHP) * 100;
-  } else if (totalHPArmor === maxHP) {
-    mode = "plein";
-    hpPercent = (validHP / maxHP) * 100;
-    armorPercent = (validArmor / maxHP) * 100;
-  } else {
-    mode = "normalisé";
-    const total = totalHPArmor;
-    hpPercent = (validHP / total) * 100;
-    armorPercent = (validArmor / total) * 100;
-  }
-
-  const hpColorPercent = (validHP / maxHP) * 100;
-
-  // --- 4) ARMURE ---
-  document.querySelectorAll(
-    `.armor-bar[data-stat="armor-bar"][data-entity-id="${entityId}"]`
-  ).forEach(armorBar => {
-    const armorFill = armorBar.querySelector(".armor-fill");
-    const armorText = armorBar.querySelector(
-      `.armor-text[data-stat="armor-text"][data-entity-id="${entityId}"]`
-    );
-
-    if (armorFill) armorFill.style.transition = "width 0.5s ease";
-
-    if (validArmor <= 0) {
-      armorBar.style.display = "none";
-    } else {
-      armorBar.style.display = "";
-      armorBar.style.setProperty("width", `${armorPercent}%`, "important");
-      armorBar.style.flex = `0 0 ${armorPercent}%`;
-      if (armorFill) armorFill.style.width = "100%";
-
-      const prevArmor = Number(armorBar.dataset.prevArmor ?? validArmor);
-      if (validArmor < prevArmor) (armorFill || armorBar).animate(
-        [
-          { backgroundColor: "rgba(255,255,255,0.7)", filter: "brightness(1.5)" },
-          { filter: "brightness(1)" }
-        ],
-        { duration: 180, easing: "ease-out" }
-      );
-
-      armorBar.dataset.prevArmor = String(validArmor);
-    }
-
-    if (armorText) armorText.textContent = `🛡️ ${validArmor}`;
-  });
-
-  // --- 5) HP ---
-  document.querySelectorAll(
-    `.health-bar[data-stat="hp-bar"][data-entity-id="${entityId}"]`
-  ).forEach(healthBar => {
-    const healthFill = healthBar.querySelector(".health-fill");
-    if (healthFill) healthFill.style.transition = "width 0.5s ease, background-color 0.5s ease";
-    healthBar.style.setProperty("width", `${hpPercent}%`, "important");
-    healthBar.style.flex = `0 0 ${hpPercent}%`;
-    updateHealthBarAnimation(healthBar, hpColorPercent);
-  });
-
-  // --- 6) Texte HP ---
-  document.querySelectorAll(
-    `.entite-stat[data-stat="HP"][data-entity-id="${entityId}"]:not(.preview):not([data-display="max"])`
-  ).forEach(el => {
-    if (!el.closest('.item-description-card, .item-stats-block')) el.textContent = `${validHP} / ${maxHP}`;
-  });
-
-  // --- 7) Texte ARMURE ---
-  document.querySelectorAll(
-    `.armor-counter[data-entity-id="${entityId}"]`
-  ).forEach(el => {
-    if (validArmor <= 0) el.style.display = "none";
-    else {
-      el.style.display = "";
-      el.textContent = `🛡️ ${validArmor}`;
-    }
-  });
-
-  document.querySelectorAll(
-    `.entite-stat[data-stat="armor"][data-entity-id="${entityId}"]:not(.preview):not([data-display="max"])`
-  ).forEach(el => {
-    if (el.closest('.item-description-card, .item-stats-block')) return;
-    const profileRow = el.closest(".codex-profile-battle-stat");
-
-    if (validArmor <= 0) {
-      if (profileRow) profileRow.style.display = "none";
-      else el.style.display = "none";
-      return;
-    }
-
-    if (profileRow) profileRow.style.display = "";
-    el.style.display = "";
-    el.textContent = String(validArmor);
-  });
-
-  return { currentHP: validHP, currentArmor: validArmor };
-}
-
-export function updateHealthBarAnimation(healthBar, percentage) {
-  const healthFill = healthBar.querySelector('.health-fill');
-
-  // ✅ gère A/SideA et B/SideB
-  const isA = healthBar.classList.contains('A') || healthBar.classList.contains('SideA');
-  const isB = healthBar.classList.contains('B') || healthBar.classList.contains('SideB');
-
-  let color;
-  if (isA) {
-    const red = Math.round(255 - (percentage / 100) * 255);
-    const green = Math.round((percentage / 100) * 255);
-    color = `rgb(${red}, ${green}, 0)`; // rouge → vert
-  } else if (isB) {
-    const red = Math.round(255 - (percentage / 100) * 173);
-    color = `rgb(${red}, 0, 0)`; // rouge sombre
-  } else {
-    const red = Math.round(255 - (percentage / 100) * 255);
-    const green = Math.round((percentage / 100) * 255);
-    color = `rgb(${red}, ${green}, 0)`;
-  }
-
-  if (healthFill) {
-    healthFill.style.transition = 'background-color 0.5s ease';
-    healthFill.style.backgroundColor = color;
-  } else {
-    healthBar.style.transition = 'background-color 0.5s ease';
-    healthBar.style.backgroundColor = color;
-  }
-
-if (percentage <= 30) {
-  const maxDuration = 1.0;   // durée du clignotement à 30 % HP
-  const minDuration = 0.04;  // durée minimale à 0 % HP
-  const normalized = Math.max(0, Math.min(percentage / 30, 1));
-  // exponent plus faible pour accélérer davantage à la fin
-  const duration = minDuration + Math.pow(normalized, 1.5) * (maxDuration - minDuration);
-  healthBar.style.animation = `blink ${duration}s ease-in-out infinite`;
-} else {
-  healthBar.style.animation = '';
-  healthBar.style.opacity = '1';
-}
-
-}
 
 export function updateStatsInDOM(statsObject, baseStats = {}, entityContext = null, options = {}) {
   const entityId = baseStats.id || statsObject.id || statsObject.entityId;
@@ -2153,7 +1909,6 @@ export function syncDOMWithStats(oldStats = {}, newStats = {}, entityId, entityC
   localStorage.setItem("entityStats", JSON.stringify(newStats));
   return changedStats; // optionnel, mais pratique en debug
 }
-
 
 export function createNicknameForm(entite, codexColumn) {
     let nicknameForm = document.createElement('div');
@@ -3079,11 +2834,6 @@ function drawRealtimegraph(ctx, strength, agility, intelligence, hoverSlice = nu
     drawRealtimegraph(ctx, strength, agility, intelligence, null);
   };
 }
-
-
-
-
-
 
 export function initArchetypeProgress(entite) {
   const progress = {};

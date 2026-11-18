@@ -28,7 +28,7 @@ try {
   await dismissStarterForFixture(page);
   const setup = async (view, preview) => page.evaluate(async ({ view, preview }) => {
     const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), E = await import("/js/entities/runtime.js");
-    const U = await import("/js/entities/progression.js");
+    const U = await Promise.all([import("/js/entities/progression.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));
     const { stats } = await import('/js/data/statsData.js');
     const { STAT_HELPER_DESCRIPTIONS } = await import('/js/data/helpers.js');
     UI.closeOpenHelpers(); document.getElementById('intro-audit')?.remove();

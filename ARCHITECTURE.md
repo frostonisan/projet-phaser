@@ -292,6 +292,60 @@ responsabilités internes à séparer. Le classement ne rend pas automatiquement
 fonctions historiques qui mélangent calcul, état et affichage ; cette séparation continue
 par étapes avant Phaser.
 
+## Septième lot : affichage des ressources et déplacements
+
+Ce lot réutilise les fichiers existants : **117 modules avant et après**.
+Les consommateurs importent les fonctions depuis leur propriétaire ; les anciens
+modules ne réexportent pas les fonctions déplacées.
+
+| Responsabilité | Propriétaire |
+| --- | --- |
+| Barres de PV et d'armure, textes des réserves et compteurs de vies supplémentaires | rendering/vitalFeedback.js |
+| Formules de capacité, charges initiales et chances des passifs de déplacement | combat/statistics.js |
+| Initialisation, recharge et consommation des charges de déplacement | board/deployment.js |
+| Compteurs de déplacement, couleurs, rebonds et surbrillance Traînard | rendering/hud.js |
+| Consommation précise des réserves d'équipement, consommables et sorts | items/resourceStocks.js, inchangé |
+
+Onze fonctions d'affichage quittent entities/progression.js et combat/vitals.js.
+Les fabriques de barres et de compteurs restent dans rendering/entities.js.
+La progression et le combat demandent explicitement une mise à jour du rendu après
+avoir appliqué leurs ressources ; le rendu ne calcule ni ne sauvegarde les dégâts.
+
+Douze fonctions de déplacement quittent combat/statistics.js. La recharge et la
+consommation modifient les réserves puis rendent leur résultat, sans actualiser les
+compteurs. La boucle de combat et les commandes de placement appellent ensuite le HUD.
+Les règles de dette, de surcapacité, de poids, d'immobilisation et les tirages des
+passifs gardent leur ordre. La recharge naturelle ne remplit pas les stocks d'objets.
+
+L'affichage ne réécrit plus current/max pour les arrondir. Il peut afficher des valeurs
+fractionnaires gelées sans les modifier. La création d'un compteur ne crée plus de
+réserve : les écrans initialisent explicitement celle-ci avant de construire leur vue.
+La mémoire des animations est conservée dans une WeakMap, sans ajouter de champ au
+personnage sauvegardé. Le message de recharge est journalisé lors de son application,
+une fois par recharge effective ; il ne dépend plus du nombre de compteurs visibles.
+
+Validation dans outputs/refactor-resource-ui/ :
+
+- Les cinq scénarios de référence passent avant les modifications.
+- Dix-huit fonctions déplacées sont identiques ; les trois fonctions d'application
+  des déplacements conservent calculs, gardes et tirages après retrait de leur affichage.
+- Des assertions ajoutées aux tests existants vérifient que plusieurs affichages des
+  PV/armure/vies ne changent ni les ressources ni le stockage ; elles vérifient également
+  des déplacements gelés, l'absence de mutation lors du rendu et l'affichage explicite
+  après recharge ou consommation.
+- Les scénarios de ressources couvrent les équipements, leurs réserves fractionnaires,
+  les changements de propriétaire, la dette et la recharge avec ou sans Traînard.
+- Quinze scénarios navigateur passent, dont les effets, la pause, la simulation de combat
+  et le démarrage sur quatre profils PC/mobile.
+- Les 51 tests Node, la syntaxe, les imports et les références de ressources passent.
+- L'audit d'import isolé conserve neuf échecs historiques, sans nouvel échec. L'entrée
+  combat/loop.js qui échouait auparavant peut maintenant être chargée isolément.
+
+Les aperçus généraux de montée de niveau et plusieurs effets historiques gardent
+leurs liens avec l'interface. board/deployment.js conserve aussi la projection visuelle
+du placement. Ce lot sépare les fonctions des ressources ; il ne rend pas encore tous
+les modules du jeu indépendants du navigateur.
+
 ## Temps et présentation
 
 combat/clock.js reste l'horloge de combat ; combat/timeline.js ordonne les échéances et les
@@ -380,5 +434,5 @@ attaque hybride.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-combat/statistics.js, combat/control.js et le plateau DOM. Ces six premiers lots ne constituent
+combat/statistics.js, combat/control.js et le plateau DOM. Ces sept premiers lots ne constituent
 pas une séparation complète du moteur de jeu.

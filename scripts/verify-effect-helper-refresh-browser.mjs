@@ -86,7 +86,7 @@ try {
     const UI = await import("/js/ui/attacks.js");
     const R = await import("/js/combat/attackResolution.js");
     const E = await import("/js/entities/runtime.js");
-    const D = await import("/js/combat/statistics.js");
+    const D = await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts));
     const P = await import("/js/combat/effectParameters.js");
     const Data = await import('/js/data/attackEffects.js');
     Object.assign(window, { __UI:UI, __R:R, __E:E, __D:D, __P:P, __Data:Data });

@@ -75,8 +75,8 @@ const checks=[];
 try {
  const page=await fixture();
  await page.evaluate(async()=>{
-  window.A=await import("/js/combat/effects.js");window.D=await import("/js/combat/statistics.js");
-  window.Damage=await import("/js/combat/vitals.js");window.Armor=await import('/js/items/armor.js');
+  window.A=await import("/js/combat/effects.js");window.D=await Promise.all([import("/js/combat/statistics.js"), import("/js/board/deployment.js"), import("/js/rendering/hud.js")]).then(parts => Object.assign({}, ...parts));
+  window.Damage=await Promise.all([import("/js/combat/vitals.js"), import("/js/rendering/vitalFeedback.js")]).then(parts => Object.assign({}, ...parts));window.Armor=await import('/js/items/armor.js');
   window.B=E.entites[0];window.enemy=E.entites[1];
   window.hit=(nature='magicalDamage',amount=50)=>({attackId:'audit-hit',functionName:'audit-hit',displayName:'Audit',combatFunction:'Attaquant',attacknature:[nature],attackRange:['melee'],attackTarget:['enemy'],deadTarget:['no'],preparationTime:100,executionTime:100,recoveryTime:100,cooldown:1000,physicalRatio:1,magicalRatio:1,piercingRatio:0,type:[],effets:[],selfEffects:[],forceDamageSources:{[nature==='magicalDamage'?'magical':'physical']:amount}});
   Math.random=()=>0;window.startedAt=Clock.clockNow();G.startGame();

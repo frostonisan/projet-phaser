@@ -1,6 +1,11 @@
-import { removeCombatVisualAfter } from "../combat/clock.js";
-import { setTimeout } from "../combat/clock.js";
-import { updateHealthBar, syncDOMWithStats } from "../entities/progression.js";
+import { ensureMovementState } from "../board/deployment.js";
+import { updateMovementDisplay } from "../rendering/hud.js";
+import { updateHealthBar, updateBonusLifeCounters } from "../rendering/vitalFeedback.js";
+import {
+  removeCombatVisualAfter, setTimeout,
+} from "../combat/clock.js";
+
+import { syncDOMWithStats } from "../entities/progression.js";
 import {
   itemSaveEntityHPToStorage,
   recordEntityCombatAmount,
@@ -12,8 +17,8 @@ import {
 } from "../storage/entityStorage.js";
 import { itemEffects } from './itemEffects.js';
 import { showHealingFeedback, toggleEffectClass, rez } from "../combat/effects.js";
-import { LifeandDeath, updateBonusLifeCounters } from "../combat/vitals.js";
-import { ensureMovementState, updateMovementDisplay } from "../combat/statistics.js";
+import { LifeandDeath } from "../combat/vitals.js";
+
 import { addMovementCharges, addFadedLife } from './resourceStocks.js';
 import { getStageAccess, refreshStageAccess } from "../app/state.js";
 import { calculateResistances, recomputeEntityStats } from "../entities/runtime.js";
