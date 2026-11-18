@@ -28,7 +28,7 @@ try {
   const report = await page.evaluate(async () => {
     const E = await import('/js/entites.js');
     const D = await import('/js/damagesCalcul.js');
-    const F = await import('/js/events/attackEntites.js');
+    const F = await import('/js/combat/attacks.js');
     const A = await import('/js/attackResolution.js');
     const R = await import('/js/entityAttributs.js');
     const C = await import('/js/entityUpdatesStorage.js');

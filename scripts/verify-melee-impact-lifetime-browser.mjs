@@ -35,7 +35,7 @@ try {
       window.M = await import('/js/entitesAnimation.js');
       window.C = await import('/js/combatClock.js');
       window.T = await import('/js/combatTimeline.js');
-      window.A = await import('/js/events/attackEntites.js');
+      window.A = await import('/js/combat/attacks.js');
       window.B = await import('/js/board.js');
       const host = document.createElement('div'); host.id = 'melee-test';
       host.style.cssText = 'position:fixed;inset:0;background:#222'; document.body.append(host);

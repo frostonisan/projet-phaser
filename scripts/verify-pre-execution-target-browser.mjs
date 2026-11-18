@@ -14,7 +14,7 @@ async function installScenario(kind) {
   const { entites } = await import('/js/entites.js');
   const A = await import('/js/entityAttributs.js'), R = await import('/js/attackResolution.js');
   const C = await import('/js/combatClock.js');
-  const { getAttackTransportDeadline } = await import('/js/events/attackEntites.js');
+  const { getAttackTransportDeadline } = await import('/js/combat/attacks.js');
   const [caster, first, second] = entites;
   const epoch = C.clockNow();
   Math.random = () => .5;

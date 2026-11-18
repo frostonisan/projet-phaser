@@ -5,7 +5,7 @@ import { getPermanentStatChoices } from './items/permanentItems.js';
 import { balanceData } from './data/balanceData.js';
 import { getSafe, normalizeStatKey } from './entite/entityRules.js';
 import { readAttackDefinitionsForEntity } from './attackResolution.js';
-import { cloneCombatSnapshot } from './events/attackEntites.js';
+import { cloneCombatSnapshot } from './combat/snapshot.js';
 import { attackDetails } from './data/attackList.js';
 import { attackEffects } from './data/attackEffects.js';
 

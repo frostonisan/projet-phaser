@@ -8,15 +8,9 @@ import { gameStarted, checkGameOver, stopAllIntervals, OrderEntity, getOrderSide
 import { createOrderButton, createQuitButton } from './game.js';
 import { entites } from './entites.js';
 import { attackDetails } from './data/attackList.js';
-import {
-  executeAttack,
-  buildAttackTimingsWithHaste,
-  acceptsSelectedTarget,
-  isHexTarget,
-  isAttackEntityAlive,
-  cancelEntityAttackAction,
-  getAttackTransportDeadline,
-} from "./events/attackEntites.js";
+import { executeAttack, buildAttackTimingsWithHaste, cancelEntityAttackAction, getAttackTransportDeadline } from './combat/attackExecution.js';
+import { acceptsSelectedTarget, isAttackEntityAlive } from './combat/targeting.js';
+import { isHexTarget } from './board/targets.js';
 import { runPhaseTimer, runEntityRecovery, updateCurrentAttackDisplay } from './entityAttributs.js';
 import { sbireEnemyTarget, sbireAllyTarget, invokerHexTarget } from './sbireFight.js';
 import { lordEnemyTarget } from './lordFight.js';

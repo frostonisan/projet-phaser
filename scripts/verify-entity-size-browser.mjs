@@ -13,7 +13,7 @@ await mkdir(output,{recursive:true});
 // Instrument only the test HTTP response, never the production runtime.
 async function spatialAudit() {
   const P=await import('/js/board.js'), E=await import('/js/entites.js');
-  const M=P, T=await import('/js/events/attackEntites.js');
+  const M=P, T=await import('/js/combat/attacks.js');
   const O=await import('/js/createBattleElements.js');
   const [a,b,c,d]=E.entites, grid=document.getElementById('hexGrid'), checks=[];
   const check=(ok,label)=>{if(!ok)throw Error(label);checks.push(label);};
@@ -236,6 +236,11 @@ try {
     const summons=await import('/js/summonsMecanics.js');
     summons.consommationSummon({summonDuration:60,summonEffet:[]},destination,ground.id,()=>{}, {adminSpawn:true,infinite:true});
     check(!P.planEntityPlacements([{entity:a,hex:destination,size:1}]).valid,'Ground consumable registration blocks placement immediately');
+    const pickup=P.planEntityPlacements([{entity:a,hex:destination,size:1}],{allowGroundConsumables:true});
+    check(pickup.valid,'Manual movement can enter a ground consumable while ordinary placement stays blocked');
+    const pickupBlocker=O.createBattleElementInDOM({id:'pickup-blocker',position:destination.dataset.position,blocking:true});
+    check(pickupBlocker&&!P.commitEntityPlacements(pickup),'Consumable movement never bypasses a newly inserted solid obstacle');
+    O.removeBattleElementFromDOM(pickupBlocker);
     summons.clearGroundItems();
     check(P.planEntityPlacements([{entity:a,hex:destination,size:1}]).valid,'Ground consumable cleanup immediately frees the registry');
     const untouched=document.getElementById(`Box_Entite_${c.id}`),path=grid.querySelector(`[data-footprint-entity="${c.id}"]`);

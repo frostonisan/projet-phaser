@@ -30,3 +30,7 @@ local d'origine. Ce nouveau depot commence par un instantane independant.
 
 Le premier chantier est la separation des regles de combat, de leur execution
 et du rendu. Phaser sera integre apres validation de ces frontieres.
+
+## Architecture
+
+Le decoupage en cours, les responsabilites et les prochains lots sont decrits dans [ARCHITECTURE.md](ARCHITECTURE.md).

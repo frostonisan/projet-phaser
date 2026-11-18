@@ -52,7 +52,7 @@ async function fixture(config = {}) {
     }
     window.E = E; window.G = await import('/js/gameState.js'); window.F = await import('/js/fight.js');
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
-    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/events/attackEntites.js');
+    window.Timeline = await import('/js/combatTimeline.js'); window.Attacks = await import('/js/combat/attacks.js');
     window.Sim = await import('/js/combatSimulation.js'); window.snapshot = Sim.captureSimulationBoard(); snapshot.balance.brokenSpell.chance.basePercent = 0;
     window.entries = [];
     window.addEventListener('combatLogEntry', event => {

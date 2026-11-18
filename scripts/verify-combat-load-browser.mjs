@@ -41,7 +41,7 @@ for (const name of comparedModules) {
 }
 let checksOn = true;
 const fingerprints = {};
-for (const name of new Set(['fight.js', 'entityAttributs.js', 'entityControl.js', 'attackResolution.js', 'combatTimeline.js', 'entites.js', 'dom.js', 'events/attackEntites.js', ...comparedModules])) {
+for (const name of new Set(['fight.js', 'entityAttributs.js', 'entityControl.js', 'attackResolution.js', 'combatTimeline.js', 'entites.js', 'dom.js', 'combat/attacks.js', 'combat/attackExecution.js', 'combat/attackFlight.js', 'combat/flightRules.js', 'combat/targeting.js', 'combat/snapshot.js', 'board/targets.js', 'rendering/attackTransport.js', ...comparedModules])) {
   fingerprints[name] = createHash('sha256').update(sourceFiles.get(resolve(root, 'js', name))).digest('hex');
 }
 const replace = (source, from, to) => {

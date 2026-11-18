@@ -816,7 +816,7 @@ export function footprintRole(members, previous='gueux') {
   return winners.includes(old)?old:winners[0];
 }
 // Pure planning: neither a resisted nor an impossible application changes size, occupants or roles.
-export function planEntityPlacements(requests,{push=false,allowedCell=()=>true}={}) {
+export function planEntityPlacements(requests,{push=false,allowedCell=()=>true,allowGroundConsumables=false}={}) {
   const fail=reason=>({valid:false,reason});
   if(!requests.length) return fail('Aucun placement.');
   const grid=gridFor(requests[0].hex),data=geometry(grid);
@@ -832,11 +832,13 @@ export function planEntityPlacements(requests,{push=false,allowedCell=()=>true}=
   for(const hex of fixed) {
     for(const occupant of registry.byCell.get(hex)||[]) {
       if(moves.has(occupant.id)) continue;
+      // Manual movement can enter consumables; spawning and resizing reserve those cells.
+      if(allowGroundConsumables && !occupant.movable && occupant.nodes.length===0) continue;
       if(!push || !occupant.movable) return fail('Une case du groupement est déjà occupée.');
       collisions.add(occupant.id);
     }
   }
-  if(!collisions.size) return {valid:true,grid,moves,pushed:[]};
+  if(!collisions.size) return {valid:true,grid,moves,pushed:[],allowGroundConsumables};
   const occupants=[...registry.occupants.values()];
   for(const occupant of occupants) if(!moves.has(occupant.id)&&!collisions.has(occupant.id)) occupant.members.forEach(hex=>fixed.add(hex));
   const displaced=occupants.filter(o=>collisions.has(o.id)).sort((a,b)=>b.members.length-a.members.length||a.id.localeCompare(b.id));
@@ -861,7 +863,7 @@ export function planEntityPlacements(requests,{push=false,allowedCell=()=>true}=
     }
   }
   search(0,fixed,new Map(moves),0);
-  return best?{valid:true,grid,moves:best,pushed:[...collisions]}:fail('Aucun placement complet disponible pour repousser les voisins.');
+  return best?{valid:true,grid,moves:best,pushed:[...collisions],allowGroundConsumables}:fail('Aucun placement complet disponible pour repousser les voisins.');
 }
 function ensureStyles() {
   if(document.getElementById('entity-footprint-styles')) return;
@@ -967,7 +969,7 @@ function animatePlacement(entity,from) {
 }
 export function commitEntityPlacements(plan,{animate=false,persist=false,notify=false,forced=false}={}) {
   if(!plan?.valid) return false;
-  const requests=[...plan.moves.values()],check=planEntityPlacements(requests);
+  const requests=[...plan.moves.values()],check=planEntityPlacements(requests,{allowGroundConsumables:plan.allowGroundConsumables===true});
   if(!check.valid || requests.some(({entity})=>!boxFor(entity))) return false;
   const starts=new Map(requests.map(({entity})=>[String(entity.id),visibleOrigin(entity)]));
   const registry=boardOccupancy(plan.grid),dirtyCells=new Set();

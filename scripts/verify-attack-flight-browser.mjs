@@ -29,9 +29,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
     const { entites, enrichEntityStats, recomputeEntityStats } = await import('/js/entites.js');
-    const { createAttackFlight, acceptsImpactTarget, acceptsSelectedTarget, getFlightMode } = await import("/js/events/attackEntites.js");
+    const { createAttackFlight, acceptsImpactTarget, acceptsSelectedTarget, getFlightMode } = await import("/js/combat/attacks.js");
     const { animationProjectile, finishMeleeCloneOnDeath, animationMelee, clearProjectileEffects } = await import('/js/entitesAnimation.js');
-    const { executeAttack, resolveAttackImpact } = await import('/js/events/attackEntites.js');
+    const { executeAttack, resolveAttackImpact } = await import('/js/combat/attacks.js');
     const { makeRoomForSummon, createEntityIngame } = await import('/js/entitySpawnEngine.js');
     const { consommationSummon, summonEntite } = await import('/js/summonsMecanics.js');
     const { LifeandDeath, estimateCancelledAttackHp } = await import('/js/entityAttributs.js');

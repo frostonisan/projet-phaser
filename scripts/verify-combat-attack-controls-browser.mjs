@@ -421,7 +421,7 @@ try {
     const E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js');
     const C = await import('/js/createEntity.js');
-    const Attack = await import('/js/events/attackEntites.js');
+    const Attack = await import('/js/combat/attacks.js');
     const reports = [];
     const check = (value, label) => { if (!value) throw Error(label); reports.push(label); };
     const wait = () => new Promise(done => setTimeout(done, 450));

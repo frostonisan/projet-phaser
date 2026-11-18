@@ -26,7 +26,7 @@ try {
   const result = await page.evaluate(async () => {
     const { calculateAttackDamagePreview, calculateDirectAttackDps, calculateCritDamageBonus, getEffectiveAttackTimings, attemptMeleeExecBonus } = await import('/js/damagesCalcul.js');
     const { getAttackPowerRatios, getAttackResolutionFlags, initializeAttackPowerRatios, readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
-    const { buildAttackTimingsWithHaste } = await import('/js/events/attackEntites.js');
+    const { buildAttackTimingsWithHaste } = await import('/js/combat/attacks.js');
     const { attackDetails } = await import('/js/data/attackList.js');
     const { entitesNestUp } = await import('/js/entites.js');
     const { AttackDetailInfos, generateAttackDescription } = await import('/js/GameInit.js');

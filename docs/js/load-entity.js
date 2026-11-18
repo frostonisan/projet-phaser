@@ -14,7 +14,7 @@ import {
   listingFocusInvocateur,
   getRoleFromHex,
 } from "./role-rule.js";
-import { acceptsSelectedTarget } from "./events/attackEntites.js";
+import { acceptsSelectedTarget } from './combat/targeting.js';
 import { getBattleEntityElement, isNonLordCombatant } from "./entite/entityRules.js";
 
 

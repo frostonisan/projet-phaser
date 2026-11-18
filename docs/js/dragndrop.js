@@ -299,7 +299,7 @@ const targetHexPosition = dropHex.dataset.position;
 const isEffectiveHexMove = originalHexPosition !== targetHexPosition;
 const requests = [{ entity: entite, hex: dropHex }];
 if (swappedEntite) requests.push({ entity: swappedEntite, hex: originalParent });
-const plan = planEntityPlacements(requests, { allowedCell: (_entity, cell) => isAdminMode || !cell.classList.contains('SideB') });
+const plan = planEntityPlacements(requests, { allowGroundConsumables: !isAdminMode, allowedCell: (_entity, cell) => isAdminMode || !cell.classList.contains('SideB') });
 if (!plan.valid) { EffectMessage(entite, 'Placement impossible !'); finishDragHexFeedback(); return; }
 let movementCheck = null;
 if (isEffectiveHexMove && !isAdminMode) {

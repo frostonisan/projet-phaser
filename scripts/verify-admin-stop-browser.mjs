@@ -99,7 +99,7 @@ try {
     const { entites } = await import('/js/entites.js');
     const G = await import('/js/gameState.js');
     const A = await import('/js/entitesAnimation.js');
-    const { createAttackFlight } = await import('/js/events/attackEntites.js');
+    const { createAttackFlight } = await import('/js/combat/attacks.js');
     const attack = { ...entites[0].attackDetails[0], attacknature: ['physicalDamage'], attackRange: ['range'],
       attackTarget: ['enemy'], deadTarget: ['no'], effets: [], selfEffects: [] };
     window.__flight = createAttackFlight(entites[0], entites[1], attack, { physical: 40 });
@@ -118,7 +118,7 @@ try {
   await page.waitForFunction(() => document.getElementById('startButton') && !document.getElementById('admin-stop-combat'));
   const stopped = await page.evaluate(async () => {
     const E = await import('/js/entites.js'); const G = await import('/js/gameState.js');
-    await (await import('/js/events/attackEntites.js')).resolveAttackImpact(window.__flight);
+    await (await import('/js/combat/attacks.js')).resolveAttackImpact(window.__flight);
     return { started: G.gameStarted, finished: G.isBattleFinished(), actors: E.entites.length,
       frozen: E.entites.every(e => e.battleStopped && e.status === 'inactive' && e.speedTimer === 0 && e.preparationTime === 0 && e.executionTime === 0 && e.recoveryTime === 0 && e.cooldownTimer === 0),
       hp: E.entites.map(e => e.stats.HP.current), beforeHP: window.__hp, ticks: window.__intervalTicks,

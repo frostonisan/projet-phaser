@@ -32,8 +32,8 @@ try {
     const { enrichEntityStats, recomputeEntityStats, entites } = await import('/js/entites.js');
     const { getStatSystemResult } = await import('/js/entite/statSystem.js');
     const damage = await import('/js/damagesCalcul.js');
-    const combat = await import('/js/events/attackEntites.js');
-    const { createAttackFlight } = await import("/js/events/attackEntites.js");
+    const combat = await import('/js/combat/attacks.js');
+    const { createAttackFlight } = await import("/js/combat/attacks.js");
     const { selectAttackDecision, entiteTurn } = await import('/js/fight.js');
     const progressionUI = await import('/js/attackInterface.js');
     const ui = await import('/js/GameInit.js');

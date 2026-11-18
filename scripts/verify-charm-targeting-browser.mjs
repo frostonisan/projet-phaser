@@ -29,7 +29,7 @@ async function fixture(side, withOthers = true, expiry = false, group = false) {
     const Storage = await import('/js/GameStorage.js');
     const G = await import('/js/gameState.js'), F = await import('/js/fight.js');
     const A = await import('/js/entityAttributs.js'), Fx = await import('/js/attackEffectMecanics.js');
-    const Control = await import('/js/entityControl.js'), Attacks = await import('/js/events/attackEntites.js');
+    const Control = await import('/js/entityControl.js'), Attacks = await import('/js/combat/attacks.js');
     const D = await import('/js/damagesCalcul.js'), Sim = await import('/js/combatSimulation.js');
     const { balanceData } = await import('/js/data/balanceData.js');
     balanceData.brokenSpell.chance.basePercent = 0;

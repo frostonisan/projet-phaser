@@ -31,7 +31,7 @@ const server = createServer(async (req, res) => {
     if (file.endsWith('entityAttributs.js')) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
       if (attacker.__stallPhaseOnce) { delete attacker.__stallPhaseOnce; await new Promise(resolve => { attacker.__releasePhase = resolve; }); }
       else await combatDelay(Math.max(0, state.nextAt - combatNow()));`);
-    if (file.endsWith('attackEntites.js')) data = data.replace('    if (!canPrepare()) return false;', `
+    if (file.endsWith('attackExecution.js')) data = data.replace('    if (!canPrepare()) return false;', `
       if (attacker.__throwPreparationOnce) { delete attacker.__throwPreparationOnce; throw Error('Injected preparation failure'); }
       if (!canPrepare()) return false;`);
     if (file.endsWith('fight.js')) data = data.replace('wait.lastTick = now;', `

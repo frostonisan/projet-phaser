@@ -1,6 +1,20 @@
-import { getActionElapsed, getPhaseElapsed, waitPreparationPulse, getExecutionProgress, getControlState, getCombatSide, isCombatEnemy, isCharmedEnemyTarget, getActionResumeTime, isEntityActionPaused, isEntitySilenced, waitForEntityControl } from '../entityControl.js';
+import { cloneCombatSnapshot } from './snapshot.js';
+import { createAttackFlight } from './attackFlight.js';
+import { isAttackEntityAlive, acceptsImpactTarget, acceptsSelectedTarget, acceptsExecutionTarget } from './targeting.js';
+import { isHexTarget } from '../board/targets.js';
+import { presentAttackTransport } from '../rendering/attackTransport.js';
+import {
+  getPhaseElapsed,
+  waitPreparationPulse,
+  getExecutionProgress,
+  getControlState,
+  getActionResumeTime,
+  isEntityActionPaused,
+  isEntitySilenced,
+  waitForEntityControl
+} from '../entityControl.js';
 import { setTimeout, clearTimeout } from '../combatClock.js';
-import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask, hasPendingCombatDeath } from '../combatTimeline.js';
+import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask } from '../combatTimeline.js';
 import { registerCombatState } from '../combatClock.js';
 import { combatData, combatReference, combatTarget } from '../combatClock.js';
 import { getAttackResolutionFlags, splitDodgeDamageSources, normArr, awardAttackMastery, startAttackCooldown } from "../attackResolution.js";
@@ -9,7 +23,6 @@ import {
   attemptAttackerDamages,
   attemptDodge,
   attemptInvisibleTargetAccuracy,
-  getRangePenaltyDetails,
   calculateAmbidextryTotalChance,
   calculateAmbidextryDamageBonus,
   AmbidextryVFX,
@@ -32,258 +45,29 @@ import {
   applyOccultismExitCritBoost,
   shouldApplyForcedInvisibleTargetAccuracy,
   totalPiercingRecupReductionWithAgi,
-  totalTranspiercingRecupReductionWithAgi,
-} from "../damagesCalcul.js";
-import {
-  getEntityManualMovementVersion,
-  recordEntityCombatAmount,
-  recordEntityCombatProc,
-  recordEntityDefenseHp,
-} from "../entityUpdatesStorage.js";
+  totalTranspiercingRecupReductionWithAgi
+} from '../damagesCalcul.js';
+import { recordEntityCombatProc, recordEntityDefenseHp } from '../entityUpdatesStorage.js';
 import { OrderEntity, checkGameOver, isBattleFinished } from "../gameState.js";
 import { entites } from "../entites.js";
 import { updateTimerDisplay } from "../dom.js";
 import {
-  runPhaseTimer,
   runEntityRecovery,
   LifeandDeath,
   applyDamage,
   applyDamageToDead,
   applyDamageToHex,
   updateBonusLifeCounters,
-  estimateCancelledAttackHp,
-} from "../entityAttributs.js";
+  estimateCancelledAttackHp
+} from '../entityAttributs.js';
 import { updateTargetStatut } from "../fight.js";
-import {
-  animatePreparation,
-  animationProjectile,
-  animationMelee, getMeleeFlightVisual,
-  mysticismBoostedAttackAnimation,
-  mysticismAttackGif,
-} from "../entitesAnimation.js";
+import { animatePreparation, mysticismBoostedAttackAnimation, mysticismAttackGif } from '../entitesAnimation.js';
 import { updateHealthBar } from "../UpgradeEntity.js";
 import { EffectMessage } from "../attackEffectMecanics.js";
 import { battleLogs } from "../battleLogs.js";
-import { attackEffects } from "../data/attackEffects.js";
+
 import { isLord } from "../entite/entityRules.js";
-import { getFootprintOccupant } from '../board.js';
 
-// Projectile flight, launch snapshots and impact targeting.
-const OMIT_COMBAT_VALUE = Symbol('omit-combat-value');
-let battleGeneration = 0;
-if (typeof window !== 'undefined') {
-  const expireFlights = () => { battleGeneration++; };
-  window.addEventListener('battleResolved', expireFlights);
-  window.addEventListener('battleStopped', expireFlights);
-}
-
-function sanitizeCombatData(value, path, dropped, seen) {
-  if (typeof value === 'function' || typeof value === 'symbol') {
-    dropped.push(path);
-    return OMIT_COMBAT_VALUE;
-  }
-  if (value === null || typeof value !== 'object') return value;
-  if (typeof Node !== 'undefined' && value instanceof Node) {
-    dropped.push(path);
-    return OMIT_COMBAT_VALUE;
-  }
-  if (seen.has(value)) return seen.get(value);
-  if (value instanceof Date) return new Date(value.getTime());
-
-  const clone = Array.isArray(value) ? [] : {};
-  seen.set(value, clone);
-  Object.entries(value).forEach(([key, entry]) => {
-    const clean = sanitizeCombatData(entry, `${path}.${key}`, dropped, seen);
-    if (clean !== OMIT_COMBAT_VALUE) clone[key] = clean;
-  });
-  return clone;
-}
-
-export function cloneCombatSnapshot(value, label = 'combat-data') {
-  const dropped = [];
-  const clone = sanitizeCombatData(value, label, dropped, new WeakMap());
-  if (dropped.length) {
-    console.warn(`[AttackFlight] Donnees runtime retirees de ${label}`, {
-      dropped,
-    });
-  }
-  return clone === OMIT_COMBAT_VALUE ? null : clone;
-}
-
-export const isHexTarget = target => target?.nodeType === 1 && target.classList.contains('hex');
-export const isAttackEntityAlive = entity => Boolean(entity && !entity.isDEAD && Number(entity.stats?.HP?.current) > 0);
-
-export function getEntityHex(entity) {
-  if (isHexTarget(entity)) return entity.isConnected ? entity : null;
-  return document.getElementById(`Box_Entite_${entity?.id}`)?.closest('.hex') || null;
-}
-
-export function getHexEntity(hex, entities) {
-  const box = getFootprintOccupant(hex);
-  return box ? entities.find(entity => String(entity.id) === box.id.replace('Box_Entite_', '')) || null : null;
-}
-
-export function getFlightMode(attack) {
-  const flags = getAttackResolutionFlags(attack);
-  if (!flags.isRange) return 'melee';
-  const physical = flags.hasPhysical || flags.hasHybridal;
-  const magical = flags.hasMagicalBehavior;
-  if (physical && magical && flags.hasPiercing) return 'triple';
-  if (magical && flags.hasPhysicalBehavior) return 'mixed';
-  return magical ? 'magical' : 'physical';
-}
-
-// Camp determines selection only. An in-flight action retains its original function.
-export function acceptsImpactTarget(attack, target) {
-  const targets = normArr(attack.attackTarget);
-  if (isHexTarget(target)) return targets.includes('hexa') && target.isConnected;
-  if (!targets.some(type => type === 'ally' || type === 'enemy') || !target || !getEntityHex(target)?.isConnected) return false;
-  if (normArr(attack.deadTarget).includes('yes')) {
-    return target.isDEAD === true && !target.corpseConsumed && !target.corpseDestroyed;
-  }
-  return isAttackEntityAlive(target);
-}
-
-export function acceptsSelectedTarget(attacker, attack, target) {
-  if ((attack.folieTargeting || attacker._folieAtLaunch || getControlState(attacker, 'folie')) && !isHexTarget(target))
-    return Boolean(target && !target.hasFled && getEntityHex(target)?.isConnected);
-  if (!acceptsImpactTarget(attack, target)) return false;
-  if (isHexTarget(target)) return true;
-  const targets = normArr(attack.attackTarget);
-  return targets.includes('enemy') && isCombatEnemy(attacker, target)
-    || targets.includes('ally') && getCombatSide(attacker) === getCombatSide(target);
-}
-
-// Recheck the current allegiance and charm priority at the preparation boundary.
-// Released attacks keep their launch-time targeting and never use this check.
-export function acceptsExecutionTarget(attacker, attack, target) {
-  const currentAttack = { ...attack, folieTargeting: false };
-  if (target?.hasFled || !acceptsSelectedTarget(attacker, currentAttack, target)) return false;
-  if (getControlState(attacker, 'folie') || isHexTarget(target)
-      || !normArr(attack.attackTarget).includes('enemy') || !isCharmedEnemyTarget(attacker, target)) return true;
-  return !entites.some(candidate => !candidate.hasFled && isAttackEntityAlive(candidate)
-    && getCombatSide(candidate) !== getCombatSide(attacker)
-    && acceptsSelectedTarget(attacker, currentAttack, candidate));
-}
-
-export function createAttackFlight(attacker, target, attack, sources = {}, saved = null) {
-  const generation = battleGeneration;
-  const definition = cloneCombatSnapshot(attack, 'attack');
-  const flags = getAttackResolutionFlags(definition);
-  const mode = getFlightMode(definition);
-  const remnantNature = mode === 'mixed' && flags.hasPiercing && !flags.hasPhysical && !flags.hasHybridal
-    ? 'piercing'
-    : mode === 'mixed' ? 'physical' : null;
-  const aimedHex = saved ? combatTarget(saved.aimedHex, entites) : getEntityHex(target);
-  const projected = createAttackStatView(attacker, attack);
-  const stats = saved?.stats ?? cloneCombatSnapshot(projected.stats || {}, 'attacker.stats');
-  const modifiers = saved?.modifiers ?? cloneCombatSnapshot(projected.modifierStats || {}, 'attacker.modifierStats');
-  const boosts = saved?.boosts ?? cloneCombatSnapshot(projected.battleBoosts || {}, 'attacker.battleBoosts');
-  const baseStats = saved?.baseStats ?? cloneCombatSnapshot(attacker.baseStats || {}, 'attacker.baseStats');
-  const statOverrides = saved?.statOverrides ?? cloneCombatSnapshot(projected._statSystemOverrides || {}, 'attacker.statOverrides');
-  const seuilUmbra = saved?.seuilUmbra ?? attacker.seuilUmbra;
-  const level = saved?.level ?? cloneCombatSnapshot(attacker.level, 'attacker.level');
-  const side = saved?.side ?? getCombatSide(attacker);
-  const folieAtLaunch = saved?.folieAtLaunch ?? Boolean(definition.folieTargeting || getControlState(attacker, 'folie'));
-  const movementAtLaunch = saved?.movementAtLaunch ?? getEntityManualMovementVersion(target);
-  // Calculations use launch-time stats; resource writes and counters still reach the entity.
-  const resources = new Set(['HP', 'armor', 'extraLife']);
-  const statView = new Proxy(stats, {
-    get: (snapshot, key) => resources.has(key) ? attacker.stats[key] : snapshot[key],
-  });
-  const source = new Proxy(attacker, {
-    get: (entity, key) => key === 'stats' ? statView
-      : key === 'modifierStats' ? modifiers : key === 'battleBoosts' ? boosts : key === 'baseStats' ? baseStats
-      : key === '_statSystemOverrides' ? statOverrides : key === 'seuilUmbra' ? seuilUmbra
-      : key === 'currentAttack' ? definition : key === 'side' || key === '_combatSideAtLaunch' ? side
-      : key === '_folieAtLaunch' ? folieAtLaunch : key === 'level' ? level : entity[key],
-  });
-  if (!saved) definition.rangePenaltyAtLaunch = getRangePenaltyDetails(source, definition);
-  const invisibleTargetAccuracy = saved ? saved.invisibleTargetAccuracy : attacker.flags?.forcedInvisibleTargetAccuracy
-    ? { ...attacker.flags.forcedInvisibleTargetAccuracy } : null;
-  const flight = {
-    id: `flight-${crypto.randomUUID()}`,
-    attacker, target, attack: definition, source, mode, remnantNature, aimedHex, invisibleTargetAccuracy,
-    sources: cloneCombatSnapshot(sources, 'damageSources'),
-    casterLost: false,
-    targetMoved: false,
-    guidanceLost: false,
-    lockedHex: mode === 'physical' ? aimedHex : null,
-    magicalLossConsumed: false,
-    manualAvoidanceRecorded: false,
-    snapshot() {
-      return combatData({ id: this.id, attacker: attacker.id, target: combatReference(target), attack: definition,
-        sources: this.sources, stats, modifiers, boosts, baseStats, statOverrides, seuilUmbra, level, side, folieAtLaunch,
-        movementAtLaunch, invisibleTargetAccuracy, aimedHex: combatReference(this.aimedHex),
-        lockedHex: this.lockedHex ? combatReference(this.lockedHex) : null,
-        casterLost: this.casterLost, targetMoved: this.targetMoved, guidanceLost: this.guidanceLost,
-        magicalLossConsumed: this.magicalLossConsumed, manualAvoidanceRecorded: this.manualAvoidanceRecorded });
-    },
-    recordManualAvoidance() {
-      const locked = this.lockedHex || this.aimedHex;
-      if (this.manualAvoidanceRecorded || this.expired() || definition.combatFunction !== 'Attaquant'
-        || isHexTarget(target) || !isAttackEntityAlive(target)
-        || !(mode === 'physical' || mode === 'mixed' && this.guidanceLost)
-        || !getEntityHex(target) || getEntityHex(target) === locked
-        || getEntityManualMovementVersion(target) <= movementAtLaunch) return;
-      this.manualAvoidanceRecorded = true;
-      recordEntityCombatAmount(target, 'physicalProjectilesAvoided', 1);
-    },
-    expired() { return this.aborted === true || generation !== battleGeneration; },
-    sample() {
-      // A render frame can run while simultaneous effects are settling. Zero
-      // HP is provisional until healing/additional lives have been resolved.
-      const casterJustLost = !this.casterLost && !isAttackEntityAlive(attacker) && !hasPendingCombatDeath(attacker);
-      this.casterLost ||= casterJustLost;
-      if (mode === 'mixed' && casterJustLost) {
-        this.guidanceLost = true;
-        this.lockedHex = isHexTarget(target) ? target : getEntityHex(target);
-        this.aimedHex = this.lockedHex;
-      }
-      if (mode === 'physical') {
-        this.targetMoved ||= !isHexTarget(target) && getEntityHex(target) !== this.lockedHex;
-      } else if (mode === 'mixed' && this.guidanceLost) {
-        this.targetMoved ||= !isHexTarget(target) && getEntityHex(target) !== this.lockedHex;
-      }
-      return casterJustLost;
-    },
-    consumeMagicalLoss() {
-      this.sample();
-      if (mode !== 'mixed' || !this.guidanceLost || this.magicalLossConsumed) return false;
-      this.magicalLossConsumed = true;
-      return true;
-    },
-    cancelled() {
-      this.sample();
-      return this.expired() || (mode === 'magical' || mode === 'melee') && this.casterLost;
-    },
-    resolveTarget(entities) {
-      this.sample();
-      if (isHexTarget(target)) return this.aimedHex?.isConnected ? this.aimedHex : null;
-      if (mode === 'physical' || mode === 'mixed' && this.guidanceLost) {
-        return getHexEntity(this.lockedHex || this.aimedHex, entities);
-      }
-      return target;
-    },
-    impactSources() {
-      this.sample();
-      const result = { ...this.sources };
-      if (mode !== 'mixed' || !this.casterLost) return result;
-      // Remove only the magical contribution. Cinétique never enters mixed mode.
-      // Hybrid damage is resolved as two equal halves by the damage pipeline.
-      const half = Number(result.hybridalDamage || 0) / 2;
-      result.physical = Number(result.physical || 0) + half;
-      result.magical = 0;
-      result.hybridalDamage = 0;
-      return result;
-    },
-  };
-  if (saved) {
-    for (const key of ['id', 'casterLost', 'targetMoved', 'guidanceLost', 'magicalLossConsumed', 'manualAvoidanceRecorded']) flight[key] = saved[key];
-    flight.lockedHex = saved.lockedHex ? combatTarget(saved.lockedHex, entites) : null;
-  }
-  return flight;
-}
 
 // Attack preparation, execution and recovery.
 const DAMAGE_SOURCE_KEYS = ["piercingDamage", "physical", "magical", "hybridalDamage"];
@@ -332,14 +116,6 @@ function buildScaledDamageSources(sources, targetTotal) {
       parts.find(part => part.key === key)?.value || 0,
     ])
   );
-}
-
-function getProjectileEffectClasses(attack = {}) {
-  return normArr(attack?.effets)
-    .map(effectName => attackEffects.find(effect => effect.effectName === effectName)?.effectProjectile)
-    .flatMap(value => Array.isArray(value) ? value : [value])
-    .map(value => String(value || "").trim())
-    .filter(value => value && value !== "none");
 }
 
 // =========================
@@ -599,7 +375,7 @@ function startMysticismPreparationState(attacker, basePreparationMs) {
     attacker.currentAttack.isLaunchedUnderMysticism = false;
     attacker.currentAttack.isBalancedNoAggro = false;
   }
-  
+
   if (attacker.mysticismTranceEndTO) {
     clearTimeout(attacker.mysticismTranceEndTO);
     attacker.mysticismTranceEndTO = null;
@@ -812,23 +588,7 @@ async function launchAttackTransport(flight, options = {}, restored = null) {
     ...(flags.isMelee ? { actionStartedAt: options.actionStartedAt ?? combatNow(),
       actionDuration: options.actionDuration ?? duration } : {}),
     at: restored?.at ?? combatNow() + duration });
-  if (flags.isRange) {
-    // The visual follows the scheduled impact, never the other way round.
-    void animationProjectile(attacker, target, () => impact, {
-      id: flight.id, attackId: attack.attackId, attacknature: attack.attacknature,
-      executionTime: duration, effectProjectileClasses: getProjectileEffectClasses(attack),
-      isLaunchedUnderMysticism: Boolean(attack.isLaunchedUnderMysticism),
-      aura: options.secondHit ? 'ambidextry' : undefined,
-      flight, impactPromise: impact, restoredVisual: restored?.visual,
-    }).catch(error => console.error('[ProjectileVisual]', error));
-    return impact;
-  }
-  const controller = (restored && getMeleeFlightVisual(flight.id))
-    || animationMelee(attacker, target, Boolean(options.secondHit), { duration, flightId: flight.id });
-  const status = await impact;
-  // Display completion must not delay the next gameplay phase.
-  void controller?.resolveImpact?.(status === 'hit');
-  return status;
+  return presentAttackTransport(flight, impact, { duration, isRange: flags.isRange, options, restored });
 }
 
 function queueSecondFlight(data) {

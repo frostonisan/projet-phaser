@@ -6,7 +6,7 @@ import { createEntiteInDOM } from './createEntity.js';
 import { toggleScanEntityListener } from './ui.js';
 import { findNearestAvailableHex, isHexOccupied } from './createBattleElements.js';
 import { planEntityPlacements, commitEntityPlacements, entityFootprint, releaseEntityFootprint } from './board.js';
-import { getHexEntity } from "./events/attackEntites.js";
+import { getHexEntity } from './board/targets.js';
 import { getRoleFromHex } from './role-rule.js';
 import { notifyProjectileTargetMoved } from './entitesAnimation.js';
 import { saveEntityPositionState, recordEntityCombatStat, recordEntityCombatMovement, beginEntityBattleRole } from './entityUpdatesStorage.js';

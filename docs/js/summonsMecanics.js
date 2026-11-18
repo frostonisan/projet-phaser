@@ -12,7 +12,8 @@ import { applyDamage } from './entityAttributs.js';
 import { createEntityIngame } from './entitySpawnEngine.js';
 import { entiteTurn } from './fight.js';
 import { gameStarted } from './gameState.js';
-import { getEntityHex, getHexEntity, cloneCombatSnapshot } from "./events/attackEntites.js";
+import { getEntityHex, getHexEntity } from './board/targets.js';
+import { cloneCombatSnapshot } from './combat/snapshot.js';
 import { isHexOccupied } from './createBattleElements.js';
 import {
   saveEntityHPToStorage,

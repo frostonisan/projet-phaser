@@ -27,7 +27,7 @@ try {
   await dismissStarterForFixture(page);
   const checks = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js');
-    const F = await import('/js/events/attackEntites.js'), State = await import('/js/gameState.js');
+    const F = await import('/js/combat/attacks.js'), State = await import('/js/gameState.js');
     const G = await import('/js/GameStorage.js'), Focus = await import('/js/sbireFocus.js');
     const P = await import('/js/items/permanentItems.js'), I = await import('/js/items/itemEffectMecanics.js');
     const results = [];
