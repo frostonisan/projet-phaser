@@ -1,14 +1,10 @@
 import { clockNow, isCombatInteractionBlocked, trackCombatAction, notifyCombatAction } from "../combat/clock.js";
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import {
-  appendItemHelperHeader,
-  buildImprovementHelperFooter,
-  appendItemEffectHelpers,
-  appendEntityHelperContent,
-  renderStuffContributionValue,
-  renderItemStatHelperRow,
-  appendOrfevreHelperDetail,
-} from '../data/helpers.js';
+  appendItemHelperHeader, buildImprovementHelperFooter, appendItemEffectHelpers,
+  appendEntityHelperContent, renderStuffContributionValue, renderItemStatHelperRow,
+  appendOrfevreHelperDetail, generateEffectDescription,
+} from "../data/helpers.js";
 import { cachedResourceUrl } from "../data/loaderList.js";
 import { ItemDetails } from '../data/itemList.js';
 import { summons } from '../data/summons.js';
@@ -16,15 +12,9 @@ import { createIngameItem, calculateItemPower } from './items.js';
 import { createUmbraCrystal } from './permanentItems.js';
 import { hexCoordonne } from "../board/controller.js";
 import {
-  loadFromLocalStorage,
-  saveToLocalStorage,
-  saveItemsData,
-  normalizeEquippedItems,
-  getEquippedItemsById,
-  loadEquippedItems,
-  getCurrentLevel,
-  loadPlayerInfo,
-  savePlayerInfo,
+  loadFromLocalStorage, saveToLocalStorage, saveItemsData, normalizeEquippedItems, getEquippedItemsById,
+  loadEquippedItems, getCurrentLevel, loadPlayerInfo, savePlayerInfo, isAdminMode,
+  spendPlayerExperience, creditPlayerExperience, saveCurrentGameData,
 } from "../storage/gameStorage.js";
 import {
   entites,
@@ -38,7 +28,6 @@ import {
 } from "../entities/runtime.js";
 import { addEntityToArmyA, canRecruitEntity } from "../entities/armies.js";
 import { createEntityCodex } from "../ui/codex/index.js";
-import { generateEffectDescription } from '../data/helpers.js';
 import { createEntityPowerValue, cachedDisplayPower, schedulePowerRefresh } from "../ui/statistics/components.js";
 import { refreshStatHelper } from "../ui/statistics/helpers.js";
 import { itemApplyEffect, validateConsumableUse, hasImplementedConsumableEffects } from './itemEffectMecanics.js';
@@ -61,7 +50,7 @@ import { placeGroundItem, clearGroundItems, releaseGroundItem, spawnConsumableSu
 import { ensureStuffArmorReserve } from './armor.js';
 import { getStuffResourceStocks, stripStuffResourceModifiers, getEffectiveMovementStock } from './resourceStocks.js';
 import { getScoredItemQuality, isUmbraRestricted, getPowerBreakdownLines } from '../procedural/proc-bareme.js';
-import { isAdminMode, spendPlayerExperience, creditPlayerExperience, saveCurrentGameData } from "../storage/gameStorage.js";
+import { applyCombatProfileView } from "../rendering/hud.js";
 
 let activeShop = null;
 
@@ -134,7 +123,6 @@ export function getIngameItemById(itemId) {
   console.warn(`❌ Aucun item trouvé avec l'ID : ${itemId}`);
   return null;
 }
-
 
 let lastDraggedItemId = null;
 export function setLastDraggedItemId(id) {
@@ -1399,8 +1387,6 @@ itemDiv.classList.add('inventory-item', `quality-${getScoredItemQuality(fullItem
 		glitterStuff('.inventory-item.stuff', 3);
 bindPersistentDescription(itemDiv, fullItem, itemId, 'item');
 }}
-
-
 
 export function addEntityLootToArmyA(entity, acquisition = { source: 'loot' }) {
     if (!canRecruitEntity(entity, acquisition)) {
@@ -2675,7 +2661,6 @@ function positionHelperCard(detailCard, hoveredElement) {
   detailCard.style.top = `${Math.max(10, Math.min(top, maxTop))}px`;
 }
 
-
 export function equippedHoverDescription() {
     const equippedItems = getEquippedItemsById();
 
@@ -2865,7 +2850,6 @@ function getItemFromDropEvent(e) {
 
     return { itemId, itemElement, item };
 }
-
 
 export function DropEquipementtoInventory() {
     document.querySelectorAll('.stuff-slot img.inventory-item-icon[draggable="true"]').forEach(img => {
@@ -3067,4 +3051,3 @@ export function sanitizeItemId() {
 
     console.groupEnd();
 }
-import { applyCombatProfileView } from "../board/deployment.js";

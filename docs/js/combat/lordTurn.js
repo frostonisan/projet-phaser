@@ -1,6 +1,6 @@
-import { listingFocusLord } from "./roles.js";
 import { calculateEquilibreAggroReduction, calculateEquilibreInvisibleDetection, calculateOccultismTargetableChanceDisplay, clearForcedInvisibleTargetAccuracy, isOccultismInvisibleTarget, markForcedInvisibleTargetAccuracy } from "./statistics.js";
 import { EffectMessage } from "./effects.js";
+import { listingFocusLord } from "../rendering/hud.js";
 
 export let globalTargetName = null;
 

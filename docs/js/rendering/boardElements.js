@@ -1,9 +1,6 @@
 /**
- * Outils de création des éléments non-entités placés sur le champ de bataille.
- *
- * Ce module ne modifie pas encore rendering/entities.js. Lors du branchement, la
- * fonction isHexOccupied pourra aussi être appelée par createEntiteInDOM afin
- * que les entités et les Battle Elements partagent exactement la même garde.
+ * Adaptateur DOM des cases et des objets poses sur le champ de bataille :
+ * occupation, creation des elements et representation visuelle des roles.
  */
 
 import { getFootprintOccupant, getFootprintOccupants, getBoardHex, refreshHexOccupancy } from "../board/controller.js";
@@ -188,7 +185,6 @@ export function validateBattleElementPlacement(
     reason: null
   };
 }
-
 
 /**
  * Retourne les hexagones appartenant à la zone neutre.
@@ -464,3 +460,73 @@ export function removeBattleElementFromDOM(elementOrId) {
   return true;
 }
 
+// Lecture et decoration des roles des cases du plateau.
+export function getRoleFromHex(hexElement) {
+    if (hexElement.classList.contains('fantassin-role')) {
+        return ['fantassin'];
+    } else if (hexElement.classList.contains('mage-role')) {
+        return ['mage'];
+    } else if (hexElement.classList.contains('tank-role')) {
+        return ['tank'];
+    } else {
+        return ['gueux'];
+    }
+}
+
+export function hexRoles(row, col, rows, cols, hexIdCounter, hexElement) {
+    const middleRow = Math.floor(rows / 2);
+    const sideAWidth = Math.floor(cols / 3);
+    const sideBStartCol = Math.floor(cols * 2 / 3);
+
+    const tankPositions = [
+        [middleRow - 2, sideAWidth - 1],
+        [middleRow - 1, sideAWidth - 1],
+        [middleRow, sideAWidth - 1],
+        [middleRow + 1, sideAWidth - 1],
+        [middleRow + 2, sideAWidth - 1],
+        [middleRow - 2, sideBStartCol],
+        [middleRow - 1, sideBStartCol],
+        [middleRow, sideBStartCol],
+        [middleRow + 1, sideBStartCol],
+        [middleRow + 2, sideBStartCol]
+    ];
+
+    const fantassinPositions = [
+        [middleRow - 2, sideAWidth - 2],
+        [middleRow - 1, sideAWidth - 2],
+        [middleRow, sideAWidth - 2],
+        [middleRow + 1, sideAWidth - 2],
+        [middleRow + 2, sideAWidth - 2],
+        [middleRow - 2, sideBStartCol + 1],
+        [middleRow - 1, sideBStartCol + 1],
+        [middleRow, sideBStartCol + 1],
+        [middleRow + 1, sideBStartCol + 1],
+        [middleRow + 2, sideBStartCol + 1]
+    ];
+
+    const magePositions = [
+        [middleRow - 1, sideAWidth - 3],
+        [middleRow, sideAWidth - 3],
+        [middleRow + 1, sideAWidth - 3],
+        [middleRow - 1, sideBStartCol + 2],
+        [middleRow, sideBStartCol + 2],
+        [middleRow + 1, sideBStartCol + 2]
+    ];
+
+    const isInPosition = (positions) => {
+        return positions.some(([r, c]) => r === row && c === col);
+    };
+
+    if (isInPosition(tankPositions)) {
+        hexElement.classList.add('tank-role');
+        return { role: 'tank', span: '<span class="hex-role-detail">TANK</span>' };
+    } else if (isInPosition(fantassinPositions)) {
+        hexElement.classList.add('fantassin-role');
+        return { role: 'fantassin', span: '<span class="hex-role-detail">FANTASSIN</span>' };
+    } else if (isInPosition(magePositions)) {
+        hexElement.classList.add('mage-role');
+        return { role: 'mage', span: '<span class="hex-role-detail">MAGE</span>' };
+    }
+
+    return { role: 'neutre', span: '' };
+}

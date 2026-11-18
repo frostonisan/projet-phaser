@@ -26,8 +26,9 @@ try {
     const { attackDetails } = await import('/js/data/attackList.js');
     const resolution = await import("/js/combat/attackResolution.js");
     const { setEntityAttackDefinitions: setKit, readAttackDefinitionsForEntity: readKit, readEntityCombatProfile: profile } = resolution;
-    const { applyCombatProfileView } = await import("/js/board/deployment.js");
-    const { updateEntityAttackTargetDisplay: showTarget, updateCombatantTargetZones, getBattleTargetAttack } = await import("/js/board/deployment.js");
+    const { applyCombatProfileView } = await import("/js/rendering/hud.js");
+    const { updateEntityAttackTargetDisplay: showTarget, getBattleTargetAttack } = await import("/js/rendering/hud.js");
+    const { updateCombatantTargetZones } = await import("/js/board/deployment.js");
     const { selectAttackDecision, collectAttackTargetCandidates } = await import("/js/combat/loop.js");
     const { getAttackCastingVisual, animatePreparation, animateFinalPhase } = await import("/js/rendering/animations.js");
     const { showHealingFeedback, brulure } = await import("/js/combat/effects.js");

@@ -346,6 +346,49 @@ leurs liens avec l'interface. board/deployment.js conserve aussi la projection v
 du placement. Ce lot sépare les fonctions des ressources ; il ne rend pas encore tous
 les modules du jeu indépendants du navigateur.
 
+## Huitième lot : rôles et affichage du ciblage
+
+Ce lot réutilise les modules existants : **117 modules avant et après**.
+Treize fonctions et la mémoire du choix affiché sont regroupées par responsabilité.
+Les consommateurs importent directement leur propriétaire, sans fichier relais.
+
+| Responsabilité | Propriétaire |
+| --- | --- |
+| Priorités tactiques des attaquants et des soutiens | combat/roles.js |
+| Badges, portraits de rôles, choix affiché et listes de cibles | rendering/hud.js |
+| Lecture et décoration des rôles des cases | rendering/boardElements.js |
+| Placement, index des combattants et charges de déplacement | board/deployment.js |
+
+combat/roles.js ne contient plus de manipulation du DOM et peut être importé sans
+navigateur. Le HUD possède sa WeakMap de choix affichés et son abonnement aux
+changements de profil ; une prévision de cible ne remplace toujours pas le choix
+confirmé. Le changement de camp remet toujours cet affichage à zéro.
+
+Deux helpers sans appel sont supprimés : getEntityPortraitFromDiv et le doublon
+hexRoles de board/interaction.js. La fonction utilisée pour construire les cases
+reste unique dans rendering/boardElements.js. Les tableaux de priorités, les zones,
+le choix des rôles et le comportement des listes sont conservés.
+
+Validation dans outputs/refactor-role-views/ :
+
+- Les treize fonctions déplacées, leur cache et leur abonnement sont identiques
+  dans l'arbre syntaxique ; les 559 autres fonctions des modules touchés sont inchangées.
+- Les 51 tests Node, la syntaxe et les références de ressources passent.
+- Sept scénarios navigateur passent : placement, tailles, déplacements, changements
+  de camp, listes de cibles et dépôts d'objets, pause/reprise et démarrage PC/mobile.
+- Le test de profil valide les badges et changements de cible, puis retrouve son
+  échec préexistant sur l'expiration des flammes d'une brûlure. Ce lot ne modifie pas
+  cet effet ni ne retire son assertion.
+- L'audit des imports isolés retrouve exactement les neuf erreurs de la référence.
+  L'ordre des dépendances existantes est conservé : les cycles historiques rendent
+  leur initialisation sensible à un simple déplacement d'import.
+- Le graphe compte 914 dépendances et conserve sa composante cyclique de 67 modules.
+
+Le placement et son observateur DOM restent dans board/deployment.js. Le champ
+historique targetZone reste actualisé par le HUD pour les consommateurs existants.
+Le prochain tri concerne les formulaires de progression et les opérations de jeu
+encore placées dans le stockage ; les grands blocs d'événements restent à séparer.
+
 ## Temps et présentation
 
 combat/clock.js reste l'horloge de combat ; combat/timeline.js ordonne les échéances et les
@@ -434,5 +477,5 @@ attaque hybride.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-combat/statistics.js, combat/control.js et le plateau DOM. Ces sept premiers lots ne constituent
+combat/statistics.js, combat/control.js et le plateau DOM. Ces huit premiers lots ne constituent
 pas une séparation complète du moteur de jeu.

@@ -1,7 +1,7 @@
-import { updateMovementDisplay } from "../rendering/hud.js";
 import {
-  consumeEntityMovement, positionnerEntites, updateRoleInDOM,
-} from "./deployment.js";
+  updateRoleInDOM, updateMovementDisplay,
+} from "../rendering/hud.js";
+import { consumeEntityMovement, positionnerEntites } from "./deployment.js";
 import { ENTITY_SIZE_OPTIONS, entitySizeInCells, createBoardState, footprintCells, chooseFootprintRole,
   putBoardOccupant, removeBoardOccupant, boardOccupantsAt, applyBoardPlacements,
   snapshotBoardState, offsetToAxial, axialDistance } from "./model.js";
@@ -12,8 +12,6 @@ import { getBoardGeometry as geometry, gridForHex as gridFor, invalidateBoardGeo
 import { registerCombatState, notifyCombatAction } from "../combat/clock.js";
 import { scenarios } from "../data/boardList.js";
 import { cachedResourceUrl } from "../data/loaderList.js";
-
-import { hexRoles } from "../combat/roles.js";
 import { levelBiome } from "../biome/level.js";
 import {
   LevelUi, getOrCreateGameContainer,
@@ -22,11 +20,12 @@ import {
   clearBiomeEffects, initCanvas, initDroplet, initSunray, initSnowstorm, handleMeteo, handleGroundFx,
 } from "../biome/meteo.js";
 import { createSoundManager } from "../rendering/sound.js";
-
 import { entites } from "../entities/runtime.js";
 import { saveEntityPositionState, recordEntityCombatMovement, recordEntityCombatProc } from "../storage/entityStorage.js";
 import { notifyProjectileTargetMoved } from "../rendering/animations.js";
-import { findNearestAvailableHex } from "../rendering/boardElements.js";
+import {
+  hexRoles, findNearestAvailableHex,
+} from "../rendering/boardElements.js";
 import { attemptAlterationResistance } from "../combat/statistics.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 
@@ -178,7 +177,6 @@ backGround.style.backgroundImage = `url('${cachedResourceUrl(backgroundUrl)}')`;
     }
 }
 
-
 // Fonction StageLoading
 export function StageLoading() {
     const gameContainer = getOrCreateGameContainer();
@@ -303,7 +301,6 @@ export function createHexGrid(forcedGridConfig = null) {
     const event = new Event('hexGridCreated');
     document.dispatchEvent(event);
 }
-
 
 // Fonction getStyleProperties
 export function getStyleProperties() {
@@ -684,7 +681,6 @@ export function hexCoordonne(
         .map(({ hex }) => hex.dataset.position)
         .filter(Boolean);
 }
-
 
 registerCombatState('board', () => ({ matchingBiome }), saved => {
     matchingBiome = saved.matchingBiome;

@@ -1,8 +1,7 @@
-import { createMovementDisplay } from "../rendering/hud.js";
 import {
-  ensureMovementState, applyCombatProfileView,
-} from "../board/deployment.js";
-// Application shell, starter selection, settings and stage menu lifecycle.
+  applyCombatProfileView, createMovementDisplay,
+} from "../rendering/hud.js";
+import { ensureMovementState } from "../board/deployment.js";
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import { cachedResourceUrl } from '../data/loaderList.js';
 import {
@@ -17,7 +16,6 @@ import {
 import { assertEntityType, isLord, getSafe } from "../entities/rules.js";
 import { generateUniqueID, entitesNestUp, enrichEntityStats } from "../entities/runtime.js";
 import { hideCombatAttackControlPanel, createEntityAttackDisplay } from "./attacks.js";
-
 import { createSoundControls } from "../rendering/sound.js";
 import { generateArmyA } from "../entities/armies.js";
 import { updateExperienceDisplay } from "../entities/progression.js";
@@ -36,9 +34,10 @@ import { createBattleSatchelView, PlayerInventory, MapShop } from './inventory.j
 import {
   createEntityPowerValue, createUmbraBlock,
 } from "./statistics/components.js";
-
 import { PlayerEssenceur } from "./essences.js";
 import { PlayerArmyCodex } from "./codex/index.js";
+
+// Application shell, starter selection, settings and stage menu lifecycle.
 
 function detectPageReload() {
     let isTrueReload = false;

@@ -63,3 +63,7 @@ dans [ARCHITECTURE.md](ARCHITECTURE.md).
 Les barres de PV/armure sont dans `rendering/vitalFeedback.js`. Pour les déplacements,
 les formules sont dans `combat/statistics.js`, l'application des charges dans
 `board/deployment.js` et leur affichage dans `rendering/hud.js`.
+
+Les priorités de ciblage restent dans `combat/roles.js`. Les badges et listes de cibles
+sont regroupés dans `rendering/hud.js`, et les rôles visuels des cases dans
+`rendering/boardElements.js`.

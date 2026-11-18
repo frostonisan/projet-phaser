@@ -4,20 +4,18 @@ import { refreshStageAccess, gameStarted, isBattleFinished } from "../app/state.
 import { collectEntityResources, prepareLevelResources } from "../data/loaderList.js";
 import { createEntiteInDOM } from "../rendering/entities.js";
 import { toggleScanEntityListener } from "../ui/display.js";
-import { findNearestAvailableHex, isHexOccupied } from "../rendering/boardElements.js";
+import {
+  getRoleFromHex, findNearestAvailableHex, isHexOccupied,
+} from "../rendering/boardElements.js";
 import { planEntityPlacements, commitEntityPlacements, entityFootprint, releaseEntityFootprint } from "../board/controller.js";
 import { getHexEntity } from "../board/targets.js";
-import { getRoleFromHex } from "../combat/roles.js";
 import { notifyProjectileTargetMoved } from "../rendering/animations.js";
 import { saveEntityPositionState, recordEntityCombatStat, recordEntityCombatMovement, beginEntityBattleRole } from "../storage/entityStorage.js";
 import {
-  determineClasse,
-  observeRoleChanges,
-  positionnerEntites,
-  updateCombatantTargetZones,
+  determineClasse, observeRoleChanges, positionnerEntites, updateCombatantTargetZones,
   updateCombatantRoleIndex,
-  updateRoleInDOM,
 } from "../board/deployment.js";
+import { updateRoleInDOM } from "../rendering/hud.js";
 
 const cloneEntity = (entity) => {
     if (typeof structuredClone === 'function') return structuredClone(entity);

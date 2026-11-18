@@ -1,9 +1,7 @@
 import {
-  presentMovementRefill, updateTimerDisplay,
+  updateEntityAttackTargetDisplay, presentMovementRefill, updateTimerDisplay,
 } from "../rendering/hud.js";
-import {
-  refillEntityMovement, updateEntityAttackTargetDisplay,
-} from "../board/deployment.js";
+import { refillEntityMovement } from "../board/deployment.js";
 import { ensureAstralityEffects } from "./effects.js";
 import {
   isEntityActionPaused, isEntityAsleep, getControlState, getCombatSide, getOriginalCombatSide,
@@ -15,7 +13,6 @@ import {
   combatTarget,
 } from "./clock.js";
 import { combatNow, combatDelay, atCombatStart, scheduleCombatTask, cancelCombatTask } from "./timeline.js";
-
 import { gameStarted, checkGameOver, stopAllIntervals, OrderEntity, getOrderSide, isBattleFinished } from "../app/state.js";
 import { createOrderButton, createQuitButton } from "../app/stages.js";
 import { entites } from "../entities/runtime.js";
@@ -54,7 +51,6 @@ import {
   resetAttackSelectionRuntime,
 } from "./attackResolution.js";
 import { createCooldownWaitView } from "../ui/attacks.js";
-
 
 const TARGET_SEARCH_INTERVAL = 1000;
 const targetSearchCycles = new Map();
@@ -445,7 +441,6 @@ export function wakeSurprisedArmy(target) {
     }, ORDER_DECISION_DURATION);
     surpriseWakeTimers.add(timer);
 }
-
 
 export function initFightEntites() {
     entites.forEach(entite => {
@@ -883,8 +878,6 @@ registerCombatState('turns', () => ({ active: [...activeTurns.keys()]
         surpriseWakeTimers.add(timer);
     }
 });
-
-
 
 //ENTITE LOOP
 export async function entiteLoop(attacker) {

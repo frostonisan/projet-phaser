@@ -1,19 +1,14 @@
 import {
-  renderMovementCounter, getLevelBattleStats,
+  updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
+  IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
 import { calibrateEntityVisuals } from "./popups.js";
 import { setTimeout, requestAnimationFrame } from "../combat/clock.js";
 import { cachedResourceImage, cachedResourceUrl, playCachedGif } from "../data/loaderList.js";
-import {
-  determineClasse,
-  updateRoleInDOM,
-  getBattleTargetAttack,
-  updateEntityAttackTargetDisplay,
-  applyCombatProfileView,
-} from "../board/deployment.js";
-import { IngameListingFocus, AttackerSbireTargetPriority, AllySbireTargetPriority } from "../combat/roles.js";
+import { determineClasse } from "../board/deployment.js";
+import { AttackerSbireTargetPriority, AllySbireTargetPriority } from "../combat/roles.js";
 import { createUmbraBlock } from "../ui/statistics/components.js";
 import { createEntityAttackDisplay } from "../ui/attacks.js";
 import { createStuffDom } from "../ui/codex/profile.js";
@@ -21,7 +16,6 @@ import { entites } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
 import { resolveAttackDefinitionForEntity } from "../combat/attackResolution.js";
 import { adjustFontSize } from "../ui/display.js";
-
 import { syncEntityAuras, cleanupEntityAuras, getAuraPoolCurrent } from "./auras.js";
 import {
   getSafe,

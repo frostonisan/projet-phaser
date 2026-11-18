@@ -42,7 +42,7 @@ try {
     const M = await import('/js/items/itemManager.js'), Gear = await import('/js/items/equipement.js');
     const R = await import('/js/items/resourceStocks.js'), U = await import("/js/storage/entityStorage.js");
     const C = await import("/js/rendering/entities.js"), AttackUI = await import("/js/ui/attacks.js");
-    const Role = await import("/js/combat/roles.js"), Lord = await import("/js/combat/lordTurn.js");
+    const Role = await import("/js/rendering/hud.js"), Lord = await import("/js/combat/lordTurn.js");
     const Popup = await import("/js/ui/display.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const { entitesNest } = await import("/js/data/entityTemplates.js");

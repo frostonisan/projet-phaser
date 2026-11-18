@@ -1,12 +1,11 @@
 import {
   initializeAllMovementStatesAtBattleStart, updateEntiteClasses, logPositionsAndAnalyze,
-  observeRoleChanges, updateCombatantRoleIndex, updateCombatantTargetZones, clearBattleTargetDisplays,
+  observeRoleChanges, updateCombatantRoleIndex, updateCombatantTargetZones,
 } from "../board/deployment.js";
 import { updateBonusLifeCounters } from "../rendering/vitalFeedback.js";
 import { setTimeout, clearTimeout, requestAnimationFrame, clockNow } from "../combat/clock.js";
 import { gameStorage as localStorage, beginAdminSession, isAdminSessionActive,
     restorePersistentSession, endAdminSession } from "../storage/sessionStorage.js";
-
 import {
   entites,
   injectSavedEntities,
@@ -59,9 +58,7 @@ import {
   setOrderSide,
 } from "./state.js";
 import { launchOrderCycleForSide, getPlayerOrderType } from "../combat/orders.js";
-
 import { advanceLifeRegen } from "../items/resourceStocks.js";
-
 import {
   resetStoredArmorCurrentToMax,
   resetStoredShiftCurrentToStartingCharges,
@@ -69,7 +66,9 @@ import {
   recordEntityDays,
   persistEquippedResourceStocks,
 } from "../storage/entityStorage.js";
-import { resetLevelBattleStats } from "../rendering/hud.js";
+import {
+  clearBattleTargetDisplays, resetLevelBattleStats,
+} from "../rendering/hud.js";
 import { battleLogs } from "../combat/journal.js";
 import { attackSurprise, configureEventRuntime, initializeEvents, resetActiveEventsImmediately } from "../events/runtime.js";
 import { getSafe } from "../entities/rules.js";
@@ -935,7 +934,6 @@ export function nextDay(increment = 1, { animate = true } = {}) {
   return { previousDay, newDay, deltaDays };
 }
 
-
 let dayAnimTimeoutA = null;
 let dayAnimTimeoutB = null;
 
@@ -1012,7 +1010,6 @@ function syncLiveLifeCopies(armyA, armyB, key) {
   }
 }
 
-
 export function bumpExtraLifeRegenInStorage(deltaDays = 1, dayNow = 1) {
   const d = Math.max(0, toNonNegInt(deltaDays));
   if (d <= 0) return { changedA: false, changedB: false };
@@ -1082,7 +1079,6 @@ function bumpEternalLifeRegenOnEntity(entite, deltaDays, dayNow) {
   if (changed) persistEquippedResourceStocks(entite);
   return changed;
 }
-
 
 export function bumpEternalLifeRegenInStorage(deltaDays = 1, dayNow = 1) {
   const d = Math.max(0, toNonNegInt(deltaDays));
@@ -1354,7 +1350,6 @@ Promise.all([
   }
 }
 
-
 // ─────────────────────────────────────────────
 // PURGE : conserve uniquement #game-windows dans <body>
 // ─────────────────────────────────────────────
@@ -1366,6 +1361,5 @@ function purgeBodyExceptGameWindows() {
     if (node !== gw) node.remove();
   });
 }
-
 
 import "../board/interaction.js";

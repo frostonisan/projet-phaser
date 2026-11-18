@@ -1,15 +1,13 @@
+import { consumeEntityMovement, ensureMovementState } from "./deployment.js";
 import {
-  consumeEntityMovement, ensureMovementState, updateRoleInDOM,
-} from "./deployment.js";
-import { updateMovementDisplay } from "../rendering/hud.js";
+  updateRoleInDOM, updateMovementDisplay,
+} from "../rendering/hud.js";
 import { getFootprintOccupant, planEntityPlacements, commitEntityPlacements, calculateHexes } from "./controller.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 import { setTimeout, isCombatPaused, isCombatInteractionBlocked, notifyCombatAction } from "../combat/clock.js";
 import { generateUniqueID, entites, enrichEntityStats } from "../entities/runtime.js";
-
 import { soclesVisible } from "../ui/display.js";
 import { spawnEntiteIngame } from "../entities/spawn.js";
-
 import { EffectMessage } from "../combat/effects.js";
 import { applyEntityTint, releaseEntityTint, notifyProjectileTargetMoved } from "../rendering/animations.js";
 import {
@@ -61,7 +59,6 @@ document.addEventListener('dragover', event => {
     updateDragHexHover(event.target.closest?.('.hex') || null);
 });
 
-
 function analyserPositionsEtRoles() {
     const tankPositions = [];
     const fantassinPositions = [];
@@ -84,7 +81,6 @@ function analyserPositionsEtRoles() {
 
     return { tankPositions, fantassinPositions, magePositions };
 }
-
 
 // Fonction pour définir les rôles des hexagones
 function definirRolesHexagones(positions) {
@@ -109,22 +105,6 @@ function initialiserEntites() {
 
 // Appeler cette fonction après le chargement de la page
 window.addEventListener('load', initialiserEntites);
-
-// Mise à jour de hexRoles pour utiliser les rôles définis après l'analyse
-export function hexRoles(hexElement) {
-    const roleClasses = ['tank-role', 'fantassin-role', 'mage-role'];
-    roleClasses.forEach(roleClass => hexElement.classList.remove(roleClass));
-
-    if (hexElement.classList.contains('tank-role')) {
-        return { role: 'tank', span: '<span class="hex-role-detail">TANK</span>' };
-    } else if (hexElement.classList.contains('fantassin-role')) {
-        return { role: 'fantassin', span: '<span class="hex-role-detail">FANTASSIN</span>' };
-    } else if (hexElement.classList.contains('mage-role')) {
-        return { role: 'mage', span: '<span class="hex-role-detail">MAGE</span>' };
-    } else {
-        return { role: 'gueux', span: '' };
-    }
-}
 
 const boundDragHexes = new WeakSet();
 function DragnDrop(hex) {
@@ -363,11 +343,9 @@ document.querySelectorAll('.entite-box').forEach(entite => {
     });
 });
 
-
 document.querySelectorAll('.hex').forEach(hex => {
     DragnDrop(hex);
 });
-
 
 document.querySelectorAll('[id^="Box_Entite_"]').forEach(entite => {
     entite.addEventListener('dragstart', event => {
@@ -389,7 +367,6 @@ const observer = new MutationObserver(mutations => {
 observer.observe(document.body, { childList: true, subtree: true });
 
 const droppableElements = document.querySelectorAll('.hex');
-
 
 // Ajoutez les écouteurs d'événements dragenter et dragleave à chaque div "droppable"
 droppableElements.forEach(element => {

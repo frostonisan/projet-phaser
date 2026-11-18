@@ -1,18 +1,9 @@
 import { ENTITY_SIZE_OPTIONS, entitySizeInCells, setEntitySizeInCells, planEntityPlacements, releaseEntityFootprint, hexCoordonne, syncEntityFootprints } from "../board/controller.js";
 import { gameStorage as localStorage, beginAdminSession } from "../storage/sessionStorage.js";
-import { isAdminMode, setAdminMode, getAvailablePlayerExperience } from "../storage/gameStorage.js";
 import {
-  loadFromLocalStorage,
-  saveToLocalStorage,
-  armyAConfig,
-  loadCurrentGameData,
-  getOrCreateGameID,
-  getVisibleHexes,
-  purgeStatPreview,
-  loadPlayerInfo,
-  loadEquippedItems,
-  addToEquippedItemsStorage,
-  removeFromEquippedItemsStorage,
+  isAdminMode, setAdminMode, getAvailablePlayerExperience, loadFromLocalStorage, saveToLocalStorage,
+  armyAConfig, loadCurrentGameData, getOrCreateGameID, getVisibleHexes, purgeStatPreview,
+  loadPlayerInfo, loadEquippedItems, addToEquippedItemsStorage, removeFromEquippedItemsStorage,
 } from "../storage/gameStorage.js";
 import { setBattleSlotCount, removeItem, isBattleConsumable, spawnBattleGroundItem, spawnAdminGroundSummon,
     setAdminGroundItemsInfinite, restoreBattleGroundItems, clearBattleGroundItems } from "../items/itemManager.js";
@@ -22,7 +13,9 @@ import { summons } from "../data/summons.js";
 import { createIngameItem } from "../items/items.js";
 import { createUmbraCrystal, getPermanentStatChoices } from "../items/permanentItems.js";
 import { PERMANENT_CRYSTAL_LEVELS } from "../data/permanentCrystalData.js";
-import { removeBattleElementFromDOM } from "../rendering/boardElements.js";
+import {
+  removeBattleElementFromDOM, isHexOccupied,
+} from "../rendering/boardElements.js";
 import {
   assignUniqueIDToEntities,
   entites,
@@ -34,7 +27,6 @@ import {
   generateUniqueID,
 } from "../entities/runtime.js";
 import { createEntityIngame, spawnEntiteIngame, prepareHexForSide } from "../entities/spawn.js";
-import { isHexOccupied } from "../rendering/boardElements.js";
 import { applyResourceStocksToEquippedItems } from "../items/resourceStocks.js";
 import { applyArmorLayersToEquippedItems } from "../items/armor.js";
 import { createLinkedEssenceId, createLinkedEssenceItem, createAttackEssenceSocketId, createUniversalEssenceId } from "../items/essenceInventory.js";
@@ -58,12 +50,7 @@ import {
 } from "../entities/rules.js";
 import { levelBiome } from "../biome/level.js";
 import { balanceData } from "../data/balanceData.js";
-import {
-  determineClasse,
-  clearBattleTargetDisplays,
-  updateCombatantRoleIndex,
-  updateCombatantTargetZones,
-} from "../board/deployment.js";
+import { determineClasse, updateCombatantRoleIndex, updateCombatantTargetZones } from "../board/deployment.js";
 import {
   ATTACK_ESSENCE_MAX_SLOTS,
   getAttackEssenceColorsFromNatures,
@@ -77,6 +64,7 @@ import {
 import { syncEntityLinkedEssenceInventory } from "../items/essences.js";
 import { closePlayerArmyCodex } from "../ui/codex/index.js";
 import { mountCombatSimulation, unmountCombatSimulation } from "./simulation.js";
+import { clearBattleTargetDisplays } from "../rendering/hud.js";
 
 const ADMIN_EVENT_LIST = Object.freeze(
     eventList
@@ -3086,7 +3074,6 @@ function getAdminEventBranches(eventDefinition) {
     if (!firstChoiceNode) return [];
     return getAdminEventChoiceTreeBranches(eventDefinition, firstChoiceNode.id);
 }
-
 
 // preload
 function preloadImages(images, callback) {

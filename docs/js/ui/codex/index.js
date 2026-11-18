@@ -1,4 +1,3 @@
-// Army and entity Codex navigation, composition and focused attack routing.
 import { getStatSystemResult } from "../../entities/statSystem.js";
 import { HELPER_TEXT } from "../../data/helpers.js";
 import { cachedResourceUrl } from "../../data/loaderList.js";
@@ -41,26 +40,15 @@ import {
   setPendingInventoryCodexAttackTarget,
 } from "../navigation.js";
 import { bindHelperEntity, getBoundHelperEntity } from "../statistics/helpers.js";
-import { createEntityPowerValue } from "../statistics/components.js";
 import {
-  createCodexInformationBattlePage,
-  createCodexProfileSummary,
-  createCodexEntityView,
-  ensureDirectEntityView,
-  removeDirectEntityView,
-  createEntityLore,
-} from "./profile.js";
-import {
-  createUmbraBlock,
-  createStatSection,
-  finalizeCodexStatSection,
-  removeEmptyCodexStatGroup,
-  statTitle,
-  createFullStatDom,
-  entityHasKey,
-  readEntityKey,
+  createEntityPowerValue, createUmbraBlock, createStatSection, finalizeCodexStatSection,
+  removeEmptyCodexStatGroup, statTitle, createFullStatDom, entityHasKey, readEntityKey,
   createValideStatDom,
 } from "../statistics/components.js";
+import {
+  createCodexInformationBattlePage, createCodexProfileSummary, createCodexEntityView,
+  ensureDirectEntityView, removeDirectEntityView, createEntityLore, getCodexStableEquipmentCharge,
+} from "./profile.js";
 import {
   normalizeInventoryLookupValue,
   getInventoryAttackKeyCandidates,
@@ -74,8 +62,8 @@ import {
   createSoulGraphPanel,
   createArchetypesList,
 } from "./stats.js";
-import { getCodexStableEquipmentCharge } from "./profile.js";
-import { applyCombatProfileView } from "../../board/deployment.js";
+import { applyCombatProfileView } from "../../rendering/hud.js";
+// Army and entity Codex navigation, composition and focused attack routing.
 
 function escapeInventorySelectorValue(value = '') {
     const text = String(value ?? '');
