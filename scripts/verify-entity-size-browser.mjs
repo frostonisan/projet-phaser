@@ -20,9 +20,16 @@ async function spatialAudit() {
   const cell=(r,c)=>grid.querySelector(`[data-row="${r}"][data-col="${c}"]`);
   const state=()=>JSON.stringify(E.entites.map(e=>[e.id,e.position,e.sizeInCells,document.getElementById(`Box_Entite_${e.id}`).dataset.occupiedPositions]));
   function invariant() {
+    const snapshot=P.getBoardSnapshot(grid);
+    const plain=value=>value===null||typeof value!=='object'||
+      (!('nodeType' in value)&&!('entity' in value)&&!('box' in value)&&Object.values(value).every(plain));
+    check(plain(snapshot),'Logical snapshot contains no DOM or entity instances');
+    const logical=new Map(snapshot.occupants.filter(record=>record.movable).map(record=>[record.id,record]));
     const occupied=new Set();
     for(const e of E.entites) {
       const members=P.entityFootprint(e);
+      check(JSON.stringify(logical.get(String(e.id))?.members)===JSON.stringify(members.map(hex=>hex.dataset.position)),
+        'Logical and rendered footprints agree after each placement');
       check(members.length===e.sizeInCells,`${e.name}: full group in bounds`);
       for(const h of members) {
         check(!occupied.has(h),`${e.name}: no overlap at ${h.dataset.position}`);occupied.add(h);

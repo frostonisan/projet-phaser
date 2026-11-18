@@ -134,6 +134,47 @@ Les effets de régénération, de vol de vie et de résurrection possèdent enco
 propres chemins historiques. Ce lot isole les règles de la résolution des impacts ;
 il ne termine pas la séparation de tous les effets et du cycle de vie des entités.
 
+## Quatrième lot : plateau logique — P3 du plan
+
+| Responsabilité | Module propriétaire |
+| --- | --- |
+| Géométrie hexagonale, empreintes, état d'occupation, application des positions et instantanés | docs/js/board/model.js |
+| Validation des placements, zones autorisées et recherche de poussées | docs/js/board/placementRules.js |
+| Lecture des coordonnées HTML, projection et correspondance entre identifiants et éléments | docs/js/rendering/boardAdapter.js |
+
+Les clés de l'état d'occupation sont désormais des identifiants de cases et d'entités.
+Le modèle ne contient ni élément HTML, ni instance d'entité du combat. Ses instantanés
+sont des données simples, copiées et sérialisables. Les règles de placement fonctionnent
+sans navigateur, stockage ou tirage aléatoire et ne modifient pas l'état examiné.
+La recherche conserve son ordre déterministe, ses coûts et sa limite de 20 000 nœuds.
+
+board.js coordonne le plateau existant. Il traduit les demandes HTML en identifiants,
+revalide le plan contre l'occupation courante, applique toutes les réservations logiques,
+puis met à jour les vues et envoie les notifications au combat. Un objet apparu entre
+la préparation et l'application continue donc de bloquer un ancien plan. Les réservations
+des consommables gardent leur exception pour les déplacements manuels.
+
+Le plateau visible et celui du simulateur utilisent ces mêmes règles. Le DOM actuel
+reste l'adaptateur d'initialisation et de restauration ; ce lot ne supprime pas le plateau
+HTML du simulateur et ne change pas les sauvegardes. Les décors, notifications et rôles
+visuels restent coordonnés par board.js. La prochaine étape P4 peut s'appuyer sur le
+modèle logique sans recréer les règles de placement dans un autre moteur.
+
+Validation dans outputs/refactor-board/ :
+
+- Neuf tests Node couvrent limites, parité des lignes, échanges atomiques, poussées,
+  obstacles, consommables, zones interdites et reconstruction depuis un instantané.
+- 572 empreintes et 1 200 plans comparés au code précédent donnent les mêmes résultats.
+- Les tests de tailles vérifient l'accord entre modèle et rendu après chaque placement,
+  ainsi que l'absence de références DOM et d'entités dans les instantanés.
+- Placement, inventaire, ciblage avant exécution, 40 scénarios de mort en vol et simulation
+  passent dans le navigateur. Le contrôle habituel comprend désormais 51 tests Node.
+
+Le premier passage du test de pause échoue sur la précision de sérialisation d'une matrice
+CSS (écart de 0,00001). La relance isolée passe sans changement des assertions, de même
+que les tests de placement et de taille relancés avec les vérifications du modèle logique.
+Le rapport du premier échec est conservé pour le suivi de cette sensibilité du test.
+
 ## Temps et présentation
 
 combatClock.js reste l'horloge de combat ; combatTimeline.js ordonne les échéances et les
@@ -179,6 +220,9 @@ Après le troisième lot : 120 modules, 930 dépendances et une composante cycli
 de 73 modules. Les règles PV/armure sont hors de cette composante ; les adaptateurs
 d’application et d’affichage utilisent encore les modules historiques.
 
+Après P3 : 123 modules et 935 dépendances. La composante cyclique reste à 73 modules ;
+les trois nouveaux modules du plateau sont hors de cette composante.
+
 ## Validation
 
 Les rapports locaux sont placés dans outputs/refactor-combat/ et ignorés par Git.
@@ -199,25 +243,25 @@ La vérification habituelle inclut désormais les tests des règles de vol :
 
 Les tests sans navigateur s'exécutent avec :
 
-    node --test scripts/verify-flight-rules.test.mjs scripts/verify-damage-rules.test.mjs scripts/verify-vital-rules.test.mjs
+    node --test scripts/verify-flight-rules.test.mjs scripts/verify-damage-rules.test.mjs scripts/verify-vital-rules.test.mjs scripts/verify-board-rules.test.mjs
 
 Ils couvrent notamment la mort provisoire du lanceur, la perte définitive du guidage,
 le retour d'une cible à sa case initiale et la conservation de la part physique d'une
 attaque hybride.
 
-## Lots suivants, avant Phaser
+## Suite du plan, avant Phaser
 
 1. Étendre les mêmes frontières aux effets de soin, régénération, vol de vie et
    résurrection, en conservant leurs échéances et leur comptabilisation.
 2. Extraire les mises à jour de barres et d'effets encore présentes dans les phases
    d'attaque ; préciser le contrat entre l'exécution et la présentation.
-3. Donner au plateau un état logique indépendant du DOM. Centraliser les conversions
-   de coordonnées dans l'adaptateur de rendu.
+3. **P3 livrée** : état logique du plateau, occupation et placements indépendants du DOM,
+   avec un adaptateur de coordonnées et de rendu pour le jeu actuel.
 4. Raccorder le jeu visible et le simulateur au même état et aux mêmes règles.
 5. Réduire les cycles restants, puis poursuivre le découpage de events.js,
    UpgradeEntity.js et admin.js par fonction métier.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-damagesCalcul.js, entityControl.js et le plateau DOM. Ces trois premiers lots ne constituent
+damagesCalcul.js, entityControl.js et le plateau DOM. Ces quatre premiers lots ne constituent
 pas une séparation complète du moteur de jeu.
