@@ -31,7 +31,7 @@ try {
   await dismissStarterForFixture(page);
   checks.push(...await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const S = await import('/js/entite/statSystem.js');
     const H = await import('/js/data/helpers.js');
     const U = await import('/js/UpgradeEntity.js');
@@ -58,7 +58,7 @@ try {
     entity.baseStats.strength += 3;
     entity.baseStatSources = { crystal: { strength: 3 } };
     recompute();
-    const attributeSources = D.getStatisticSourceTotals(entity, 'strength', D.calculateStatsDisplay('strength', entity));
+    const attributeSources = DDisplay.getStatisticSourceTotals(entity, 'strength', DDisplay.calculateStatsDisplay('strength', entity));
     check(attributeSources.length === 1 && attributeSources[0].category === 'fixed'
       && attributeSources[0].value === 13 && !attributeSources[0].provenance.length,
     'attribute crystal is absorbed into the 13 owned points without a separate annotation');
@@ -75,7 +75,7 @@ try {
     const timingEntity = { ...entity, baseStats: { HP: 100, intelligence: 20, haste: 5, attackCooldownReduc: 3, attackCooldownReducPlus: 2 },
       baseStatSources: { crystal: { haste: 2, attackCooldownReduc: 3, attackCooldownReducPlus: 2 } }, modifierStats: undefined };
     E.recomputeEntityStats(timingEntity, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
-    const timing = D.calculateStatsDisplay('cooldownTimeDetail', timingEntity, { baseMs: 1000 }).helperDetails.timing;
+    const timing = DDisplay.calculateStatsDisplay('cooldownTimeDetail', timingEntity, { baseMs: 1000 }).helperDetails.timing;
     check(Math.abs(timing.sources.filter(source => !source.duration).reduce((sum, source) => sum + source.value, 0) - timing.bonus) < .00001,
       'timing source totals include crystal gains exactly once');
     check(timing.sources.some(source => source.category === 'umbra')
@@ -87,9 +87,9 @@ try {
     check(E.getStatMalusSources(entity, 'physicalDamage')[0].value === -30, 'negative progression is exposed');
     const render = key => {
       const doc = document.createElement('div');
-      const calculated = D.calculateStatsDisplay(key, entity);
+      const calculated = DDisplay.calculateStatsDisplay(key, entity);
       const modifiers = D.getStatContributions(entity, key, { includePreview: true, includePlus: true });
-      doc.innerHTML = H.buildStatisticOrigins({ compact: true, totals: D.getStatisticSourceTotals(entity, key, calculated), modifiers });
+      doc.innerHTML = H.buildStatisticOrigins({ compact: true, totals: DDisplay.getStatisticSourceTotals(entity, key, calculated), modifiers });
       return doc;
     };
     let doc = render('physicalDamage');
@@ -302,12 +302,13 @@ try {
     assert.doesNotMatch(await detail.innerText(), /crystal/i, `${category}: no separate Crystal mention`);
   }
   const mixedValues = await page.evaluate(async () => {
-    const { entity, D, S, U } = window.__malusAudit;
+    const { entity, S, U } = window.__malusAudit;
+    const DDisplay = await import('/js/ui/statDetails.js');
     const UI = await import('/js/GameInit.js');
     const statsBefore = JSON.stringify(entity.stats);
     const row = document.querySelector('#malus-audit .section-content.stats [data-stat="physicalDamage"].stat-container');
     for (let i = 0; i < 3; i++) UI.syncStatCurseMarker(row, entity, 'physicalDamage');
-    const totals = D.getStatisticSourceTotals(entity, 'physicalDamage', D.calculateStatsDisplay('physicalDamage', entity));
+    const totals = DDisplay.getStatisticSourceTotals(entity, 'physicalDamage', DDisplay.calculateStatsDisplay('physicalDamage', entity));
     return { label: row.querySelector('.stat-name').textContent, value: S.getStatSystemResult(entity, 'physicalDamage').value,
       sum: totals.reduce((sum, source) => sum + source.value, 0), unchanged: statsBefore === JSON.stringify(entity.stats),
       saved: JSON.parse(localStorage.getItem('selectedArmyA'))[0].baseStatSources,

@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js');
+const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S=await import('../docs/js/entite/statSystem.js'),U=await import('../docs/js/UpgradeEntity.js');
 const A=await import('../docs/js/items/armor.js'),Rules=await import('../docs/js/entite/entityRules.js');
 const P=globalThis.umbraProgression;
@@ -33,7 +33,7 @@ for(const threshold of [150,300])for(const r of [0,1,10,149,150,151,300,1000])fo
  const parts=L.contributions(lab,'maj');eq(parts.fixed+parts.plus+parts.umbra,lab.total,'Lab has no double-counted X');
  const retainedR=P.calculateStatPointLimit(r,0,0,threshold).value,retainedF=P.calculateStatPointLimit(f).value;
  eq(e.armorLayers.robustness.max,A.calculateRobustnessBonus(retainedR,retainedF),'Solar layer follows retained points');
- const before=JSON.stringify(e),h=D.calculateStatsDisplay('robustness',e);
+ const before=JSON.stringify(e),h=DDisplay.calculateStatsDisplay('robustness',e);
  eq(h.umbraHelperCalculations.armorTotal.value,lab.total,'Helper entity total');
  eq(h.umbraHelperCalculations.armorBonus.value,e.armorLayers.robustness.max,'Helper solar grant');
  ok(h.helpContent.includes('data-umbra-passive="solarArmor"'),'Exclusive solar card');

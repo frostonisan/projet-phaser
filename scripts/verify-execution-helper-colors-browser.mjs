@@ -100,7 +100,7 @@ try {
   const detail = page.locator('[data-umbra-detail]');
   checks.push(...await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const S = await import('/js/entite/statSystem.js');
     const H = await import('/js/data/helpers.js');
     const U = await import('/js/UpgradeEntity.js');
@@ -132,7 +132,7 @@ try {
           expect(icons[0].dataset.helperUmbraSource === origin && icons[0].classList.contains(origin), `${label}: originating Umbra icon`);
           expect(icons[0].nextElementSibling?.dataset.statState === row.state, `${label}: icon precedes the final stat name with its actual state`);
         }
-        const totals = D.getStatisticSourceTotals(entity, key, D.calculateStatsDisplay(key, entity));
+        const totals = DDisplay.getStatisticSourceTotals(entity, key, DDisplay.calculateStatsDisplay(key, entity));
         content.innerHTML = H.buildStatisticOrigins({ compact: true, totals, statName: key });
         for (const source of content.querySelectorAll('[data-helper-source]')) {
           const template = source.querySelector('template');

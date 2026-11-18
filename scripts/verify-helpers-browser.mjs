@@ -136,7 +136,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   await dismissStarterForFixture(page);
   const snapshot = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const UI = await import('/js/GameInit.js');
     const E = await import('/js/entites.js');
     const A = await import('/js/attackInterface.js');
@@ -168,7 +168,7 @@ try {
         const value = key.endsWith('TimeDetail') ? { label: key, baseMs: 1500, effectiveMs: 950, reduc: 37, reducKey: 'prepReduc' } : undefined;
         const helperOwner = key === 'executionRangeTimeDetail'
           ? { ...owner, currentAttack: { ...owner.currentAttack, attackRange: ['range'] } } : owner;
-        const computed = D.calculateStatsDisplay(key, helperOwner, value);
+        const computed = DDisplay.calculateStatsDisplay(key, helperOwner, value);
         snapshot[`stat:${index}:${key}`] = {
           helpContent: computed.helpContent, ambianceContent: computed.ambianceContent, displayValue: computed.displayValue,
           totalMagicalDamageHelp: computed.totalMagicalDamageHelp,
@@ -183,7 +183,7 @@ try {
     for (const base of [0, 17.5]) for (const hypercognition of [0, 10, 150]) for (const override of [undefined, 0, 23.5]) {
       const entity = { id: 'magic-helper', stats: { magicalDamage: base, hypercognition, intelligence: 20 } };
       const before = JSON.stringify(entity);
-      const computed = D.calculateStatsDisplay('magicalDamage', entity, override);
+      const computed = DDisplay.calculateStatsDisplay('magicalDamage', entity, override);
       if (JSON.stringify(entity) !== before) throw new Error('Helper calculation mutated its entity');
       if (computed.displayValue !== Math.round(override ?? base)) throw new Error('Flat Hyper bonus must not inflate magical power');
       if (!computed.helpContent.includes(computed.totalMagicalDamageHelp)) throw new Error('Magic fragment is disconnected');
@@ -193,7 +193,7 @@ try {
     const formulaHost = document.createElement('div');
     const formulaValues = (key, entity, index = 0) => {
       const before = JSON.stringify(entity);
-      const computed = D.calculateStatsDisplay(key, entity);
+      const computed = DDisplay.calculateStatsDisplay(key, entity);
       if (before !== JSON.stringify(entity)) throw new Error(`${key}: helper mutated entity`);
       formulaHost.innerHTML = computed.helpContent;
       const framed = formulaHost.querySelector('[data-umbra-layout="card"]');
@@ -273,7 +273,7 @@ try {
       E.recomputeEntityStats(generatedEntity, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
       const row=StatSystem.getStatSystemResult(generatedEntity,cfg.target);
       equal(generatedEntity.stats[cfg.target],row.value,cfg.source+': committed entity follows the shared engine');
-      equal(D.calculateStatsDisplay(cfg.source,generatedEntity).generatedUmbraSource.bonus,row.umbraFlat+row.generated,cfg.source+': helper matches derived stat');
+      equal(DDisplay.calculateStatsDisplay(cfg.source,generatedEntity).generatedUmbraSource.bonus,row.umbraFlat+row.generated,cfg.source+': helper matches derived stat');
     }
     const resistanceEntity = { id: 987095, name: 'Integrity audit', type: 'sbire', side: 'A',
       level: { current: 1, max: 250 }, baseStats: { HP: 100, intelligence: 6, integrite: 3 }, attacks: ['autoAttack'] };
@@ -289,7 +289,7 @@ try {
     resistanceEntity.baseStats.intelligence = 50;
     recomputeResistance();
     equal(resistanceEntity.stats.magicalResistance, 44, 'Changing Intelligence updates resistance points');
-    equal(D.calculateStatsDisplay('integrite', resistanceEntity).generatedUmbraSource.bonus, 44, 'Helper follows recalculated resistance');
+    equal(DDisplay.calculateStatsDisplay('integrite', resistanceEntity).generatedUmbraSource.bonus, 44, 'Helper follows recalculated resistance');
     const targetFormula = formulaValues('magicalResistance', resistanceEntity);
     const targetModel = targetFormula.computed.umbraHelperCalculations.autonomousTotal;
     equal(targetModel.value, 44, 'Resistance hover total matches combat');
@@ -301,7 +301,7 @@ try {
     equal(resistanceEntity.stats.magicalResistance ?? 0, 0, 'No generated resistance without Integrity');
     for (const [max, intel] of [[11, 0], [100, 150], [3, .5], [0, 0]]) {
       const entity = fixture({ HP: { current: 0, max }, intelligence: intel, extraLife: { current: 1, max: 1 } });
-      const shown = D.calculateStatsDisplay('extraLife', entity);
+      const shown = DDisplay.calculateStatsDisplay('extraLife', entity);
       B.attemptExtraLife(entity);
       equal(shown.extraLifeResurrectHP, entity.stats.HP.current, `Extra life ceil/cap ${max}/${intel}`);
       equal(shown.extraLifeResurrectPercentTotal, Math.min(100, 20 + intel), 'Extra life cap');
@@ -310,7 +310,7 @@ try {
     try {
       for (const points of [0, 1, 25, 100, 150, 300]) {
         const entity = fixture({ esoterism: points });
-        const chance = D.calculateStatsDisplay('esoterism', entity).esoterismBonus;
+        const chance = DDisplay.calculateStatsDisplay('esoterism', entity).esoterismBonus;
         for (const roll of [0, .02, .2, .73, .99]) {
           Math.random = () => roll;
           equal(Number(D.attemptEsoterism(null, entity)), Number(roll * 100 < chance), `Esoterism ${points}/${roll}`);
@@ -328,7 +328,7 @@ try {
     equal(D.attemptResilienceCritReduction(null, inactive, 100), 100, 'Inactive resilience in combat');
     const frozen = { ...fixture({ hypercognition: 100, intelligence: 150 }), archetypeFrozen: true };
     if (isUmbraRestricted(frozen, 'hypercognition')) {
-      equal(D.calculateStatsDisplay('hypercognition', frozen, 100).hypercognitionBonus, 0, 'Restricted explicit preview');
+      equal(DDisplay.calculateStatsDisplay('hypercognition', frozen, 100).hypercognitionBonus, 0, 'Restricted explicit preview');
     } else throw new Error('Frozen fixture must exercise the restriction');
     const magicAttack = { attacknature: ['magicalDamage'], attackRange: ['melee'], combatFunction: 'Attaquant',
       physicalRatio: 0, magicalRatio: 1, piercingRatio: 0, entityAttackId: 'audit-attack' };
@@ -349,7 +349,7 @@ try {
         const timing = D.getEffectiveAttackTimings(attack, entity);
         for (const [key, field] of [['cooldownTimeDetail', 'cooldown'], ['preparationTimeDetail', 'preparationTime'],
           [range === 'range' ? 'executionRangeTimeDetail' : 'executionTimeDetail', 'executionTime'], ['recoveryTimeDetail', 'recoveryTime']]) {
-          const helper = D.calculateStatsDisplay(key, entity, { baseMs: 1001, reduc: timing.reduc }).helperDetails.timing;
+          const helper = DDisplay.calculateStatsDisplay(key, entity, { baseMs: 1001, reduc: timing.reduc }).helperDetails.timing;
           equal(helper.calculatedMs, timing.effective[field], `${key}: grouped clamps ${range}/${nature}/${direct}/${haste}`);
           equal(helper.effectiveMs, field === 'executionTime' ? timing.impactExecutionTime : timing.effective[field], `${key}: impact minimum`);
         }
@@ -367,27 +367,27 @@ try {
       'Regen penalty remains visible in current source details');
     equal(regenFormula.computed.hpBattleRegenAmount, D.calculateHpBattleRegenAmount(regen), 'Regen HP rounding');
     const highChance = fixture({ criticalPower: 300, criticalChance: 150, ambidextry: 300, agility: 300 });
-    equal(D.calculateStatsDisplay('criticalChance', highChance).criticalChanceTotal, 99, 'Crit probability cap');
-    equal(D.calculateStatsDisplay('ambidextry', highChance).ambidextryTotalChance, 100, 'Ambidextry probability cap');
+    equal(DDisplay.calculateStatsDisplay('criticalChance', highChance).criticalChanceTotal, 99, 'Crit probability cap');
+    equal(DDisplay.calculateStatsDisplay('ambidextry', highChance).ambidextryTotalChance, 100, 'Ambidextry probability cap');
     const resist = fixture({ physicalResistance: 1 });
-    equal(D.calculateStatsDisplay('physicalResistance', resist).reductionPercent, 100 / 71, 'Autonomous resistance is converted from its score');
+    equal(DDisplay.calculateStatsDisplay('physicalResistance', resist).reductionPercent, 100 / 71, 'Autonomous resistance is converted from its score');
     equal(Rules.calculateResistances(resist, { physical: 1000 }).reducedPhysicalDamage, Math.floor(1000 * 70 / 71), 'Autonomous resistance uses the current curve');
     const generatedResist = fixture({ constitution: 1 });
-    equal(D.calculateStatsDisplay('physicalResistance', generatedResist).reductionPercent, 200 / 72, 'Generated resistance includes the current fixed gift');
+    equal(DDisplay.calculateStatsDisplay('physicalResistance', generatedResist).reductionPercent, 200 / 72, 'Generated resistance includes the current fixed gift');
     equal(Rules.calculateResistances(generatedResist, { physical: 1000 }).reducedPhysicalDamage, Math.floor(1000 * 70 / 72), 'Generated resistance retains the exact curve then floors damage');
     const fractional = fixture({ magicalDamage: 12.4, intelligence: 0 });
     const psionic = formulaValues('psionic', fractional, 1);
     equal(psionic.total, psionic.parts.reduce((sum, value) => sum + value, 0), 'Psionic rounded input');
     for (const points of [0, 1, 25, 150, 300]) {
       const entity = fixture({ hypercognition: points, intelligence: 10 });
-      const helper = D.calculateStatsDisplay('hypercognition', entity);
+      const helper = DDisplay.calculateStatsDisplay('hypercognition', entity);
       const retained = points <= 150 ? points : 150 + (points - 150) * .1;
       equal(helper.hypercognitionBonus, points > 0 ? Math.round(retained + 10 * helper.hypercognitionRatio) : 0, 'Hyper final rounding after natural point retention');
     }
     for (const haste of [0, 1, 25, 150, 300]) for (const attribute of [0, 1, 2.99, 25, 150, 300]) {
       const entity = fixture({ haste, strength: attribute, intelligence: attribute, agility: attribute });
       const before = JSON.stringify(entity);
-      const shown = D.calculateStatsDisplay('haste', entity);
+      const shown = DDisplay.calculateStatsDisplay('haste', entity);
       equal(Number(JSON.stringify(entity) === before), 1, 'Haste helper leaves the entity unchanged');
       formulaHost.innerHTML = shown.helpContent;
       const formulas = [...formulaHost.querySelectorAll('[data-umbra-section="capacity"] > .helper-calculation')];
@@ -427,7 +427,7 @@ try {
       equal(E.calculateRobustnessBonus(r, f), expected, 'Approved progressive armor table');
     for (const robustness of [-1, 0, .5, 1, 3, 25, 150, 300, 10000]) for (const strength of [0, 5, 100, 300]) {
       const entity = fixture({ robustness, strength, armor: { current: 3, max: 9999 } });
-      const shown = D.calculateStatsDisplay('robustness', entity);
+      const shown = DDisplay.calculateStatsDisplay('robustness', entity);
       const r = Rules.getSafe(entity, 'robustness'), f = Rules.getSafe(entity, 'strength');
       equal(shown.armorBonus, armorExpected(r, f), 'Armor helper follows retained points and common curves');
       formulaHost.innerHTML = shown.helpContent;
@@ -440,7 +440,7 @@ try {
       if (robustness === 150 && strength === 300) snapshot.robustnessSoftCapExample = shown.helpContent;
     }
     for (const override of [0, 1, 3, 25]) {
-      const shown = D.calculateStatsDisplay('robustness', fixture({ robustness: 150, strength: 100 }), override);
+      const shown = DDisplay.calculateStatsDisplay('robustness', fixture({ robustness: 150, strength: 100 }), override);
       equal(shown.armorBonus, armorExpected(override, 100), 'Preview uses requested Robustness');
     }
     for (const r of [0, 1, 150, 1000, 1e6]) {
@@ -462,7 +462,7 @@ try {
       armorConfig.ratios.source = 2; armorConfig.ratios.attribute = .25; armorConfig.flatPerPoint = .5;
       for (const r of [0,1,3,10000]) {
         const entity = fixture({ robustness:r, strength:100 });
-        equal(D.calculateStatsDisplay('robustness', entity).armorBonus, armorExpected(Rules.getSafe(entity,'robustness'),100,armorConfig), 'Editable ratios/gift reach helper and engine');
+        equal(DDisplay.calculateStatsDisplay('robustness', entity).armorBonus, armorExpected(Rules.getSafe(entity,'robustness'),100,armorConfig), 'Editable ratios/gift reach helper and engine');
       }
     } finally { Object.assign(armorConfig.ratios, savedRatios); armorConfig.flatPerPoint = savedGift; }
     const Armor = await import('/js/items/armor.js');
@@ -532,14 +532,14 @@ try {
     armored.modifierStats.preview = { statLeveled: { strength: 20 } };
     const preview = Upgrade.ComputeStatPreview(armored);
     equal(preview.armor.max, 536, 'Force-only level preview updates armor');
-    equal(D.calculateStatsDisplay('robustness', armored).armorBonus, preview.armor.max, 'Preview helper agrees with preview capacity');
+    equal(DDisplay.calculateStatsDisplay('robustness', armored).armorBonus, preview.armor.max, 'Preview helper agrees with preview capacity');
     equal(armored.armorLayers.robustness.max, 516, 'Preview does not mutate real capacity');
     equal(armored.armorLayers.robustness.current, consumed, 'Preview does not heal real armor');
     armored.modifierStats.preview = { statLeveled: {} };
     const boost = Rules.entityBattleBooste(armored, { stat: 'strength', value: 20, source: 'armor-test' });
     equal(armored.armorLayers.robustness.max, 536, 'Temporary Force updates armor capacity');
     equal(armored.armorLayers.robustness.current, consumed, 'Temporary Force grants no free refill');
-    equal(D.calculateStatsDisplay('robustness', armored).armorBonus, 536, 'Battle boost helper and capacity agree');
+    equal(DDisplay.calculateStatsDisplay('robustness', armored).armorBonus, 536, 'Battle boost helper and capacity agree');
     E.recomputeEntityStats(armored, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
     armorBuffCheck(armored.armorLayers.robustness.max, 536, 'Recompute retains active Force boost exactly once');
     boost.remove();
@@ -690,7 +690,7 @@ try {
     snapshot.entityCard = entityCard?.innerHTML;
     entityCard?.remove();
     const H = await import('/js/data/helpers.js');
-    snapshot.orfevre = D.calculateStatsDisplay('orfevre-detail', owner, {
+    snapshot.orfevre = DDisplay.calculateStatsDisplay('orfevre-detail', owner, {
       stat: 'strength', label: 'Force', raw: 10, exactBonus: 2.5, exactTotal: 12.5, total: 13,
     }).helpContent;
     snapshot.statSource = H.buildStatSourcesHelper({
@@ -1112,7 +1112,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#armor-bars-regression').screenshot({ path: resolve(output, 'armor-bars-mobile.png') });
   const layeredChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const Rules = await import('/js/entite/entityRules.js');
     const UI = await import('/js/GameInit.js');
     const H = await import('/js/data/helpers.js');
@@ -1127,7 +1127,7 @@ try {
     const before = JSON.stringify(entity);
     const host = document.createElement('div');
     for (const stat of stats.filter(stat => stat.nature === 'umbra')) {
-      const computed = D.calculateStatsDisplay(stat.key, entity);
+      const computed = DDisplay.calculateStatsDisplay(stat.key, entity);
       const models = computed.umbraHelperCalculations || {};
       check(Object.keys(models).length > 0, `${stat.key}: missing layered calculations`);
       host.innerHTML = computed.helpContent;
@@ -1223,7 +1223,7 @@ try {
       edge.baseStats = structuredClone(edge.stats);
       const untouched = JSON.stringify(edge);
       for (const stat of stats.filter(stat => stat.nature === 'umbra')) {
-        const computed = D.calculateStatsDisplay(stat.key, edge);
+        const computed = DDisplay.calculateStatsDisplay(stat.key, edge);
         for (const [key, model] of Object.entries(computed.umbraHelperCalculations || {})) {
           check(Number.isFinite(Number(model.value)), `${stat.key}/${points}: nonfinite total`);
           for (const part of model.parts) {
@@ -1246,7 +1246,7 @@ try {
     for (const points of [-1, .5, 15.2, 99.5, 124.9, ...Array.from({ length: 301 }, (_, index) => index)]) {
       const probe = { stats: { hypercognition: points, intelligence: 6 } };
       const probeBefore = JSON.stringify(probe);
-      const computed = D.calculateStatsDisplay('hypercognition', probe);
+      const computed = DDisplay.calculateStatsDisplay('hypercognition', probe);
       const model = computed.umbraHelperCalculations.hypercognitionEssences;
       const progression = model.parts[0].progression;
       const count = calculateHypercognitionEssenceCount(points);
@@ -1267,7 +1267,7 @@ try {
     }
     for (const [points, count, nextPoints, nextCount] of [[0, 0, 1, 1], [1, 1, 16, 2], [99, 7, 100, 8],
       [100, 8, 125, 9], [124, 8, 125, 9], [125, 9, 150, 10], [149, 9, 150, 10], [150, 10, null, null]]) {
-      const progression = D.calculateStatsDisplay('hypercognition', { stats: { hypercognition: points } })
+      const progression = DDisplay.calculateStatsDisplay('hypercognition', { stats: { hypercognition: points } })
         .umbraHelperCalculations.hypercognitionEssences.parts[0].progression;
       check(progression.current.count === count, `Approved cognitive count at ${points}`);
       check((progression.next?.points ?? null) === nextPoints && (progression.next?.count ?? null) === nextCount,
@@ -1277,7 +1277,7 @@ try {
     const previousSoftCap = essenceConfig.softCap;
     try {
       essenceConfig.softCap = 80;
-      const progression = D.calculateStatsDisplay('hypercognition', { stats: { hypercognition: 80 } })
+      const progression = DDisplay.calculateStatsDisplay('hypercognition', { stats: { hypercognition: 80 } })
         .umbraHelperCalculations.hypercognitionEssences.parts[0].progression;
       check(progression.current.count === 8 && progression.next.points === 115 && progression.next.count === 9,
         'Milestones read the live engine configuration, not hard-coded thresholds');
@@ -1288,7 +1288,7 @@ try {
     for (const points of [-1, .1, .5, 5.4, 57.9, 89.9, 149.9, 1000, ...Array.from({ length: 301 }, (_, index) => index)]) {
       const probe = { stats: { transcendence: points, intelligence: 6, extraLife: { current: 0, max: 4 } } };
       const probeBefore = JSON.stringify(probe);
-      const computed = D.calculateStatsDisplay('transcendence', probe);
+      const computed = DDisplay.calculateStatsDisplay('transcendence', probe);
       const model = computed.umbraHelperCalculations.transcendenceExBonus;
       const progression = model.parts[0].progression;
       const count = calculateTranscendenceExtraLife(points);
@@ -1313,7 +1313,7 @@ try {
     for (const [points, count, nextPoints, nextCount] of [[0, 0, 1, 1], [1, 1, 6, 2], [6, 2, 17, 3],
       [17, 3, 34, 4], [34, 4, 58, 5], [50, 4, 58, 5], [57, 4, 58, 5], [58, 5, 90, 6],
       [89, 5, 90, 6], [90, 6, 150, 7], [149, 6, 150, 7], [150, 7, null, null]]) {
-      const progression = D.calculateStatsDisplay('transcendence', { stats: { transcendence: points } })
+      const progression = DDisplay.calculateStatsDisplay('transcendence', { stats: { transcendence: points } })
         .umbraHelperCalculations.transcendenceExBonus.parts[0].progression;
       check(progression.current.count === count && (progression.next?.points ?? null) === nextPoints
         && (progression.next?.count ?? null) === nextCount, `Approved Transcendence thresholds at ${points}`);
@@ -1322,7 +1322,7 @@ try {
     const originalLifeExponent = lifeConfig.exponent;
     try {
       lifeConfig.exponent = 1;
-      const progression = D.calculateStatsDisplay('transcendence', { stats: { transcendence: 50 } })
+      const progression = DDisplay.calculateStatsDisplay('transcendence', { stats: { transcendence: 50 } })
         .umbraHelperCalculations.transcendenceExBonus.parts[0].progression;
       check(progression.current.count === 2 && progression.next.points === 54 && progression.next.count === 3,
         'Life milestones follow the live curve and its rounding, not hard-coded thresholds');
@@ -1332,7 +1332,7 @@ try {
     for (const transcendence of [0, 1, 150]) for (const intelligence of [-1, 0, .5, 6, 30, 75, 149.9, 150, 151, 300]) {
       const probe = { stats: { transcendence, intelligence } };
       const before = JSON.stringify(probe);
-      const computed = D.calculateStatsDisplay('transcendence', probe);
+      const computed = DDisplay.calculateStatsDisplay('transcendence', probe);
       const model = computed.umbraHelperCalculations.transcendenceConsoProtectionPercent;
       const part = model.parts[1];
       const curve = part.curvePreview;
@@ -1346,20 +1346,20 @@ try {
       check(JSON.stringify(probe) === before, 'The curve preview never mutates entity stats');
       check(H.buildUmbraContributionHelper(model, 1).includes('Bonus inactif.') === (transcendence <= 0), 'Inactive contributions keep their existing explanation');
     }
-    const frozenProtection = D.calculateStatsDisplay('transcendence', {
+    const frozenProtection = DDisplay.calculateStatsDisplay('transcendence', {
       archetypeFrozen: true, stats: { transcendence: 150, intelligence: 30 },
     }).umbraHelperCalculations.transcendenceConsoProtectionPercent;
     check(frozenProtection.value === 0 && frozenProtection.parts[1].curvePreview.current.value === 0
       && frozenProtection.parts[1].curvePreview.maximum.value === 0, 'Frozen entities receive no hypothetical active protection');
     for (const [points, expected] of [[0, 0], [6, .39], [30, 1.8], [150, 5], [300, 5]]) {
-      const model = D.calculateStatsDisplay('transcendence', { stats: { transcendence: 150, intelligence: points } })
+      const model = DDisplay.calculateStatsDisplay('transcendence', { stats: { transcendence: 150, intelligence: points } })
         .umbraHelperCalculations.transcendenceConsoProtectionPercent;
       check(model.parts[1].curvePreview.current.value === expected, `Approved rounded curve contribution at ${points}`);
     }
     check(JSON.stringify(protectionConfig) === JSON.stringify(protectionBefore), 'Curve reads preserve the protection configuration');
     try {
       Object.assign(protectionConfig, { intelligenceCap: 200, intelligenceMaxPercent: 8, curvePower: 3, maxPercent: 4 });
-      const model = D.calculateStatsDisplay('transcendence', { stats: { transcendence: 150, intelligence: 30 } })
+      const model = DDisplay.calculateStatsDisplay('transcendence', { stats: { transcendence: 150, intelligence: 30 } })
         .umbraHelperCalculations.transcendenceConsoProtectionPercent;
       check(model.parts[1].curvePreview.current.value === 3.09
         && model.parts[1].curvePreview.maximum.points === 200 && model.parts[1].curvePreview.maximum.value === 8,
@@ -1371,7 +1371,7 @@ try {
     const astralityRules=globalThis.umbraProgression;
     for(const astrality of [0,1,50,150,300])for(const intelligence of [0,30,150]){
       const probe={stats:{astrality,intelligence,strength:30,HP:{current:100,max:100}}};
-      const before=JSON.stringify(probe),shown=D.calculateStatsDisplay('astrality',probe);
+      const before=JSON.stringify(probe),shown=DDisplay.calculateStatsDisplay('astrality',probe);
       check(shown.umbraHelperCalculations.astralityTotal.value===D.calculateAstralityTotal(probe),'Astrality helper matches combat chance');
       check(shown.astralBody.seconds===D.calculateAstralBody(probe).seconds,'Astral duration matches combat');
       check(shown.helpContent.includes('data-umbra-capacity="astralReturn"'),'Return is explained on the card');
@@ -1394,7 +1394,7 @@ try {
       const config = balanceData[stat][section];
       const original = { ...config };
       const index = section === 'critical' ? 0 : 1;
-      const getModel = probe => D.calculateStatsDisplay(stat, probe).umbraHelperCalculations[key];
+      const getModel = probe => DDisplay.calculateStatsDisplay(stat, probe).umbraHelperCalculations[key];
       for (const points of [-1, 0, 1, 150]) for (const attribute of [-1, 0, .5, 6, 30, 149.9, 150, 151, 300]) {
         const probe = { stats: { [stat]: points, [source]: attribute } };
         const before = JSON.stringify(probe);
@@ -1437,7 +1437,7 @@ try {
       } finally { Object.assign(config, original); }
       window.__umbraCurveCases.push({ stat, key, source, index, example, maximum, unit });
     }
-    const occultismModels = D.calculateStatsDisplay('occultism', { stats: { occultism: 25, agility: 30 } }).umbraHelperCalculations;
+    const occultismModels = DDisplay.calculateStatsDisplay('occultism', { stats: { occultism: 25, agility: 30 } }).umbraHelperCalculations;
     for (const key of ['occultismPreparationSpeedDebuff', 'occultismShadowFragilityPercent']) {
       check(occultismModels[key].parts[0].fixed && !/×|→/.test(H.buildUmbraContributionHelper(occultismModels[key], 0)),
         'Fixed Occultism drawbacks expose their existing value without a ratio');
@@ -1466,7 +1466,7 @@ try {
     for (const [stat, key, index, calculate] of completedCurves) for (const points of [1, 12, 25, 150, 300]) {
       const probe = { stats: { [stat]: points, strength: points, intelligence: points, agility: points } };
       const before = JSON.stringify(probe);
-      const model = D.calculateStatsDisplay(stat, probe).umbraHelperCalculations[key];
+      const model = DDisplay.calculateStatsDisplay(stat, probe).umbraHelperCalculations[key];
       const part = model.parts[index];
       check(part.curvePreview.current.value === calculate(probe), `${stat}/${key}: displayed curve reads the actual engine value at ${points}`);
       check(part.rounded && !/×|Prochain palier/.test(H.buildUmbraContributionHelper(model, index)),
@@ -1476,7 +1476,7 @@ try {
     for (const movement of [0, 1, 10]) for (const agility of [-1, 0, 1, 30, 149.9, 150, 300]) {
       const probe = { stats: { movement, agility } };
       const before = JSON.stringify(probe);
-      const shown = D.calculateStatsDisplay('movement', probe);
+      const shown = DDisplay.calculateStatsDisplay('movement', probe);
       const model = shown.umbraHelperCalculations.movementStartingTotalCurrent;
       const part = model.parts[1];
       const actual = D.calculateMovementStartingChargeDetails(probe);
@@ -1502,7 +1502,7 @@ try {
     try {
       Object.assign(movementConfig, { startingSoftCapDivider: 80, agilityCap: 200, baseStartingPercent: 20, maxAgilityStartingBonusPercent: 80 });
       const probe = { stats: { movement: 10, agility: 30 } };
-      const shown = D.calculateStatsDisplay('movement', probe);
+      const shown = DDisplay.calculateStatsDisplay('movement', probe);
       const actual = D.calculateMovementStartingChargeDetails(probe);
       check(shown.umbraHelperCalculations.movementStartingTotalCurrent.parts[1].curvePreview.current.value === actual.agiRatioCurrent
         && shown.movementStartingCharges === D.calculateMovementStartingCharges(probe),
@@ -1512,7 +1512,7 @@ try {
       const probe = { stats: { weaponMastery: points, strength: points, bloodFury: points,
         physicalDamage: 12.7, bloodFuryExecutionDamage: 1.2 } };
       const before = JSON.stringify(probe);
-      const models = D.calculateStatsDisplay('weaponMastery', probe).umbraHelperCalculations;
+      const models = DDisplay.calculateStatsDisplay('weaponMastery', probe).umbraHelperCalculations;
       for (const [key, index, expected] of [
         ['weaponMasteryChargeBonus', 0, E.calculateWeaponMasteryCharge(probe)],
         ['weaponOrfevreBonus', 0, D.calculateWeaponOrfevreWeaponMastery(probe)],
@@ -1527,7 +1527,7 @@ try {
         check(H.buildUmbraContributionHelper(changed, index) === H.buildUmbraContributionHelper(models[key], index),
           `${key}: coefficients never depend on rounded contributions`);
       }
-      const damage = D.calculateStatsDisplay('bloodFury', probe).umbraHelperCalculations.bloodFuryExecDamage;
+      const damage = DDisplay.calculateStatsDisplay('bloodFury', probe).umbraHelperCalculations.bloodFuryExecDamage;
       const coefficient = balanceData.blood.furyExecution.damageMultiplier
         * D.calculateBloodFuryExecutionSRatio(D.calculateBloodFuryExecStrengthRatio(points)) / 100;
       check(damage.parts[1].compact.source.value === 12.7 && damage.parts[1].compact.multiplier.value === coefficient,
@@ -1547,7 +1547,7 @@ try {
       Object.assign(trophy, { masteryMaxBonusPercent: 40, masteryRange: 199 });
       for (const points of [25, 75]) {
         const probe = { stats: { weaponMastery: points, strength: points } };
-        const models = D.calculateStatsDisplay('weaponMastery', probe).umbraHelperCalculations;
+        const models = DDisplay.calculateStatsDisplay('weaponMastery', probe).umbraHelperCalculations;
         check(models.weaponMasteryChargeBonus.parts[0].arithmetic.terms[2].value === '0.05', 'Charge detail reads the updated divisor');
         check(Number(models.weaponOrfevreBonus.parts[0].arithmetic.terms.find(term => term.stat === 'weaponMastery' && term.icon === null).value)
           === (points <= 50 ? .25 : .125), 'Orfevre detail switches at the configured Mastery threshold');
@@ -1559,10 +1559,10 @@ try {
     } finally {
       [masteryCharge, masteryOrfevre, strengthOrfevre, trophy].forEach((config, index) => Object.assign(config, originalMasterySettings[index]));
     }
-    host.innerHTML = D.calculateStatsDisplay('ambidextry', entity).helpContent;
+    host.innerHTML = DDisplay.calculateStatsDisplay('ambidextry', entity).helpContent;
     check(host.textContent.startsWith("L'entité est si agile qu'elle peut manier ses deux bras pour attaquer plusieurs fois."),
       'Ambidextry retains the requested introduction before its effects');
-    const hyperco = D.calculateStatsDisplay('hypercognition', { stats: { hypercognition: 20, intelligence: 6 } });
+    const hyperco = DDisplay.calculateStatsDisplay('hypercognition', { stats: { hypercognition: 20, intelligence: 6 } });
     check(hyperco.umbraHelperCalculations.hypercognitionBonus.parts[0].compact.multiplier.value === 1,
       'The direct Hypercognition contribution exposes its actual identity coefficient');
     check(!hyperco.umbraHelperCalculations.hypercognitionBonus.parts[0].rounded
@@ -1572,19 +1572,19 @@ try {
     check(host.querySelector('[data-umbra-calculation="hypercognitionEssences"]').textContent === '20',
       'Cognitive generator source retains the actual Hypercognition points');
     window.__remainingUmbraDetails = stats.filter(stat => stat.nature === 'umbra').flatMap(stat => {
-      const models = D.calculateStatsDisplay(stat.key, entity).umbraHelperCalculations;
+      const models = DDisplay.calculateStatsDisplay(stat.key, entity).umbraHelperCalculations;
       return Object.entries(models).flatMap(([key, model]) => model.parts.flatMap((part, index) =>
         H.buildUmbraContributionHelper(model, index) ? [] : [`${stat.key}/${key}/${index}`]));
     });
-    const robust = D.calculateStatsDisplay('robustness', entity);
+    const robust = DDisplay.calculateStatsDisplay('robustness', entity);
     check(!!robust.umbraHelperCalculations.armorBonus, 'Robustness has a layered model');
     check(robust.helpContent.includes('data-umbra-calculation="armorBonus"'), 'Robustness sources open the compact calculation');
     for (const source of D.getGeneratedUmbraSourceKeys()) {
       const cfg = D.getGeneratedUmbraStatConfig(source);
       for (const attribute of [0, 6, 30, 60, 90, 300]) {
         const probe = { stats: { [source]: 3, [cfg.attribute]: attribute } };
-        const model = D.calculateStatsDisplay(source, probe).umbraHelperCalculations.generatedUmbraSource;
-        const system = D.calculateStatsDisplay(source, probe).generatedUmbraSource.system;
+        const model = DDisplay.calculateStatsDisplay(source, probe).umbraHelperCalculations.generatedUmbraSource;
+        const system = DDisplay.calculateStatsDisplay(source, probe).generatedUmbraSource.system;
         const ratioModel = model.parts.find(part => part.calculation)?.calculation || model;
         const ratios = { parts: ratioModel.parts.filter(part => part.compact) };
         check(model.value === system.value && system.umbraFlat === 0, `${source}: own points are used by the ratio only`);
@@ -1597,7 +1597,7 @@ try {
     try {
       Object.assign(integrityConfig, { source: 2, attribute: .25 });
       const probe = { stats: { integrite: 3, intelligence: 6 } };
-      const model = D.calculateStatsDisplay('integrite', probe).umbraHelperCalculations.generatedUmbraSource;
+      const model = DDisplay.calculateStatsDisplay('integrite', probe).umbraHelperCalculations.generatedUmbraSource;
       const ratios = model.parts.find(part => part.calculation).calculation;
       check(model.value === Rules.calculateResistanceReductionPercent(8), 'Integrity follows configured coefficients without a target flat');
       check(ratios.parts[0].compact.multiplier.value === 2, 'Integrity source detail follows balance changes');
@@ -1617,7 +1617,7 @@ try {
       const probeEntity = structuredClone(entity);
       probeEntity.stats[source] = points;
       probeEntity.baseStats[source] = points;
-      const model = D.calculateStatsDisplay(stat, probeEntity).umbraHelperCalculations[key];
+      const model = DDisplay.calculateStatsDisplay(stat, probeEntity).umbraHelperCalculations[key];
       if (key === 'generatedUmbraSource' && source === stat && points === 0) {
         check(model.value === 0, `${stat}: inactive Umbra grants no generated stat`);
         continue;
@@ -1637,7 +1637,7 @@ try {
     const originalDivisor = chargeConfig.strengthDivisor;
     try {
       chargeConfig.strengthDivisor = 40;
-      const changed = D.calculateStatsDisplay('weaponMastery', entity).umbraHelperCalculations.weaponMasteryChargeBonus.parts[1];
+      const changed = DDisplay.calculateStatsDisplay('weaponMastery', entity).umbraHelperCalculations.weaponMasteryChargeBonus.parts[1];
       check(changed.compact.multiplier.value === .025, 'The displayed ratio updates when its configured divisor changes');
     } finally { chargeConfig.strengthDivisor = originalDivisor; }
     const ratio = balanceData.hypercognition;
@@ -2136,8 +2136,8 @@ try {
     assert.equal(await detail.count(), 1);
     assert.equal(await detail.locator('.umbra-description').innerText(), 'Statistique : Vie supplémentaire +');
     const expectedLifeHelper = await page.evaluate(async () => {
-      const D = await import('/js/damagesCalcul.js');
-      return D.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
+      const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+      return DDisplay.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
     });
     assert.equal(await detail.locator('.stat-hover-body').innerHTML(), `\n      ${expectedLifeHelper}\n    `);
     assert.equal(await detail.locator('[data-helper-picto-stat]').count(), 0, 'A tertiary description cannot create recursive helper chains');
@@ -2156,8 +2156,8 @@ try {
   await page.evaluate(() => new Promise(requestAnimationFrame));
   assert.equal(await page.locator('[data-umbra-detail]').count(), 1, 'A third-party helper stays open when its parent text is unchanged');
   assert.equal(await page.locator('[data-umbra-detail] .stat-hover-body').evaluate(async node => {
-    const D = await import('/js/damagesCalcul.js');
-    return node.innerHTML.trim() === D.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    return node.innerHTML.trim() === DDisplay.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
   }), true, 'Already-open third-party helpers refresh from current entity stats without another hover');
   const transcendenceRatio = transcendenceCard.locator('[data-umbra-calculation="transcendenceExBonus"]').first();
   await transcendenceRatio.dispatchEvent('mouseover');
@@ -2233,14 +2233,14 @@ try {
   };
   const assertDraftHelper = async key => {
     const previewCheck = await page.evaluate(async key => {
-      const D = await import('/js/damagesCalcul.js');
+      const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
       const UI = await import('/js/GameInit.js');
       const { host, draft, originalStats, baseStats } = window.__levelHelperTest;
       const beforeRead = JSON.stringify(draft);
       const block = host.querySelector(`.umbra-submenu .stat-container[data-stat="${key}"]`);
       const helper = document.querySelector(`.stat-hover[data-stat="${key}"]`);
       const view = UI.getBoundHelperEntity(block);
-      const expected = D.calculateStatsDisplay(key, draft);
+      const expected = DDisplay.calculateStatsDisplay(key, draft);
       return {
         sameModels: JSON.stringify(helper._umbraCalculations) === JSON.stringify(expected.umbraHelperCalculations),
         sameStats: JSON.stringify(view.stats) === JSON.stringify(draft.modifierStats?.preview?.total || draft.stats),
@@ -2271,11 +2271,11 @@ try {
   const assertRelatedPowerHelper = async () => {
     await page.locator('[data-umbra-pinned] [data-helper-picto-stat="physicalDamage"]').first().dispatchEvent('mouseover');
     const matches = await page.evaluate(async () => {
-      const D = await import('/js/damagesCalcul.js');
+      const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
       const UI = await import('/js/GameInit.js');
       const parent = document.querySelector('[data-umbra-pinned]');
       const view = UI.getBoundHelperEntity(parent._helperHost);
-      const expected = D.calculateStatsDisplay('physicalDamage', view).statSystem.value;
+      const expected = DDisplay.calculateStatsDisplay('physicalDamage', view).statSystem.value;
       const body = document.querySelector('[data-umbra-detail] .stat-hover-body');
       const amount = Number(body.querySelector('.helper-calculation-result').textContent.replace(/\s/g, ''));
       return amount === expected && !body.querySelector('.helper-calculation-detail')
@@ -2401,7 +2401,7 @@ try {
   assert.equal(await page.locator('.stat-hover').count(), 0, 'Removing the level-up screen clears its helpers');
   console.log('PASS: real Soul preview helpers, new/unchanged Umbras, sub-helpers, undo, clear, confirmation, reopen and desktop/mobile bounds');
   const autonomousChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const UI = await import('/js/GameInit.js');
     let checks = 0;
@@ -2422,7 +2422,7 @@ try {
       check(D.calculateTranscendenceConsoProtectionTotal(restricted) === autonomous, 'Frozen entities retain autonomous protection only');
       for (const key of ['cognitiveExplosion', 'cognitiveGenerator', 'transcendenceTotal']) {
         const before = JSON.stringify(entity);
-        const display = D.calculateStatsDisplay(key, entity);
+        const display = DDisplay.calculateStatsDisplay(key, entity);
         check(JSON.stringify(entity) === before, `${key}: helper is read-only`);
         check(display.umbraHelperCalculations.autonomousTotal.parts.at(-1).value === autonomous, `${key}: autonomous amount is unchanged`);
         check(/data-umbra-calculation/.test(display.helpContent), `${key}: source details are linked`);
@@ -2435,7 +2435,7 @@ try {
       attacks: [{ functionName: 'autoAttack', attacknature: ['physicalDamage'], attackRange: ['melee'] }] };
     E.enrichEntityStats(entity);
     check(entity.stats.physicalDamage === 25, 'Vigueur 15 ratio + Force 10 ratio + autonomous power 5 gives 25');
-    const detail = D.calculateStatsDisplay('physicalDamage', entity).umbraHelperCalculations.generatedUmbraTarget;
+    const detail = DDisplay.calculateStatsDisplay('physicalDamage', entity).umbraHelperCalculations.generatedUmbraTarget;
     check(detail.system.state === 'X' && detail.system.normalApplied === 5 && detail.system.enhanced === 20,
       'Mixed power separates 5 normal from 20 Umbra ratio points');
     check(JSON.stringify(detail.improvement.parts.map(part => [part.stat, part.value])) === '[["vigueur",15],["strength",5]]',
@@ -2451,14 +2451,14 @@ try {
     };
     sourced.battleBoosts = { physicalDamage: [{ value: 7, mode: 'flat', source: 'Buff <test>', id: 'source-boost' }] };
     const sourceSnapshot = JSON.stringify(sourced);
-    const sourceModel = D.calculateStatsDisplay('physicalDamage', sourced).umbraHelperCalculations.generatedUmbraTarget;
+    const sourceModel = DDisplay.calculateStatsDisplay('physicalDamage', sourced).umbraHelperCalculations.generatedUmbraTarget;
     const sourceHTML = H.buildAutonomousCalculationHelper(sourceModel, '');
     const sourceProbe = document.createElement('div');
     sourceProbe.innerHTML = sourceHTML;
     check(JSON.stringify([...sourceProbe.querySelectorAll('.helper-calculation-result')].map(node => Number(node.textContent.replace(/\s/g, '')))) === '[20,20]',
       'The sub-helper separates autonomous PP from Vigueur without repeating the final total');
     check(!sourceProbe.querySelector('.helper-calculation-detail'), 'PP total shows only exclusive amounts');
-    const totals = D.getStatisticSourceTotals(sourced, 'physicalDamage', D.calculateStatsDisplay('physicalDamage', sourced));
+    const totals = DDisplay.getStatisticSourceTotals(sourced, 'physicalDamage', DDisplay.calculateStatsDisplay('physicalDamage', sourced));
     check(JSON.stringify(totals.map(source => [source.category, source.value])) === '[["umbra",20],["fixed",20]]',
       'Normal PP includes base 5, equipment 8 and combat 7 once, apart from Umbra');
     check(H.buildStatisticOrigins({ compact: true, totals, statName: '<Power>' }).includes('&lt;Power&gt;'), 'Source stat labels are escaped');
@@ -2470,23 +2470,23 @@ try {
       ['occultism', 'occultismCritChanceBonus', 'criticalChance'],
       ['occultism', 'occultismDodgeBonus', 'dodge'],
     ]) {
-      check(D.getStatImprovement(context, source, effect)?.stat === visual, `${effect}: contextual + uses the effect's stat color`);
-      check(!D.getStatImprovement({ ...context, archetypeFrozen: true }, source, effect), `${effect}: restricted Umbra cannot grant +`);
+      check(DDisplay.getStatImprovement(context, source, effect)?.stat === visual, `${effect}: contextual + uses the effect's stat color`);
+      check(!DDisplay.getStatImprovement({ ...context, archetypeFrozen: true }, source, effect), `${effect}: restricted Umbra cannot grant +`);
     }
-    check(!D.getStatImprovement(context, 'dodge'), 'Owning Occultism alone does not improve permanent dodge');
+    check(!DDisplay.getStatImprovement(context, 'dodge'), 'Owning Occultism alone does not improve permanent dodge');
     context.battleBoosts = { dodge: [{ source: 'occultismInvisible', value: 5, mode: 'flat' }] };
-    check(D.getStatImprovement(context, 'dodge')?.source === 'occultism', 'Active invisible dodge boost supplies its contextual +');
+    check(DDisplay.getStatImprovement(context, 'dodge')?.source === 'occultism', 'Active invisible dodge boost supplies its contextual +');
     delete context.battleBoosts.dodge;
-    check(!D.getStatImprovement(context, 'dodge'), 'The + disappears when the temporary boost ends');
+    check(!DDisplay.getStatImprovement(context, 'dodge'), 'The + disappears when the temporary boost ends');
     const essences = await import('/js/essenceur.js');
     check(essences.resolveAttackNatureFromEssenceurConfig({ slots: [] })[0] === 'inerte', 'Empty essence configuration actually resolves to Inert');
     for (const key of ['attackEssenceRed', 'attackEssenceBlue', 'attackEssenceYellow', 'attackEssenceEmpty']) {
-      const text = D.calculateStatsDisplay(key, entity).helpContent;
+      const text = DDisplay.calculateStatsDisplay(key, entity).helpContent;
       check(text.includes('Inerte') && !text.includes('toujours conserver'), `${key}: bound helper agrees with the Inert state`);
     }
     const preview = { ...entity, modifierStats: { ...entity.modifierStats,
       preview: { statLeveled: { strength: 10 }, total: { ...entity.stats, strength: 20, physicalDamage: 30 } } } };
-    check(D.calculateStatsDisplay('physicalDamage', preview).umbraHelperCalculations.autonomousTotal.improvement.parts
+    check(DDisplay.calculateStatsDisplay('physicalDamage', preview).umbraHelperCalculations.autonomousTotal.improvement.parts
       .find(part => part.stat === 'strength').value === 10,
       'Autonomous helper reads preview attribute ratios');
     const moving = structuredClone(entity);
@@ -2557,14 +2557,14 @@ try {
   await page.evaluate(() => window.__autonomousHelperTest.host.remove());
   console.log(`PASS: ${autonomousChecks} autonomous/combined/restricted stat checks, colored + names, source ratios and desktop/mobile helpers`);
   const sourceTotalChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const H = await import('/js/data/helpers.js');
     let count = 0;
     const check = (ok, message) => { if (!ok) throw Error(message); count++; };
     const inspect = (entity, key, expected) => {
       const before = JSON.stringify(entity);
-      const display = D.calculateStatsDisplay(key, entity, D.getSafe(entity, key));
-      const totals = D.getStatisticSourceTotals(entity, key, display);
+      const display = DDisplay.calculateStatsDisplay(key, entity, D.getSafe(entity, key));
+      const totals = DDisplay.getStatisticSourceTotals(entity, key, display);
       check(Math.abs(totals.reduce((sum, entry) => sum + entry.value, 0) - expected) < .011, `${key}: sources sum to the final displayed amount`);
       check(new Set(totals.map(entry => entry.category)).size === totals.length, `${key}: one total per category`);
       check(JSON.stringify(entity) === before, `${key}: calculating sources never mutates gameplay or previews`);
@@ -2627,7 +2627,7 @@ try {
     check(inspect(penalty, 'physicalDamage', 20).fixed === -5, 'Normal PP retains base 5 and penalty -10 separately in its calculation');
     for (const key of ['physicalResistance', 'magicalResistance', 'physicalPen', 'magicalPen', 'dodge', 'velocity']) {
       const probe = { baseStats: { [key]: 30 }, stats: { [key]: 30, speed: 1000 } };
-      const display = D.calculateStatsDisplay(key, probe);
+      const display = DDisplay.calculateStatsDisplay(key, probe);
       const conversion = display.umbraHelperCalculations.autonomousConversion;
       if (conversion) inspect(probe, key, conversion.value);
     }
@@ -2636,7 +2636,7 @@ try {
   console.log(`PASS: ${sourceTotalChecks} source totals, final units, equipment, percentages, caps, previews and inactive Umbras`);
   await page.setViewportSize({ width: 1280, height: 900 });
   const effectKeys = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const UI = await import('/js/GameInit.js');
     const H = await import('/js/data/helpers.js');
@@ -2662,7 +2662,7 @@ try {
     for (const row of rows) {
       const bound = UI.getBoundHelperEntity(row);
       const before = JSON.stringify(bound);
-      const original = D.calculateStatsDisplay(row.dataset.stat, bound);
+      const original = DDisplay.calculateStatsDisplay(row.dataset.stat, bound);
       const projected = H.selectStatisticHelper(original, row.dataset.statEffect);
       if (Object.keys(projected.umbraHelperCalculations).join() !== row.dataset.statEffect) throw Error(`Unrelated model: ${row.dataset.statEffect}`);
       if (!projected.helpContent || projected.helpContent !== original.statEffectHelpers[row.dataset.statEffect]) {
@@ -2700,7 +2700,7 @@ try {
     }
   }
   const essentialChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const H = await import('/js/data/helpers.js');
     const { balanceData } = await import('/js/data/balanceData.js');
@@ -2709,7 +2709,7 @@ try {
     const signedSum = model => model.parts.reduce((sum, part) => sum + (part.operator === '−' ? -part.value : part.value), 0);
     const inspect = (key, probe, modelKey) => {
       const before = JSON.stringify(probe);
-      const display = D.calculateStatsDisplay(key, probe);
+      const display = DDisplay.calculateStatsDisplay(key, probe);
       const model = display.umbraHelperCalculations[modelKey];
       check(!!model && display.helpContent.includes(`data-umbra-calculation="${modelKey}"`), `${key}: model linked`);
       check(!/NaN|undefined|Maximum\s*:|Prochain palier/.test(display.helpContent), `${key}: clean body, no future caps`);
@@ -2763,8 +2763,8 @@ try {
     check(previewSpeed.parts[0].value === 1000 && previewSpeed.parts[1].value === 300, 'Preview follows the existing preview speed basis');
     const inspectWeight = probe => {
       const before = JSON.stringify(probe);
-      const display = D.calculateStatsDisplay('weight', probe);
-      const movement = D.calculateStatsDisplay('shift', probe);
+      const display = DDisplay.calculateStatsDisplay('weight', probe);
+      const movement = DDisplay.calculateStatsDisplay('shift', probe);
       const weight = E.getMovementWeightMalus(probe);
       for (const [key, helper] of [['weight', display], ['shift', movement]]) {
         const content = document.createElement('template');
@@ -2990,12 +2990,12 @@ try {
   await dedicatedHost.locator('[data-stat-effect="indestructibilityReductionTotal"]').dispatchEvent('click');
   const previewCheck = await page.evaluate(async () => {
     const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const row = window.__dedicatedHelperTest.host.querySelector('[data-stat-effect="indestructibilityReductionTotal"]');
     const bound = UI.getBoundHelperEntity(row);
     const committed = JSON.stringify(bound.stats);
     bound.modifierStats.preview = { total: { ...bound.stats, strength: 90 } };
-    const expected = D.calculateStatsDisplay('indestructibility', bound).umbraHelperCalculations.indestructibilityReductionTotal;
+    const expected = DDisplay.calculateStatsDisplay('indestructibility', bound).umbraHelperCalculations.indestructibilityReductionTotal;
     window.__dedicatedHelperTest.previewOriginal = committed;
     return expected;
   });
@@ -3025,7 +3025,7 @@ try {
   console.log(`PASS: ${effectKeys.length} dedicated statistic helpers, isolated effects, pin replacement, sources, previews and mobile bounds`);
   await page.setViewportSize({ width: 1280, height: 900 });
   const conversions = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const UI = await import('/js/GameInit.js');
     const H = await import('/js/data/helpers.js');
@@ -3060,7 +3060,7 @@ try {
     }
     window.__conversionHelperTest = { entity, root, original: JSON.stringify(entity) };
     return ['physicalResistance', 'magicalResistance', 'physicalPen', 'magicalPen', 'dodge', 'velocity'].map(key => {
-      const calculated = D.calculateStatsDisplay(key, entity);
+      const calculated = DDisplay.calculateStatsDisplay(key, entity);
       const model = calculated.umbraHelperCalculations.autonomousTotal;
       return { key, final: model.value, parts: model.contributions.filter(part => part.value !== 0).map(part => Math.abs(part.value)) };
     });
@@ -3126,7 +3126,7 @@ try {
   }
   await page.locator('body').dispatchEvent('click');
   const autonomousRows = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const H = await import('/js/data/helpers.js');
     const UI = await import('/js/GameInit.js');
     const rows = [...window.__conversionHelperTest.root.querySelectorAll('[data-autonomous-helper="true"]')];
@@ -3140,7 +3140,7 @@ try {
     return rows.map((row, index) => {
       row.dataset.auditStat = String(index);
       const entity = UI.getBoundHelperEntity(row);
-      const raw = D.calculateStatsDisplay(row.dataset.stat, entity, D.getSafe(entity, row.dataset.stat));
+      const raw = DDisplay.calculateStatsDisplay(row.dataset.stat, entity, D.getSafe(entity, row.dataset.stat));
       const calculated = row.dataset.statEffect ? H.selectStatisticHelper(raw, row.dataset.statEffect) : raw;
       const root = document.createElement('div');
       root.innerHTML = calculated.helpContent || '';
@@ -3149,7 +3149,7 @@ try {
       const sourceDisplay = { ...calculated, umbraHelperCalculations: Object.fromEntries(
         Object.entries(calculated.umbraHelperCalculations || {}).filter(([key]) => visibleModels.has(key))) };
       const before = JSON.stringify(entity);
-      const totals = D.getStatisticSourceTotals(entity, row.dataset.stat, sourceDisplay);
+      const totals = DDisplay.getStatisticSourceTotals(entity, row.dataset.stat, sourceDisplay);
       const modelKey = row.dataset.stat === 'shift' ? null : ['autonomousConversion', 'generatedUmbraTarget', 'autonomousTotal']
         .find(key => sourceDisplay.umbraHelperCalculations[key]) || Object.keys(sourceDisplay.umbraHelperCalculations)[0];
       const rawValue = D.getSafe(entity, row.dataset.stat, 0);
@@ -3170,7 +3170,7 @@ try {
   });
   let autonomousDetails = 0;
   const sourceMatrix = await page.evaluate(async rows => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const H = await import('/js/data/helpers.js');
     const { getDisplayStatKey } = await import('/js/entite/entityRules.js');
@@ -3184,7 +3184,7 @@ try {
     const audit = (entity, label) => {
       const before = JSON.stringify(entity);
       for (const { key, effect } of rows) {
-        const raw = D.calculateStatsDisplay(key, entity, D.getSafe(entity, key));
+        const raw = DDisplay.calculateStatsDisplay(key, entity, D.getSafe(entity, key));
         const display = effect ? H.selectStatisticHelper(raw, effect) : raw;
         const body = document.createElement('div');
         body.innerHTML = display.helpContent || '';
@@ -3192,7 +3192,7 @@ try {
         if (visible.has('autonomousConversion')) visible.add('generatedUmbraTarget');
         const calculated = { ...display, umbraHelperCalculations: Object.fromEntries(
           Object.entries(display.umbraHelperCalculations || {}).filter(([name]) => visible.has(name))) };
-        const totals = D.getStatisticSourceTotals(entity, key, calculated);
+        const totals = DDisplay.getStatisticSourceTotals(entity, key, calculated);
         const footer = document.createElement('div');
         footer.innerHTML = H.buildStatisticOrigins({ compact: true, totals });
         const rendered = [...footer.querySelectorAll('[data-helper-source-detail]')]

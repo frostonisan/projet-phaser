@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const result = await page.evaluate(async () => {
     const P = await import('/js/procedural/proc-bareme.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js');
     const U = await import('/js/GameInit.js');
@@ -298,7 +298,7 @@ try {
     protectedEntity.battleBoosts = { brutality: [{ mode: 'flat', value: 50 }], physicalDamage: [{ mode: 'flat', value: 7 }] };
     equal(Rules.getSafe(protectedEntity, 'brutality'), 0, 'Battle buffs cannot bypass the Umbra restriction');
     equal(Rules.getSafe(protectedEntity, 'physicalDamage'), 27, 'Ordinary battle buffs remain active');
-    const restrictedHelp = D.calculateStatsDisplay('robustness', protectedEntity);
+    const restrictedHelp = DDisplay.calculateStatsDisplay('robustness', protectedEntity);
     check(restrictedHelp.helpContent.includes('doit être éveillée'), 'Umbra helper explains the awakening requirement');
     const beforeWear = D.calculateEntityPower(protectedEntity, { equipment: [blockedGear] }).score;
     Gear.consumeEntityArmor(protectedEntity, 5);

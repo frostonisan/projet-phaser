@@ -169,8 +169,8 @@ try {
         check(cards.every(card => card.isConnected), 'Pinned cards reattach to current slots instead of being removed');
       },
     };
-    const D = await import('/js/damagesCalcul.js');
-    window.__itemSwapDisplay = D.calculateStatsDisplay;
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    window.__itemSwapDisplay = DDisplay.calculateStatsDisplay;
   });
   const checks = [];
   for (const context of ['map', 'combat']) for (const empty of [false, true]) {

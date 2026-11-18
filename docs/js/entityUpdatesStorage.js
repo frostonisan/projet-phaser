@@ -4,7 +4,8 @@ import { saveToLocalStorage, loadFromLocalStorage, saveCurrentGameData, loadEqui
 import { showHealingFeedback, toggleEffectClass } from './attackEffectMecanics.js';
 import { updateHealthBar } from './UpgradeEntity.js';
 import { toNonNegInt } from './ui.js';
-import { calculateShiftDailyStartingCharges, calculateHpBattleRegenAmount, attemptBattleRegen, updateMovementDisplay } from "./damagesCalcul.js";
+import { calculateShiftDailyStartingCharges, calculateHpBattleRegenAmount, updateMovementDisplay } from './damagesCalcul.js';
+import { attemptBattleRegen } from './rendering/damageFeedback.js';
 import { battleLogs } from "./battleLogs.js";
 import { syncEntityAuras } from "./entitesAura.js";
 import { getSafe, getCycleLenFor } from "./entite/entityRules.js";

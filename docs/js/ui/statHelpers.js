@@ -20,13 +20,8 @@ import {
 } from '../data/helpers.js';
 import { getSafe, normalizeStatKey, getDisplayStatKey } from '../entite/entityRules.js';
 import { entites } from '../entites.js';
-import {
-  createAttackStatView,
-  getStatContributions,
-  getStatisticSourceTotals,
-  calculateStatsDisplay,
-  isDisplayableStatContribution,
-} from '../damagesCalcul.js';
+import { createAttackStatView, getStatContributions } from '../damagesCalcul.js';
+import { getStatisticSourceTotals, calculateStatsDisplay, isDisplayableStatContribution } from './statDetails.js';
 import { ComputeStatPreview } from '../UpgradeEntity.js';
 import { stats } from '../data/statsData.js';
 import { EFFECT_VISUALS } from '../data/effectVisuals.js';

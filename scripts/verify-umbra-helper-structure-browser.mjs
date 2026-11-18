@@ -21,7 +21,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const setup = async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js');
+    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const UI = await import('/js/GameInit.js'), S = await import('/js/GameStorage.js');
     const { stats } = await import('/js/data/statsData.js');
     const umbras = stats.filter(stat => stat.nature === 'umbra');
@@ -33,7 +33,7 @@ try {
     E.recomputeEntityStats(entity, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
     E.entites.splice(0, E.entites.length, entity);
     S.saveToLocalStorage('equippedItems', []); S.saveToLocalStorage('selectedArmyA', [entity]);
-    window.audit = { entity, D, E, UI, umbras, stats,
+    window.audit = { entity, D, DDisplay, E, UI, umbras, stats,
       show(key) {
         UI.closeOpenHelpers();
         document.body.innerHTML = '<div class="Game-helper"></div><main class="codex-entity-scan" id="audit" style="position:fixed;inset:0;padding:60px;background:#190707"></main>';
@@ -51,7 +51,7 @@ try {
     };
     const before = JSON.stringify(entity);
     for (const stat of umbras) {
-      const value = D.calculateStatsDisplay(stat.key, entity);
+      const value = DDisplay.calculateStatsDisplay(stat.key, entity);
       if (!value.helpContent.includes('data-umbra-section="introduction"')) throw Error(`Missing structure: ${stat.key}`);
     }
     if (JSON.stringify(entity) !== before) throw Error('Helper changed entity gameplay state');
@@ -222,7 +222,7 @@ try {
           assert.equal(await page.locator('[data-umbra-detail]').count(), 0, 'No verbose formula popup on the X result');
           assert.equal(await result.getAttribute('data-autonomous-calculation'), null);
         }
-        const plain = await page.evaluate(key => audit.D.calculateStatsDisplay(key, audit.entity, undefined, { nestedHelper: true }).helpContent, key);
+        const plain = await page.evaluate(key => audit.DDisplay.calculateStatsDisplay(key, audit.entity, undefined, { nestedHelper: true }).helpContent, key);
         assert.doesNotMatch(plain, /data-umbra-layout="card"|umbra-card-/, 'Nested Umbra content retains its ordinary presentation');
       }
       if (framed || ['haste', 'bloodFury'].includes(key)) {
@@ -264,9 +264,9 @@ try {
     const original = meta.ambiant;
     try {
       meta.ambiant = '';
-      const empty = audit.D.calculateStatsDisplay('esprit', audit.entity).helpContent;
+      const empty = audit.DDisplay.calculateStatsDisplay('esprit', audit.entity).helpContent;
       meta.ambiant = 'Texte <personnalisé>\nDeuxième ligne.';
-      const custom = audit.D.calculateStatsDisplay('esprit', audit.entity).helpContent;
+      const custom = audit.DDisplay.calculateStatsDisplay('esprit', audit.entity).helpContent;
       return { empty, custom };
     } finally { meta.ambiant = original; }
   });
@@ -337,7 +337,7 @@ try {
     audit.show('finesse');
   });
   const gold = page.locator('.umbra-helper-card');
-  const nestedFinesse = await page.evaluate(() => audit.D.calculateStatsDisplay('finesse', audit.entity, undefined, { nestedHelper: true }).helpContent);
+  const nestedFinesse = await page.evaluate(() => audit.DDisplay.calculateStatsDisplay('finesse', audit.entity, undefined, { nestedHelper: true }).helpContent);
   assert.doesNotMatch(nestedFinesse, /data-umbra-layout="card"|umbra-card-/,
     'Even Finesse itself keeps the ordinary layout when displayed as a nested helper');
   const readGoldValue = section => gold.locator(`[data-umbra-section="${section}"] .helper-calculation-result`).innerText().then(text => Number(text.replace(/[^\d.\-]/g, '')));
@@ -412,7 +412,7 @@ try {
   });
   assert.match(await page.locator('[data-umbra-section="introduction"]').innerText(), /33/);
   const actualPower = await page.evaluate(() => audit.entity.stats.physicalDamage);
-  const umbraPower = await page.evaluate(() => audit.D.calculateStatsDisplay('vigueur', audit.entity).umbraHelperCalculations.physicalDamageTotal.contributions.find(part => part.kind === 'umbra').value);
+  const umbraPower = await page.evaluate(() => audit.DDisplay.calculateStatsDisplay('vigueur', audit.entity).umbraHelperCalculations.physicalDamageTotal.contributions.find(part => part.kind === 'umbra').value);
   assert.equal(Number((await page.locator('[data-umbra-section="total"] .helper-calculation-result').innerText()).replace(/[^\d.\-]/g, '')), umbraPower, 'The card excludes PP+ and fixed PP');
   await page.locator('[data-umbra-section="total"] .helper-calculation-result').focus();
   assert.equal(Number((await page.locator('[data-umbra-detail] .helper-score-total .helper-figure').innerText()).trim()), actualPower, 'The hover retains all entity sources');

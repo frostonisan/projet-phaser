@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
 const E = await import('../docs/js/entites.js');
-const D = await import('../docs/js/damagesCalcul.js');
+const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S = await import('../docs/js/entite/statSystem.js');
 const A = await import('../docs/js/attackResolution.js');
 const H = await import('../docs/js/data/helpers.js');
@@ -64,7 +64,7 @@ for (const agility of [0, 75, 150, 300]) {
   const e = entity({ occultism: 1, agility });
   eq(D.calculateOccultismTargetableChance(e), agility === 0 ? 10 : agility === 75 ? 2.5 : 0, 'Agility lowers targetability');
   eq(D.calculateOccultismTargetableChanceDisplay(e), agility === 0 ? 90 : agility === 75 ? 97.5 : 100, 'Agility improves targeting avoidance');
-  const helper = D.calculateStatsDisplay('occultism', e);
+  const helper = DDisplay.calculateStatsDisplay('occultism', e);
   ok(helper.umbraHelperCalculations.occultismTargetableChance.parts[1].operator === '−', 'Helper subtracts agility');
 }
 for (const precision of [0, 1, 30, 150]) eq(D.calculateInvisibleTargetAvoidChance(entity({ precision })), 50 * (1 - E.calculatePrecisionPercent(precision) / 100), 'Only final Precision reduces the 50% avoidance');
@@ -91,7 +91,7 @@ for(const vision of [0,10,200]) {
   ok(row.uniquePassive&&row.state==='normal','Passive has no + or X variant');
   const source=S.getStatSystemSourceTotals(passive,'bullsEye');
   eq(source.reduce((sum,part)=>sum+part.value,0),expected,'Manual additions and Vision reconcile in the entity total');
-  const helper=D.calculateStatsDisplay('vision',passive);
+  const helper=DDisplay.calculateStatsDisplay('vision',passive);
   eq(helper.umbraHelperCalculations.bullsEyeTotal.contributions.find(part=>part.kind==='umbra').value,generated,'Passive block reports only the percentage granted by Vision');
   const manual=entity({vision,bullsEye:5,bullsEyePlus:3});
   eq(manual.stats.bullsEye,Math.min(99,generated+8),'Manual admin additions are percentage points');
@@ -111,7 +111,7 @@ eq(D.calculateRangeRatio(swift,{...attack(['red'],5000),effectiveExecutionTime:5
 const hasty = entity({ haste:20, strength:150 });
 ok(D.calculateRangeRatio(hasty,attack(['red'])) < 50,'Haste helps ranged damage via execution duration');
 for(const key of ['vision','precision','bullsEye','occultism','criticalPower','criticalDamage','rangeAttack','rangeAttackPhysical']) {
-  const r=D.calculateStatsDisplay(key,entity({vision:10,agility:10,precisionPlus:5,occultism:1}));
+  const r=DDisplay.calculateStatsDisplay(key,entity({vision:10,agility:10,precisionPlus:5,occultism:1}));
   ok(!/undefined|NaN/.test(r.helpContent),`${key} helper has valid figures`);
   if(key==='vision') {
     ok(r.helpContent.includes('Bull’s Eye') && r.helpContent.includes('data-helper-ratio'), 'Vision includes both abilities and inspectable ratios');

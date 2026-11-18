@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js');
+const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js'), DRules = await import('../docs/js/combat/damageRules.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S=await import('../docs/js/entite/statSystem.js'),Items=await import('../docs/js/items/permanentItems.js');
 const P=globalThis.umbraProgression;
 let checks=0;
@@ -40,7 +40,7 @@ for(const threshold of [150,300])for(const resilience of [0,1,10,149,150,151,299
     eq(model.contributions.reduce((sum,p)=>sum+p.value,0),expected,`${key}: contribution totals`);
     ok(expected>=0&&expected<99,`${key}: finite result below asymptote`);
   }
-  const before=JSON.stringify(e),helper=D.calculateStatsDisplay('resilience',e);
+  const before=JSON.stringify(e),helper=DDisplay.calculateStatsDisplay('resilience',e);
   ok(helper.helpContent.includes('data-umbra-passive="resilienceTotal"'),'Exclusive passive card');
   ok(helper.helpContent.includes('data-umbra-layout="card"'),'Main card layout');
   ok(!/seuil|maximum|plafond|Max atteint/i.test(helper.helpContent),'No threshold notices in helper');
@@ -71,7 +71,7 @@ for(const key of keys.slice(0,3)){
 eq(D.attemptResilienceCritReduction(null,entity({criticalResistance:60}),150,100),120,'100 + 50 × 40% = 120');
 eq(D.attemptResilienceCritReduction(null,empty,150,100),150,'No free critical reduction');
 for(const base of [0,1,10,100,1000])for(const bonus of [0,1,50,500])for(const reduction of [0,20,60,99,100]){
-  const value=D.reduceCriticalSupplement(base+bonus,base,reduction);
+  const value=DRules.reduceCriticalSupplement(base+bonus,base,reduction);
   ok(value>=base&&value<=base+bonus,'Mitigation preserves normal hit and never increases damage');
 }
 const protection=entity({alterationResistance:50}),agilityOnly=entity({hindranceResistance:50});

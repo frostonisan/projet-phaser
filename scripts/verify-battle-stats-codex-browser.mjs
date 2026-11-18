@@ -24,7 +24,7 @@ try {
   const reports = await page.evaluate(async () => {
     const { entitesNestUp, entites } = await import('/js/entites.js');
     const { createCodexEntityScan, createCodexCombatRecord } = await import('/js/GameInit.js');
-    const { calculateStatsDisplay } = await import('/js/damagesCalcul.js');
+    const { calculateStatsDisplay } = await import('/js/ui/statDetails.js');
     const { createAttackNatureSignature } = await import('/js/attackInterface.js');
     const { recordEntityCombatProc } = await import('/js/entityUpdatesStorage.js');
     const check = (condition, label) => { if (!condition) throw Error(label); return label; };

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
 const E = await import('../docs/js/entites.js');
-const D = await import('../docs/js/damagesCalcul.js');
+const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S = await import('../docs/js/entite/statSystem.js');
 const P = await import('../docs/js/items/permanentItems.js');
 const live = globalThis.umbraProgression;
@@ -27,7 +27,7 @@ for (const criticalPower of [0,1,2,50,149,150,151,300,1000]) for (const agility 
     eq(model.parts.reduce((sum,p)=>sum+p.value,0),row.value,'Calculation reconciles');
   }
   const before=JSON.stringify(e);
-  const helper=D.calculateStatsDisplay('criticalPower',e);
+  const helper=DDisplay.calculateStatsDisplay('criticalPower',e);
   ok(helper.helpContent.includes('data-umbra-passive="criticalDamage"'),'Damage gets exclusive passive card');
   ok(helper.helpContent.includes('data-umbra-layout="card"'),'Main Umbra gets compact card');
   eq(helper.umbraHelperCalculations.criticalDamageTotal.contributions.find(p=>p.kind==='umbra').value,live.criticalDamageDetails(power).value,'Native 50 excluded from Umbra grant');

@@ -29,6 +29,59 @@ snapshot.js ne charge aucun autre module du jeu. La simulation et les invocation
 copier leurs données sans importer l'exécution des attaques. Le filtrage des références
 DOM reste identique au comportement initial.
 
+## Deuxième lot : calcul des dégâts et affichage
+
+Le module damagesCalcul.js passe d'environ 6 400 à 3 700 lignes. Trois propriétaires
+portent désormais des responsabilités distinctes :
+
+| Responsabilité | Module propriétaire |
+| --- | --- |
+| Composition des sources, répartition par nature, arrondis, dégâts secondaires et critiques | docs/js/combat/damageRules.js |
+| Détails des statistiques, contributions présentées et aides HTML | docs/js/ui/statDetails.js |
+| Messages et effets des esquives, protections, exécutions, sorts brisés, ambidextrie et régénération | docs/js/rendering/damageFeedback.js |
+
+Le module damageRules.js n'a aucun import. Il reçoit les valeurs déjà résolues et,
+pour un critique, le jet déjà tiré. Il ne lit ni les entités, ni le DOM, ni l'horloge,
+et n'appelle pas Math.random. Il retourne des données sans modifier ses entrées.
+Les règles de répartition, les seuils critiques et les arrondis sont conservés.
+
+calculateAttackDamagePreview reste l'adaptateur des statistiques courantes et du
+registre des modificateurs. L'attaque visible, le simulateur et les aperçus utilisent
+ce même chemin. Les aides d'interface importent leurs calculs ; les calculs n'importent
+pas ui/statDetails.js. Les données de provenance des statistiques restent partagées
+avec statSystem.js et ne sont pas remplacées par du HTML.
+
+Les fonctions de présentation reçoivent les résultats déjà déterminés. Les tirages,
+les règles d'éligibilité et la consommation du bonus critique restent dans le chemin
+de combat. Les délais des animations utilisent toujours l'horloge de combat.
+Les consommateurs importent directement le nouveau propriétaire des fonctions ;
+aucune réexportation de compatibilité n'est ajoutée dans damagesCalcul.js.
+
+Ce lot ne termine pas toute l'extraction : damagesCalcul.js contient encore les
+états et animations de déplacement, d'occultisme, d'astralité et de transe. La résolution
+des PV et de l'armure dans entityAttributs.js mélange encore calculs, application,
+effets et journaux. Ces frontières restent à séparer avant d'introduire Phaser.
+
+Validation propre à ce lot :
+
+- Huit tests Node vérifient les règles de dégâts sans navigateur, les frontières
+  d'arrondi, la conservation du total et l'absence de mutation.
+- Une comparaison locale avec le calcul du commit c5bf0a4 vérifie 648 cas identiques,
+  avec différentes natures, valeurs, ratios et modificateurs de dégâts.
+- Les scénarios navigateur couvrent DPS, critiques, dégâts affichés, aides de calcul,
+  projectiles, impacts simultanés, pause/rechargement et mort des cibles en vol.
+- Le test des messages de dégâts vérifie également les VFX extraits et la conservation
+  des PV, de l'armure et du résultat reçu par l'affichage.
+- Le simulateur valide ses scénarios de reproductibilité, annulation et export,
+  ainsi que deux lots de 20 combats.
+
+Les rapports sont dans outputs/refactor-damage/. Avant modification, deux audits
+Node (verify-critical.mjs et verify-resilience.mjs) échouaient au chargement car
+leur environnement de test simule gameState.js sans exporter refreshStageAccess.
+Le scénario verify-resilience-browser.mjs échouait aussi sur « Friendly swap is not
+a harmful displacement ». Ces échecs de référence sont conservés dans les rapports ;
+les assertions concernées ne sont pas affaiblies pour valider ce lot.
+
 ## Temps et présentation
 
 combatClock.js reste l'horloge de combat ; combatTimeline.js ordonne les échéances et les
@@ -66,6 +119,10 @@ de 69 modules. Le découpage augmente le nombre de sommets du graphe ; les cycle
 ne sont donc pas encore supprimés. Le résultat de ce lot est l'extraction de deux modules
 sans dépendances et la séparation explicite du rendu des trajectoires.
 
+Après le deuxième lot : 116 modules, 917 dépendances locales et une composante
+cyclique de 71 modules. damageRules.js ajoute un troisième module sans dépendances.
+Les cycles historiques restent à réduire ; ce lot ne prétend pas les éliminer.
+
 ## Validation
 
 Les rapports locaux sont placés dans outputs/refactor-combat/ et ignorés par Git.
@@ -86,7 +143,7 @@ La vérification habituelle inclut désormais les tests des règles de vol :
 
 Les tests sans navigateur s'exécutent avec :
 
-    node --test scripts/verify-flight-rules.test.mjs
+    node --test scripts/verify-flight-rules.test.mjs scripts/verify-damage-rules.test.mjs
 
 Ils couvrent notamment la mort provisoire du lanceur, la perte définitive du guidage,
 le retour d'une cible à sa case initiale et la conservation de la part physique d'une
@@ -94,7 +151,8 @@ attaque hybride.
 
 ## Lots suivants, avant Phaser
 
-1. Extraire les calculs de dégâts et de durée de leur présentation HTML/VFX.
+1. Poursuivre la séparation dans entityAttributs.js : calcul de la résolution
+   des PV/armure, application au combat, puis présentation du résultat.
 2. Extraire les mises à jour de barres et d'effets encore présentes dans les phases
    d'attaque ; préciser le contrat entre l'exécution et la présentation.
 3. Donner au plateau un état logique indépendant du DOM. Centraliser les conversions
@@ -105,5 +163,5 @@ attaque hybride.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-damagesCalcul.js, entityControl.js et le plateau DOM. Ce premier lot ne constitue
+damagesCalcul.js, entityControl.js et le plateau DOM. Ces deux premiers lots ne constituent
 pas une séparation complète du moteur de jeu.

@@ -1,3 +1,4 @@
+import { DAMAGE_SOURCE_KEYS, buildScaledDamageSources } from './damageRules.js';
 import { cloneCombatSnapshot } from './snapshot.js';
 import { createAttackFlight } from './attackFlight.js';
 import { isAttackEntityAlive, acceptsImpactTarget, acceptsSelectedTarget, acceptsExecutionTarget } from './targeting.js';
@@ -17,36 +18,20 @@ import { setTimeout, clearTimeout } from '../combatClock.js';
 import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask } from '../combatTimeline.js';
 import { registerCombatState } from '../combatClock.js';
 import { combatData, combatReference, combatTarget } from '../combatClock.js';
-import { getAttackResolutionFlags, splitDodgeDamageSources, normArr, awardAttackMastery, startAttackCooldown } from "../attackResolution.js";
 import {
-  createAttackStatView,
-  attemptAttackerDamages,
-  attemptDodge,
-  attemptInvisibleTargetAccuracy,
-  calculateAmbidextryTotalChance,
-  calculateAmbidextryDamageBonus,
-  AmbidextryVFX,
-  getFinalAttackCooldownReduc,
-  getFinalAttackPreparationReduc,
-  getFinalAttackExecutionReduc,
-  getFinalAttackRecoveryReduc,
-  getFinalAttackProjectileSpeed,
-  clampPercent,
-  getHastePoints,
-  applyReducToMs,
-  attemptRangeBrokenSpell,
-  attemptMeleeBrokenSpell,
-  attemptMeleeExecBonus,
-  attemptMysticismTrance,
-  attemptEquilibreAttack,
-  attemptOccultismInvisibility,
-  clearOccultismInvisibleState,
-  calculateOccultismPreparationSpeedDebuff,
-  applyOccultismExitCritBoost,
-  shouldApplyForcedInvisibleTargetAccuracy,
-  totalPiercingRecupReductionWithAgi,
-  totalTranspiercingRecupReductionWithAgi
+  getAttackResolutionFlags, splitDodgeDamageSources, normArr, awardAttackMastery,
+  startAttackCooldown
+} from '../attackResolution.js';
+import {
+  createAttackStatView, attemptAttackerDamages, attemptDodge, attemptInvisibleTargetAccuracy,
+  calculateAmbidextryTotalChance, calculateAmbidextryDamageBonus, getFinalAttackCooldownReduc, getFinalAttackPreparationReduc,
+  getFinalAttackExecutionReduc, getFinalAttackRecoveryReduc, getFinalAttackProjectileSpeed, clampPercent,
+  getHastePoints, applyReducToMs, attemptRangeBrokenSpell, attemptMeleeBrokenSpell,
+  attemptMeleeExecBonus, attemptMysticismTrance, attemptEquilibreAttack, attemptOccultismInvisibility,
+  clearOccultismInvisibleState, calculateOccultismPreparationSpeedDebuff, applyOccultismExitCritBoost, shouldApplyForcedInvisibleTargetAccuracy,
+  totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi
 } from '../damagesCalcul.js';
+import { AmbidextryVFX } from '../rendering/damageFeedback.js';
 import { recordEntityCombatProc, recordEntityDefenseHp } from '../entityUpdatesStorage.js';
 import { OrderEntity, checkGameOver, isBattleFinished } from "../gameState.js";
 import { entites } from "../entites.js";
@@ -70,53 +55,9 @@ import { isLord } from "../entite/entityRules.js";
 
 
 // Attack preparation, execution and recovery.
-const DAMAGE_SOURCE_KEYS = ["piercingDamage", "physical", "magical", "hybridalDamage"];
 
-function buildScaledDamageSources(sources, targetTotal) {
-  const total = Math.max(0, Math.round(Number(targetTotal) || 0));
-  const cleanSources = Object.fromEntries(
-    DAMAGE_SOURCE_KEYS.map(key => [key, Math.max(0, Number(sources?.[key] || 0))])
-  );
-  const sourceTotal = DAMAGE_SOURCE_KEYS.reduce((sum, key) => sum + cleanSources[key], 0);
 
-  if (total <= 0) {
-    return { piercingDamage: 0, physical: 0, magical: 0, hybridalDamage: 0 };
-  }
 
-  if (sourceTotal <= 0) {
-    return { piercingDamage: 0, physical: total, magical: 0, hybridalDamage: 0 };
-  }
-
-  const parts = DAMAGE_SOURCE_KEYS.map(key => {
-    const exact = (cleanSources[key] / sourceTotal) * total;
-    const value = Math.floor(exact);
-    return {
-      key,
-      exact,
-      value,
-      remainder: exact - value,
-    };
-  });
-
-  let assigned = parts.reduce((sum, part) => sum + part.value, 0);
-  let missing = total - assigned;
-
-  parts
-    .slice()
-    .sort((a, b) => b.remainder - a.remainder)
-    .forEach(part => {
-      if (missing <= 0) return;
-      part.value += 1;
-      missing -= 1;
-    });
-
-  return Object.fromEntries(
-    DAMAGE_SOURCE_KEYS.map(key => [
-      key,
-      parts.find(part => part.key === key)?.value || 0,
-    ])
-  );
-}
 
 // =========================
 // HASTE TIMINGS BUILDER

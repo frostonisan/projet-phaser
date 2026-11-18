@@ -44,22 +44,12 @@ import {
   getAttackResonance,
 } from './attackResolution.js';
 import {
-  createAttackStatView,
-  getAttackPurity,
-  calculateAttackDamagePreview,
-  calculateDirectAttackDps,
-  calculateDirectAttackHps,
-  calculateProfanationSummonLevel,
-  getFinalAttackProjectileSpeed,
-  getEffectiveAttackTimings,
-  calculateCritTotalChance,
-  getRangePenaltyDetails,
-  totalPiercingRecupReductionWithAgi,
-  totalTranspiercingRecupReductionWithAgi,
-  calculateMeleeExecBonus,
-  getAttackUmbraAccess,
-  calculateStatsDisplay,
+  createAttackStatView, getAttackPurity, calculateAttackDamagePreview, calculateDirectAttackDps,
+  calculateDirectAttackHps, calculateProfanationSummonLevel, getFinalAttackProjectileSpeed, getEffectiveAttackTimings,
+  calculateCritTotalChance, getRangePenaltyDetails, totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi,
+  calculateMeleeExecBonus, getAttackUmbraAccess
 } from './damagesCalcul.js';
+import { calculateStatsDisplay } from './ui/statDetails.js';
 import { saveEntityAttackSelection } from './entityUpdatesStorage.js';
 import { resolveAttackEffects, describeAttackEffect, EFFECT_TYPES } from './data/attackEffects.js';
 import { normArr } from './entityAttributs.js';
@@ -69,7 +59,10 @@ import {
   setCodexFocusedAttackKey,
   getPendingInventoryCodexAttackTarget,
 } from './ui/menuNavigation.js';
-import { bindHelperEntity, getBoundHelperEntity, layoutOpenStatHelpers, cssEscape, escape, statSourcesHelper } from './ui/statHelpers.js';
+import {
+  bindHelperEntity, getBoundHelperEntity, layoutOpenStatHelpers, cssEscape,
+  escape, statSourcesHelper
+} from './ui/statHelpers.js';
 import { resolvePowerOwner, createAttackPowerValue } from './ui/powerViews.js';
 import { applyAttackEssenceSocketChoice, applyAdminAttackCardChange } from './ui/essenceInterface.js';
 import { createFullStatDom, createEntityStatsTitleNode } from './ui/statElements.js';

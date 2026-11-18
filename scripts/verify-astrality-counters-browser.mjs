@@ -74,7 +74,7 @@ async function fixture(config = {}) {
 try{
  const page=await fixture();
  const checks=await page.evaluate(async()=>{
-  const A=await import('/js/attackEffectMecanics.js'),D=await import('/js/damagesCalcul.js'),Damage=await import('/js/entityAttributs.js');
+  const A=await import('/js/attackEffectMecanics.js'),D=await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'),Damage=await import('/js/entityAttributs.js');
   const Armor=await import('/js/items/armor.js'),Control=await import('/js/entityControl.js');
   const results=[],ok=(v,msg)=>{if(!v)throw Error(msg);results.push(msg)};
   const subject=E.entites[0],enemy=E.entites[1];
@@ -103,7 +103,7 @@ try{
    const state=A.getAstralityRuntime(subject),readyAt=state.survivalReadyAt;
    ok(readyAt===Timeline.combatNow()+5000,'Cooldown autonome de cinq secondes');
    ok(!state.return&&!state.body&&state.nextCheckAt==null,'Aucun soin ni jet de Corps astral autonome');
-   ok(/Cooldown astral[\s\S]*5 s/.test(D.calculateStatsDisplay('fatalSurvival',subject).helpContent),'Helper : délai réel de cinq secondes');
+   ok(/Cooldown astral[\s\S]*5 s/.test(DDisplay.calculateStatsDisplay('fatalSurvival',subject).helpContent),'Helper : délai réel de cinq secondes');
    const afterFirstHit=rolls;
    ok(!D.attemptAstrality(enemy,subject)&&rolls===afterFirstHit,'Aucun nouveau jet de survie pendant le cooldown');
    Damage.applyDamage(subject,30,enemy,hit('physicalDamage',{physical:30}),{physical:30});

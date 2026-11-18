@@ -3,7 +3,7 @@ import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
 const S = await import('../docs/js/entite/statSystem.js');
 const E = await import('../docs/js/entites.js');
-const D = await import('../docs/js/damagesCalcul.js');
+const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const R = await import('../docs/js/entite/entityRules.js');
 const U = await import('../docs/js/UpgradeEntity.js');
 const H = await import('../docs/js/data/helpers.js');
@@ -29,7 +29,7 @@ for (const [origin, attribute, target] of [['vigueur', 'strength', 'physicalDama
     recompute(entity);
     eq(entity.stats[target], expected, `${origin}: real entity total`);
     eq(R.getSafe(entity, target), expected, `${origin}: combat reader`);
-    eq(D.calculateStatsDisplay(target, entity).statSystem.value, expected, `${origin}: helper`);
+    eq(DDisplay.calculateStatsDisplay(target, entity).statSystem.value, expected, `${origin}: helper`);
     const row = S.getStatSystemResult(entity, target);
     if (u) {
       eq(row.progression.source.normalValue, Math.round(u * expectedRatio(u)), `${origin}: Umbra contribution rounds to nearest`);
@@ -46,7 +46,7 @@ for (const [origin, attribute, target] of [['vigueur', 'strength', 'physicalDama
     recompute(saved);
     eq(saved.stats[target], expected, `${origin}: no accumulation after reload`);
     if (u) {
-      const helper = D.calculateStatsDisplay(origin, entity);
+      const helper = DDisplay.calculateStatsDisplay(origin, entity);
       const plain = helper.helpContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
       ok(!/Don fixe|data-umbra-fixed-gift/.test(helper.helpContent), `${origin}: established helper structure has no added fixed-gift paragraph`);
       const inlineHTML = helper.helpContent.match(/data-umbra-inline-detail="generatedUmbraSource">([\s\S]*?)<\/div>/)?.[1] || '';
@@ -83,10 +83,10 @@ for (const [origin, attribute, target] of [['vigueur', 'strength', 'physicalDama
   eq(entity.stats[origin], 155, `${origin}: actual equipment crosses total threshold`);
   eq(entity.stats[attribute], 155, `${attribute}: actual equipment crosses total threshold`);
   eq(R.getSafe(entity, origin), 155, `${origin}: no second limit when reading`);
-  const sourceTotals = D.getStatisticSourceTotals(entity, attribute, D.calculateStatsDisplay(attribute, entity));
+  const sourceTotals = DDisplay.getStatisticSourceTotals(entity, attribute, DDisplay.calculateStatsDisplay(attribute, entity));
   eq(sourceTotals.find(p => p.category === 'equipment').value, 15, `${attribute}: equipment helper shows effective gain`);
   eq(sourceTotals.reduce((n, p) => n + p.value, 0), 155, `${attribute}: source helper reconciles after threshold`);
-  ok(!/data-helper-point-limit|bonus externes|Au-delà : niveaux/.test(D.calculateStatsDisplay(attribute, entity).helpContent), `${attribute}: helper omits point-limit explanation`);
+  ok(!/data-helper-point-limit|bonus externes|Au-delà : niveaux/.test(DDisplay.calculateStatsDisplay(attribute, entity).helpContent), `${attribute}: helper omits point-limit explanation`);
   const total = entity.stats[target];
   entity.modifierStats.preview = { statLeveled: { [origin]: 20, [attribute]: 20 } };
   U.ComputeStatPreview(entity);
@@ -114,9 +114,9 @@ for (const [origin, attribute, target] of [['vigueur', 'strength', 'physicalDama
   eq(entity.stats[origin], 176, `${origin}: direct admin addition uses external rate`);
   const row = S.getStatSystemResult(entity, target);
   ok(row.progression.source.note.includes('Seuil 150'), `${origin}: helper explains point threshold`);
-  const detail = D.calculateStatsDisplay(origin, entity).umbraHelperCalculations.generatedUmbraSource;
-  ok(!/points propres|bonus externes|Seuil 150/.test(D.calculateStatsDisplay(origin, entity).helpContent), `${origin}: above-limit helper remains concise`);
-  const overflowInline = D.calculateStatsDisplay(origin, entity).helpContent.match(/data-umbra-inline-detail="generatedUmbraSource">([\s\S]*?)<\/div>/)?.[1] || '';
+  const detail = DDisplay.calculateStatsDisplay(origin, entity).umbraHelperCalculations.generatedUmbraSource;
+  ok(!/points propres|bonus externes|Seuil 150/.test(DDisplay.calculateStatsDisplay(origin, entity).helpContent), `${origin}: above-limit helper remains concise`);
+  const overflowInline = DDisplay.calculateStatsDisplay(origin, entity).helpContent.match(/data-umbra-inline-detail="generatedUmbraSource">([\s\S]*?)<\/div>/)?.[1] || '';
   ok(!overflowInline.includes('→'), `${origin}: above-limit points keep the same compact presentation`);
   eq(detail.value, row.enhanced, `${origin}: complete ability in Umbra helper`);
   eq(S.calculateStatSources({ [target]: 10000 }, target).value, 10000, `${target}: fixed points unlimited`);
@@ -181,7 +181,7 @@ for (const [values, points] of [
   eq(row.value, points, `All ${target} sources use points`);
   eq(row.reductionRatio, points / (points + 70), 'One conversion with K=70 after source pooling');
   eq(row.unit.length, 0, 'RP helper quantities are not percentages');
-  const display = D.calculateStatsDisplay(target, entity);
+  const display = DDisplay.calculateStatsDisplay(target, entity);
   eq(display.displayValue, points, 'Entity displays its total resistance points');
   eq(display.reductionPercent, points / (points + 70) * 100, 'Helper mitigation uses the pooled total');
   for (const penetration of [0, 25, 100]) {
@@ -213,7 +213,7 @@ const magicDefense = fixture({ integrite: 10, intelligence: 10, magicalResistanc
 recompute(magicDefense);
 const magicPoints = S.getStatSystemResult(magicDefense, 'magicalResistance').value;
 const magicHit = R.calculateResistances(magicDefense, { magical: 100 }).reducedMagicalDamage;
-const magicDisplay = D.calculateStatsDisplay('magicalResistance', magicDefense).reductionPercent;
+const magicDisplay = DDisplay.calculateStatsDisplay('magicalResistance', magicDefense).reductionPercent;
 eq(magicPoints, 32, 'Magic pools fixed, plus, both rounded contributions and the gift');
 eq(magicDisplay, magicPoints / (magicPoints + 70) * 100, 'Magical conversion uses K=70 once on the total');
 const bareDefense = { stats: { physicalResistance: 150, magicalResistance: 150 } };
@@ -224,7 +224,7 @@ B.resistance.reductionCurve.physicalConstant = 300;
 eq(S.getStatSystemResult(tank, 'physicalResistance').reductionRatio, 567 / 867, 'K edits apply without recomputing point gains');
 eq(R.calculateResistances(tank, { physical: 565 }).reducedPhysicalDamage, 195, 'Combat reads the shared K live');
 eq(R.calculateResistances(magicDefense, { magical: 100 }).reducedMagicalDamage, magicHit, 'Physical K edits leave magical damage unchanged');
-eq(D.calculateStatsDisplay('magicalResistance', magicDefense).reductionPercent, magicDisplay, 'Physical K edits leave magical helpers unchanged');
+eq(DDisplay.calculateStatsDisplay('magicalResistance', magicDefense).reductionPercent, magicDisplay, 'Physical K edits leave magical helpers unchanged');
 eq(B.generatedUmbraStats.progression.limit, 150, 'Physical K is independent of the acquisition limit');
 B.resistance.reductionCurve.physicalConstant = oldConstant;
 const physicalBefore = R.calculateResistances(tank, { physical: 100 }).reducedPhysicalDamage;
@@ -248,7 +248,7 @@ for (const [score, percent] of [[0, 0], [1, 1], [27, 21.384], [98, 49.5]]) {
   recompute(entity);
   eq(entity.stats.dodge, score, 'Dodge storage retains score points');
   eq(D.calculateTotalDodgeBonus(entity), percent, 'Dodge combat converts the complete score once');
-  eq(D.calculateStatsDisplay('dodge', entity).calculateTotalDodgeBonus, percent, 'Dodge helper uses combat chance');
+  eq(DDisplay.calculateStatsDisplay('dodge', entity).calculateTotalDodgeBonus, percent, 'Dodge helper uses combat chance');
 }
 let previousChance = 0;
 for (const score of [.0001, .1, 1, 27, 98, 1000, 1e9, Number.MAX_VALUE]) {

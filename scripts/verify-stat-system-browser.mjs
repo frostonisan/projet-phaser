@@ -30,7 +30,7 @@ try {
     await import('/js/GameInit.js');
     const S = await import('/js/entite/statSystem.js');
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const H = await import('/js/data/helpers.js');
     const R = await import('/js/entite/entityRules.js');
     const U = await import('/js/UpgradeEntity.js');
@@ -105,7 +105,7 @@ try {
       const entity = fixture({ physicalDamage: 25, strength: 10, ...gain });
       recompute(entity);
       equal(entity.stats.physicalDamage, expected, 'Force 10: plus retains its flat amount and unlocks ratios without inventing Vigueur');
-      equal(D.calculateStatsDisplay('physicalDamage', entity).statSystem.value, expected, 'The reported three-entity case uses the same helper and combat total');
+      equal(DDisplay.calculateStatsDisplay('physicalDamage', entity).statSystem.value, expected, 'The reported three-entity case uses the same helper and combat total');
     }
     for (const plus of [1, 6, 100]) {
       equal(S.calculateStatSources({ physicalDamage: 25, physicalDamagePlus: plus, strength: 10 }, 'physicalDamage').value, 30 + plus,
@@ -222,7 +222,7 @@ try {
       equal((key === 'armor' ? recipient.stats.armor.totalMax : recipient.stats[key]), 6 + directUmbra + (config.ratioPercent ? percent(4 * curve(4) + 10 * curve(20)) : config.progressive ? progressiveGain(4, 20) : converted(14)), `${key}: swap uses the new wearer's attribute`);
       equal(S.getStatSystemSourceTotals(recipient, key).reduce((sum, source) => sum + source.value, 0) + (key === 'armor' ? recipient.stats.armor.stuffMax : 0), (key === 'armor' ? recipient.stats.armor.totalMax : recipient.stats[key]),
         `${key}: swapped source calculations reconcile`);
-      equal(D.calculateStatsDisplay(key, recipient).umbraHelperCalculations.autonomousTotal.value, (key === 'armor' ? recipient.stats.armor.totalMax : recipient.stats[key]), `${key}: swapped helper reads the new total`);
+      equal(DDisplay.calculateStatsDisplay(key, recipient).umbraHelperCalculations.autonomousTotal.value, (key === 'armor' ? recipient.stats.armor.totalMax : recipient.stats[key]), `${key}: swapped helper reads the new total`);
     }
     for (const [key, attribute, channel] of [['physicalResistance', 'strength', 'Physical'], ['magicalResistance', 'intelligence', 'Magical']]) {
       const actor = fixture({ [attribute]: 10, [`${key}Plus`]: 6 });
@@ -259,7 +259,7 @@ try {
     equal(debt.stats.charge, -2, 'Equipment Charge debt is not clamped away');
     equal(R.getSafe(debt, 'charge'), -2, 'Charge reader preserves equipment debt');
     equal(D.calculateChargeEquipmentSlots(debt), 0, 'Negative Charge grants no usable equipment capacity');
-    equal(D.calculateStatsDisplay('charge', debt).chargeEquipmentSlots, 0, 'Charge helper does not describe negative slots');
+    equal(DDisplay.calculateStatsDisplay('charge', debt).chargeEquipmentSlots, 0, 'Charge helper does not describe negative slots');
     check(E.getEquipmentSlotKeys(debt).join() === 'slot1' && debt.stuff.slot1[0] === debtItem.equippedId,
       'Only the malus equipment slot remains accessible at negative Charge');
     const chargeSources = S.getStatSystemSourceTotals(debt, 'charge');
@@ -289,7 +289,7 @@ try {
       recompute(generator);
       equal(generator.stats.cognitiveGenerator, expected, 'Generator total is a whole available essence count');
       equal(Ess.calculateCognitiveEssenceCount(generator), expected, 'Generator reader agrees with the stored total');
-      equal(D.calculateStatsDisplay('cognitiveGenerator', generator).hypercognitionEssences, expected, 'Generator helper agrees with the available count');
+      equal(DDisplay.calculateStatsDisplay('cognitiveGenerator', generator).hypercognitionEssences, expected, 'Generator helper agrees with the available count');
       equal(generator.attackEssenceInventory.linkedItems.filter(item => item.hyperco).length, expected, 'Generator inventory contains exactly the displayed count');
       equal(S.getStatSystemSourceTotals(generator, 'cognitiveGenerator').reduce((sum, part) => sum + part.value, 0), expected, 'Generator source totals include final whole-count rounding');
     }
@@ -305,7 +305,7 @@ try {
         const target = fixture(values);
         recompute(target);
         equal(target.stats.dodge, expected, 'Dodge stored as score');
-        equal(D.calculateStatsDisplay('dodge', target).calculateTotalDodgeBonus, 99 * expected / (expected + 98), 'Dodge helper converts score to chance');
+        equal(DDisplay.calculateStatsDisplay('dodge', target).calculateTotalDodgeBonus, 99 * expected / (expected + 98), 'Dodge helper converts score to chance');
         equal(D.calculateTotalDodgeBonus(target), 99 * expected / (expected + 98), 'Dodge reader converts generated points once');
         for (const precision of [0, 10]) for (const offset of [-0.001, 0.001]) {
           const chance = 99 * expected / (expected + 98) * (1 - E.calculatePrecisionPercent(precision) / 100);
@@ -370,7 +370,7 @@ try {
     const pen = fixture({ magicalPen: 1, magicalPenPlus: 7, intelligence: 0 });
     recompute(pen);
     equal(R.calculateMagicalPenPercent(pen), 8, 'Plus retains its flat penetration without Intelligence or Inflexion');
-    check(D.getStatImprovement(pen, 'magicalPen').state === '+', 'Normal and plus without Umbra display plus');
+    check(DDisplay.getStatImprovement(pen, 'magicalPen').state === '+', 'Normal and plus without Umbra display plus');
     pen.modifierStats.preview = { statLeveled: { magicalPenPlus: 3, intelligence: 20 } };
     U.ComputeStatPreview(pen);
     const preview = S.getStatSystemResult(pen, 'magicalPen');
@@ -388,7 +388,7 @@ try {
     const ordinary = fixture({ physicalDamage: 5, strength: 100 });
     recompute(ordinary);
     equal(R.getSafe(ordinary, 'physicalDamage'), 5, 'Normal stat does not receive attribute ratio');
-    check(!D.getStatImprovement(ordinary, 'physicalDamage'), 'Normal stat has no plus');
+    check(!DDisplay.getStatImprovement(ordinary, 'physicalDamage'), 'Normal stat has no plus');
     check(R.normalizeStatKey('magicalPen+') === 'magicalPenPlus', 'Explicit plus source key');
     equal(E.buildStuffModifierDelta({ Stuffeffets: [{ type: 'stat-buff', stat: 'magicalPen', value: 6, variant: '+' }] }).magicalPenPlus, 6, 'Existing equipment pipeline accepts plus sources');
     const equipped = fixture({ chargePlus: 3, intelligence: 20 });
@@ -423,7 +423,7 @@ try {
       recompute(entity);
       const row = S.getStatSystemResult(entity, spec.key);
       const before = JSON.stringify(entity);
-      const display = D.calculateStatsDisplay(spec.helperKey, entity);
+      const display = DDisplay.calculateStatsDisplay(spec.helperKey, entity);
       check(before === JSON.stringify(entity), `${spec.key}: helper is read-only`);
       equal(display.statSystem.value, row.value, `${spec.key}: helper uses final total`);
       check(!/NaN|undefined|Infinity/.test(display.helpContent), `${spec.key}: valid helper text`);
@@ -510,7 +510,7 @@ try {
           U.ComputeStatPreview(entity);
         }
         const saved = JSON.stringify(entity);
-        const display = D.calculateStatsDisplay(spec.helperKey, entity);
+        const display = DDisplay.calculateStatsDisplay(spec.helperKey, entity);
         const body = visibleContent(display.helpContent);
         const text = body.textContent.replace(/\s+/g, ' ').trim();
         check(pattern.test(text), `${key} ${mode}${preview ? ' preview' : ''}: requested sentence`);
@@ -562,13 +562,13 @@ try {
       ['mysticism', 'mysticismPreparationAcceleration', /Durant une transe mystique, la vitesse de préparation de l'attaque est .* plus rapide/],
       ['mysticism', 'mysticismDamageBonus', /Une attaque lancée pendant la transe mystique inflige/],
     ]) {
-      const display = H.selectStatisticHelper(D.calculateStatsDisplay(stat, effectsEntity), key);
+      const display = H.selectStatisticHelper(DDisplay.calculateStatsDisplay(stat, effectsEntity), key);
       const body = visibleContent(display.helpContent);
       check(pattern.test(body.textContent.replace(/\s+/g, ' ')), `${key}: dedicated requested sentence`);
       check(body.querySelectorAll('.helper-calculation-result').length === 1, `${key}: only its own result`);
       equal(Number(body.querySelector('.helper-calculation-result').textContent.replace(/\s|%|s|\+/g, '')), Math.round(display.umbraHelperCalculations[key].value * 100) / 100, `${key}: current calculated value displayed to two decimals`);
     }
-    check(/L'entité met 1 s\s+à charger son tour\./.test(visibleContent(D.calculateStatsDisplay('speed', effectsEntity).helpContent).textContent), 'Speed sentence uses seconds');
+    check(/L'entité met 1 s\s+à charger son tour\./.test(visibleContent(DDisplay.calculateStatsDisplay('speed', effectsEntity).helpContent).textContent), 'Speed sentence uses seconds');
     const movementCases = [
       { label: 'normal', values: { shift: 10 } },
       { label: 'plus', values: { shiftPlus: 10 } },
@@ -584,7 +584,7 @@ try {
       const initial = structuredClone(entity.stats.shift);
       const checkDisplay = expected => {
         const before = JSON.stringify(entity);
-        const display = D.calculateStatsDisplay('shift', entity);
+        const display = DDisplay.calculateStatsDisplay('shift', entity);
         const model = display.umbraHelperCalculations.shiftStartingCharges;
         const daily = expected.baseDefault ? 0 : D.calculateMovementStartingCharges({ stats: {
           movement: expected.max, agility: R.getSafe(entity, 'agility', 0),
@@ -598,7 +598,7 @@ try {
           && new RegExp(`Déplacements max : ${expected.max}\\s*\\.`).test(text), `${label}: current and maximum explicitly distinguished`);
         check(text.includes(`sa réserve revient à ${daily} déplacements`), `${label}: daily refill is distinguished from current charges`);
         check(text.includes('Poids actuel :') && text.includes("Coût d'un déplacement :"), 'Movement keeps weight and charge cost');
-        equal(D.getStatisticSourceTotals(entity, 'shift', display).reduce((sum, part) => sum + part.value, 0), expected.max, `${label}: capacity sources reconcile`);
+        equal(DDisplay.getStatisticSourceTotals(entity, 'shift', display).reduce((sum, part) => sum + part.value, 0), expected.max, `${label}: capacity sources reconcile`);
         check(JSON.stringify(entity) === before, 'Starting reserve helper is read-only');
       };
       checkDisplay(initial);
@@ -616,7 +616,7 @@ try {
     const inactiveMovement = fixture({ shift: 5, shiftPlus: 7, movement: 20, agility: 30 });
     inactiveMovement.Archetype = { current: { key: 'egare' } };
     recompute(inactiveMovement);
-    const inactiveMovementDisplay = D.calculateStatsDisplay('shift', inactiveMovement);
+    const inactiveMovementDisplay = DDisplay.calculateStatsDisplay('shift', inactiveMovement);
     equal(inactiveMovementDisplay.shiftMax, 12, 'Inactive Movement contributes no capacity');
     equal(inactiveMovementDisplay.shiftStartingCharges, inactiveMovement.stats.shift.current, 'Inactive Umbra does not hide the autonomous starting reserve');
     const equippedMovement = fixture({ movement: 20, agility: 30, charge: 3 });
@@ -626,17 +626,17 @@ try {
     }));
     equippedMovement.stuff = Object.fromEntries(movementGear.map((item, index) => [`slot${index + 1}`, [item.equippedId]]));
     E.recomputeEntityStats(equippedMovement, { equippedItems: movementGear, persistEquipment: false, skipReverseArchetype: true });
-    const equippedMovementDisplay = D.calculateStatsDisplay('shift', equippedMovement);
+    const equippedMovementDisplay = DDisplay.calculateStatsDisplay('shift', equippedMovement);
     equal(equippedMovementDisplay.shiftMax, 32, 'Normal and plus equipment both add movement capacity');
     equal(equippedMovementDisplay.shiftStartingCharges, equippedMovement.stats.shift.current, 'Equipment is counted in the initial reserve');
-    const movementSources = D.getStatisticSourceTotals(equippedMovement, 'shift', equippedMovementDisplay);
+    const movementSources = DDisplay.getStatisticSourceTotals(equippedMovement, 'shift', equippedMovementDisplay);
     equal(movementSources.find(source => source.category === 'equipment').value, 12, 'Both equipment source types are counted once');
     equal(movementSources.reduce((sum, source) => sum + source.value, 0), 32, 'Movement equipment source footer matches capacity');
     const removedMovement = fixture({ shiftPlus: 10, agility: 30 });
     recompute(removedMovement);
     removedMovement.modifierStats.preview = { statLeveled: { shiftPlus: -10 } };
     U.ComputeStatPreview(removedMovement);
-    const emptyMovementDisplay = D.calculateStatsDisplay('shift', removedMovement);
+    const emptyMovementDisplay = DDisplay.calculateStatsDisplay('shift', removedMovement);
     equal(emptyMovementDisplay.shiftStartingCharges, 0, 'Removing the last source previews an empty starting reserve');
     equal(emptyMovementDisplay.umbraHelperCalculations.autonomousTotal.value, 1, 'Empty preview keeps the engine default capacity');
     equal(Ess.calculateCognitiveEssenceCount(fixture({ cognitiveGenerator: 8, cognitiveGeneratorPlus: 8 })), 10, 'Essence cap remains ten');
@@ -650,8 +650,8 @@ try {
     const umbraExample = fixture({ magicalPen: 2, magicalPenPlus: 3, inflexion: 1, intelligence: 44 });
     recompute(umbraExample);
     const compareUmbraDetail = (entity, label) => {
-      const autonomous = D.calculateStatsDisplay('magicalPen', entity).umbraHelperCalculations.autonomousTotal;
-      const umbra = D.calculateStatsDisplay('inflexion', entity).umbraHelperCalculations.generatedUmbraSource;
+      const autonomous = DDisplay.calculateStatsDisplay('magicalPen', entity).umbraHelperCalculations.autonomousTotal;
+      const umbra = DDisplay.calculateStatsDisplay('inflexion', entity).umbraHelperCalculations.generatedUmbraSource;
       const ratios = umbra.improvement || umbra.parts.find(part => part.calculation).calculation;
       equal(autonomous.improvement.value, ratios.value, `${label}: same ratio points as Inflexion, before conversion`);
       equal(umbra.value, autonomous.system.enhanced, `${label}: Umbra helper retains the full capacity including autonomous plus`);
@@ -703,7 +703,7 @@ try {
     umbrella.Archetype = { current: { key: 'mage' } };
     recompute(umbrella);
     for (const key of ['criticalPower', 'bloodFury']) {
-      const display = D.calculateStatsDisplay(key, umbrella);
+      const display = DDisplay.calculateStatsDisplay(key, umbrella);
       for (const model of Object.values(display.umbraHelperCalculations)) {
         const sum = model.parts.reduce((total, part) => total + (part.operator === '−' ? -part.value : part.value), 0);
         check(Math.abs(sum - model.value) < 1.01 || model.maximumReached, `${key}: no duplicated source in Umbra helper (${sum}, ${model.value})`);
@@ -758,19 +758,19 @@ try {
     equal(R.calculateMagicalPenPercent(testEntity), 2, 'Purchased normal equipment stays at 2 percent with 30 Intelligence');
     equip(['i48']);
     equal(R.calculateMagicalPenPercent(testEntity), 9, 'Purchased plus equipment keeps its flat 3 and one Intelligence improvement');
-    check(D.getStatImprovement(testEntity, 'magicalPen').state === '+', 'Purchased plus equipment displays plus state');
+    check(DDisplay.getStatImprovement(testEntity, 'magicalPen').state === '+', 'Purchased plus equipment displays plus state');
     equip(['i49']);
     equal(R.calculateMagicalPenPercent(testEntity), 15, 'Purchased mixed equipment combines normal 4, plus 5 and Intelligence 6');
-    check(D.getStatImprovement(testEntity, 'magicalPen').state === '+', 'Mixed equipment without Umbra displays plus state');
+    check(DDisplay.getStatImprovement(testEntity, 'magicalPen').state === '+', 'Mixed equipment without Umbra displays plus state');
     equip(['i47', 'i48', 'i49']);
     equal(R.calculateMagicalPenPercent(testEntity), 20, 'Three purchased items pool 6 normal and 8 plus with one Intelligence bonus');
     equal(S.getStatSystemSourceTotals(testEntity, 'magicalPen').reduce((sum, part) => sum + part.value, 0), 20, 'Purchased item source totals reconcile');
-    const mixedModel = D.calculateStatsDisplay('magicalPen', testEntity).umbraHelperCalculations.autonomousTotal;
+    const mixedModel = DDisplay.calculateStatsDisplay('magicalPen', testEntity).umbraHelperCalculations.autonomousTotal;
     equal(mixedModel.sourceGroups.normal.find(part => part.category === 'equipment').value, 6, 'Normal equipment sources are grouped separately');
     equal(mixedModel.sourceGroups.improved.find(part => part.category === 'equipment').value, 8, 'Plus equipment inputs are grouped before ratios');
     testEntity.modifierStats.preview = { statLeveled: { weaponOrfevre: 100 } };
     U.ComputeStatPreview(testEntity);
-    const orfevreModel = D.calculateStatsDisplay('magicalPen', testEntity).umbraHelperCalculations.autonomousTotal;
+    const orfevreModel = DDisplay.calculateStatsDisplay('magicalPen', testEntity).umbraHelperCalculations.autonomousTotal;
     equal(orfevreModel.sourceGroups.normal.find(part => part.category === 'equipment').value, 12, 'Orfevre preview belongs to normal equipment sources');
     equal(orfevreModel.sourceGroups.improved.find(part => part.category === 'equipment').value, 16, 'Orfevre preview belongs to plus equipment sources');
     const orfevreSources = S.getStatSystemSourceTotals(testEntity, 'magicalPen');
@@ -778,7 +778,7 @@ try {
     equal(orfevreSources.reduce((sum, part) => sum + part.value, 0), 34, 'Orfevre preview sources match the displayed total');
     delete testEntity.modifierStats.preview;
     const effect = R.entityBattleBooste(testEntity, { stat: 'magicalPen', value: 25, mode: 'percent', source: 'helper-audit' });
-    const combatModel = D.calculateStatsDisplay('magicalPen', testEntity).umbraHelperCalculations.autonomousTotal;
+    const combatModel = DDisplay.calculateStatsDisplay('magicalPen', testEntity).umbraHelperCalculations.autonomousTotal;
     equal(combatModel.sourceGroups.normal.find(part => part.category === 'combat').value, 1.5, 'Combat multiplier remains an effect source');
     equal(S.getStatSystemSourceTotals(testEntity, 'magicalPen').reduce((sum, part) => sum + part.value, 0), 21.5, 'Combat sources match the total');
     effect.remove();
@@ -986,7 +986,7 @@ try {
   await page.evaluate(async () => {
     const U = await import('/js/UpgradeEntity.js');
     const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const entity = structuredClone(window.__helperEquipmentAudit.entity);
     U.setPlayerExperience(1000000);
     const form = U.createLevelUpForm(entity);
@@ -996,7 +996,7 @@ try {
       U.ComputeStatPreview(entity);
       const bound = UI.getBoundHelperEntity(form.querySelector('.axis-line'));
       if (!bound?.modifierStats?.preview?.statLeveled) throw new Error('Level-up helper lost preview source inputs');
-      const display = D.calculateStatsDisplay('magicalPen', bound);
+      const display = DDisplay.calculateStatsDisplay('magicalPen', bound);
       const model = display.umbraHelperCalculations.autonomousTotal;
       if (model.value !== 14 || model.system.normal !== 3 || model.system.plus !== 5) throw new Error('Level-up helper must include equipment and both preview source types');
       if (!display.helpContent.startsWith('Les attaques de nature magique ignorent ')) throw new Error('Level-up uses the updated helper sentence');
@@ -1103,9 +1103,9 @@ try {
     await page.keyboard.press('Escape');
   }
   const movementText = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
-    const display = D.calculateStatsDisplay('shift', entity);
+    const display = DDisplay.calculateStatsDisplay('shift', entity);
     return { initial: display.shiftStartingCharges, current: display.shiftCurrent, capacity: display.shiftMax, percent: display.shiftStartingPercent };
   });
   const movementRow = page.locator('#system-test .stat-container[data-stat="shift"]').first();
@@ -1139,7 +1139,7 @@ try {
   await page.evaluate(async () => {
     const U = await import('/js/UpgradeEntity.js');
     const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
     const before = JSON.stringify(entity.stats);
     const form = U.createLevelUpForm(entity);
@@ -1148,7 +1148,7 @@ try {
       entity.modifierStats.preview = { statLeveled: { shiftPlus: 3, movement: 2, agility: 4 } };
       U.ComputeStatPreview(entity);
       const bound = UI.getBoundHelperEntity(form.querySelector('.axis-line'));
-      const display = D.calculateStatsDisplay('shift', bound);
+      const display = DDisplay.calculateStatsDisplay('shift', bound);
       if (display.shiftMax !== 37) throw new Error('Movement preview misses autonomous or Umbra capacity');
       const expected = D.calculateMovementStartingCharges({ stats: { movement: 37, agility: 34 } });
       if (display.shiftStartingCharges !== expected) throw new Error('Movement preview ignores the total starting reserve');

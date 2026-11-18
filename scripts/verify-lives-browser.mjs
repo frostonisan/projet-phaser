@@ -33,7 +33,7 @@ try {
     const G = await import('/js/game.js');
     const I = await import('/js/items/itemEffectMecanics.js');
     const Armor = await import('/js/items/armor.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const P = await import('/js/UpgradeEntity.js');
     const Q = await import('/js/procedural/proc-bareme.js');
     const checks = [];
@@ -157,7 +157,7 @@ try {
     old.resourceStocks.extraLife.stuff[equipment[0].equippedId].lastUpdate = 24;
     const frozen = JSON.stringify({ stats: old.stats, stocks: old.resourceStocks, regen: old.extraLifeRegen });
     old.modifierStats.preview = { statLeveled: { extraLife: 2 } }; P.ComputeStatPreview(old);
-    equal(D.calculateStatsDisplay('extraLife', old).extraLifeMax, 4, 'Preview adds native capacity to equipment');
+    equal(DDisplay.calculateStatsDisplay('extraLife', old).extraLifeMax, 4, 'Preview adds native capacity to equipment');
     equal(JSON.stringify({ stats: old.stats, stocks: old.resourceStocks, regen: old.extraLifeRegen }), frozen, 'Preview never refills any life');
     delete old.modifierStats.preview;
     old.baseStats.weaponOrfevre = 100; recompute(old);
@@ -170,7 +170,7 @@ try {
     equal(JSON.stringify(old.resourceStocks), resetState, 'Reset preview leaves real life stocks untouched');
     const fadedCategory = fixture({ fadedLife: 2 }); recompute(fadedCategory);
     R.addFadedLife(fadedCategory, 3, 'consumable'); R.addFadedLife(fadedCategory, 4, 'spell');
-    const sources = D.getStatisticSourceTotals(fadedCategory, 'fadedLife', D.calculateStatsDisplay('fadedLife', fadedCategory));
+    const sources = DDisplay.getStatisticSourceTotals(fadedCategory, 'fadedLife', DDisplay.calculateStatsDisplay('fadedLife', fadedCategory));
     equal(sources.reduce((sum, source) => sum + source.value, 0), 9, 'Faded source totals reconcile');
     check(sources.some(source => source.category === 'consumable' && source.value === 3), 'Consumable source visible');
     const armor = fixture({ armor: 5 }); const armorGear = gear('armor', 'armor', 4); equipment = [armorGear];

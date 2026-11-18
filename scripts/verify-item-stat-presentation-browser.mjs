@@ -35,7 +35,7 @@ try {
     const H = await import('/js/data/helpers.js');
     const { stats } = await import('/js/data/statsData.js');
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const U = await import('/js/UpgradeEntity.js');
     setAdminMode(true);
     document.body.innerHTML = '<div class="Game-helper"></div><div id="anchor"></div><div id="equipment-anchor"></div>';
@@ -65,7 +65,7 @@ try {
           entity.modifierStats.preview = { statLeveled: { [key]: 5 } };
           U.ComputeStatPreview(entity);
         }
-        const calculated = D.calculateStatsDisplay(key, entity);
+        const calculated = DDisplay.calculateStatsDisplay(key, entity);
         // Generated introductions include live points and fixed grants.
         const content = document.createElement('div'); content.innerHTML = calculated.helpContent;
         check(content.querySelector('.short-descri')?.dataset.statDescription === key && content.querySelector('.short-descri').textContent.startsWith('Confère'), `${key}/${preview}: shared introduction precedes the calculations`);

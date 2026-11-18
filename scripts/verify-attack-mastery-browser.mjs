@@ -31,7 +31,7 @@ try {
     const { attackDetails: catalog } = await import('/js/data/attackList.js');
     const { enrichEntityStats, recomputeEntityStats, entites } = await import('/js/entites.js');
     const { getStatSystemResult } = await import('/js/entite/statSystem.js');
-    const damage = await import('/js/damagesCalcul.js');
+    const damage = await import('/js/damagesCalcul.js'), damageDisplay = await import('/js/ui/statDetails.js');
     const combat = await import('/js/combat/attacks.js');
     const { createAttackFlight } = await import("/js/combat/attacks.js");
     const { selectAttackDecision, entiteTurn } = await import('/js/fight.js');
@@ -315,7 +315,7 @@ try {
     }
     const yellowMixed = resolution.getAttackNatureRules(rawAttack(['red', 'yellow', 'yellow']));
     check(resolution.getAttackNatureRules(null).profile.total === 0
-      && damage.calculateStatsDisplay('physicalDamage', { stats: { physicalDamage: 20 }, currentAttack: null }, 20),
+      && damageDisplay.calculateStatsDisplay('physicalDamage', { stats: { physicalDamage: 20 }, currentAttack: null }, 20),
       'Nature helpers remain safe when no attack is selected');
     check(resolution.getAttackResolutionFlags(rawAttack(['blue'])).canBrokenSpell
       && !resolution.getAttackResolutionFlags(rawAttack(['blue'], true)).canBrokenSpell,

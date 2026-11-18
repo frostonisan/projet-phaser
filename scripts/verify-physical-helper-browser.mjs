@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const D = await import('/js/damagesCalcul.js'), H = await import('/js/data/helpers.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'), H = await import('/js/data/helpers.js');
     const UI = await import('/js/GameInit.js'), U = await import('/js/UpgradeEntity.js');
     const G = await import('/js/GameStorage.js');
     const checks = [];
@@ -44,7 +44,7 @@ try {
     const model = S.buildStatSystemModel(S.getStatSystemResult(probe, 'physicalDamage'), probe);
     equal(probe.stats.physicalDamage, 46, 'Player example combat value');
     for (const part of model.contributions) equal(part.value, expected[part.kind], `${part.kind} exclusive contribution`);
-    const baseSource = D.getStatisticSourceTotals(probe, 'physicalDamage', D.calculateStatsDisplay('physicalDamage', probe));
+    const baseSource = DDisplay.getStatisticSourceTotals(probe, 'physicalDamage', DDisplay.calculateStatsDisplay('physicalDamage', probe));
     for (const [category, amount] of [['fixed', 20], ['plus', 10], ['umbra', 16]]) equal(baseSource.find(row => row.category === category).value, amount, `${category} source amount`);
     check(!baseSource.find(row => row.category === 'plus').calculations.improved.parts.some(part => part.stat === 'strength'), 'Autonomous plus remains direct when Umbra is present');
     check(baseSource.find(row => row.category === 'umbra').calculations.improved.parts.some(part => part.stat === 'strength'), 'Umbra owns the progressive Force ratio once');
@@ -61,7 +61,7 @@ try {
       for (const part of full.contributions) equal(part.parts.reduce((sum, term) => sum + (term.operator === '−' ? -term.value : term.value), 0), part.value, 'Exclusive calculation matches its own amount');
       const totals = S.getStatSystemSourceTotals(entity, 'physicalDamage');
       equal(totals.reduce((sum, part) => sum + part.value, 0), row.value, 'Sources reconcile with actual result');
-      const vig = D.calculateStatsDisplay('vigueur', entity).umbraHelperCalculations;
+      const vig = DDisplay.calculateStatsDisplay('vigueur', entity).umbraHelperCalculations;
       equal(vig.generatedUmbraSource.value, vigueur > 0 && plus !== 0 ? row.enhanced : full.contributions.find(part => part.kind === 'umbra').value, 'Vigueur helper includes its complete capacity when an autonomous PP+ is present');
       equal(vig.generatedUmbraSource.parts.reduce((sum, part) => sum + (part.operator === '−' ? -part.value : part.value), 0), vig.generatedUmbraSource.value, 'Complete Umbra calculation matches its displayed capacity');
       equal(vig.physicalDamageTotal.value, row.value, 'Vigueur separate total includes all contributions');
@@ -69,7 +69,7 @@ try {
     }
     const noPlus = fixture({ strength: 10, physicalDamage: 20, vigueur: 5 });
     recompute(noPlus);
-    equal(D.calculateStatsDisplay('vigueur', noPlus).umbraHelperCalculations.generatedUmbraSource.value, 16, 'Without PP+, Vigueur owns Force once');
+    equal(DDisplay.calculateStatsDisplay('vigueur', noPlus).umbraHelperCalculations.generatedUmbraSource.value, 16, 'Without PP+, Vigueur owns Force once');
     const noUmbra = fixture({ strength: 10, physicalDamage: 20, physicalDamagePlus: 10 });
     recompute(noUmbra);
     equal(noUmbra.stats.physicalDamage, 35, 'Without Umbra, PP+ keeps its flat and Force');
@@ -119,7 +119,7 @@ try {
     check(!summary.querySelector('.helper-calculation-detail'), 'One fixed amount is not repeated as its own calculation');
     const screenshotCase = fixture({ strength: 10, vigueur: 10, physicalDamagePlus: 10, physicalDamage: 10 });
     recompute(screenshotCase);
-    const screenshotHelper = D.calculateStatsDisplay('vigueur', screenshotCase).umbraHelperCalculations;
+    const screenshotHelper = DDisplay.calculateStatsDisplay('vigueur', screenshotCase).umbraHelperCalculations;
     equal(screenshotHelper.generatedUmbraSource.value, 37, 'Screenshot case: complete ability includes 10 gift + 11 Vigueur + 6 Force + 10 PP+');
     equal(screenshotHelper.physicalDamageTotal.value, 47, 'Screenshot case: entity total is 47, no duplicated PP+');
     check(screenshotHelper.generatedUmbraSource.parts.some(part => part.stat === 'strength'), 'Force remains visible inside Vigueur despite autonomous PP+');
@@ -128,7 +128,7 @@ try {
       const actor = fixture({ [source]: 10, [cfg.attribute]: 25, [cfg.target]: 5, [`${cfg.target}Plus`]: plus });
       recompute(actor);
       const before = JSON.stringify(actor), system = S.getStatSystemResult(actor, cfg.target);
-      const helper = D.calculateStatsDisplay(source, actor).umbraHelperCalculations;
+      const helper = DDisplay.calculateStatsDisplay(source, actor).umbraHelperCalculations;
       const ability = cfg.ratioPercent ? S.buildStatSystemModel(system, actor).contributions.find(part => part.kind === 'umbra').value : system.enhanced;
       equal(helper.generatedUmbraSource.value, ability, `${source}: full ability includes signed autonomous plus`);
       equal(helper.generatedUmbraSource.parts.reduce((sum, part) => sum + (part.operator === '−' ? -part.value : part.value), 0), ability, `${source}: formula reconciles after conversion or rounding`);

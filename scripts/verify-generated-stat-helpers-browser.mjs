@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const result = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const D = await import('/js/damagesCalcul.js'), R = await import('/js/entite/entityRules.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'), R = await import('/js/entite/entityRules.js');
     const UI = await import('/js/GameInit.js'), U = await import('/js/UpgradeEntity.js');
     const G = await import('/js/GameStorage.js');
     const configs = Object.values(D.getGeneratedUmbraStatConfigs());
@@ -74,7 +74,7 @@ try {
             equal(part.parts.reduce((sum, term) => sum + (term.operator === '−' ? -term.value : term.value), 0), part.value, `${cfg.target}/${part.kind}: calculation matches contribution`);
           }
           equal(S.getStatSystemSourceTotals(entity, cfg.target).reduce((sum, part) => sum + part.value, 0), expected, `${cfg.target}: source totals reconcile`);
-          const helper = D.calculateStatsDisplay(cfg.source, entity);
+          const helper = DDisplay.calculateStatsDisplay(cfg.source, entity);
           equal(helper.umbraHelperCalculations.generatedUmbraSource.value, !cfg.ratioPercent && points > 0 && plus !== 0 ? row.enhanced : model.contributions.find(part => part.kind === 'umbra').value, `${cfg.source}: ability contribution and separate entity total stay consistent`);
           equal(helper.umbraHelperCalculations[`${cfg.target}Total`].value, expected, `${cfg.source}: separate entity total`);
           check(JSON.stringify(entity) === before, `${cfg.source}: helper reads never change combat state`);
@@ -101,7 +101,7 @@ try {
           this.entity.modifierStats.preview = { statLeveled: Object.fromEntries(configs.map(cfg => [cfg.source, 3])) };
           U.refreshActiveStatPreview(this.entity, mount);
         }
-        return configs.map(cfg => ({ ...cfg, value: D.calculateStatsDisplay(cfg.source, this.entity).umbraHelperCalculations[`${cfg.target}Total`].value }));
+        return configs.map(cfg => ({ ...cfg, value: DDisplay.calculateStatsDisplay(cfg.source, this.entity).umbraHelperCalculations[`${cfg.target}Total`].value }));
       },
       show(key, source = true) {
         UI.closeOpenHelpers();

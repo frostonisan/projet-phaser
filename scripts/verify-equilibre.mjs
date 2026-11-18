@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import('../docs/js/entites.js'), D=await import('../docs/js/damagesCalcul.js');
+const E=await import('../docs/js/entites.js'), D=await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S=await import('../docs/js/entite/statSystem.js'), Items=await import('../docs/js/items/permanentItems.js');
 const P=globalThis.umbraProgression;
 const keys=['equilibreAggroReduction','equilibreInvisibleDetection','equilibreBalancedAttackChance'];
@@ -50,7 +50,7 @@ for(const threshold of [150,300])for(const u of [0,1,10,149,150,151,300,1000])fo
     const cfg=L.conversionSettings(key);
     eq(L.conversionPercent(retained,{...cfg,agility:attribute}),expected,'Interactive conversion curve agrees');
   }
-  const before=JSON.stringify(e),helper=D.calculateStatsDisplay('equilibre',e);
+  const before=JSON.stringify(e),helper=DDisplay.calculateStatsDisplay('equilibre',e);
   ok(helper.helpContent.includes('umbra-equilibre-grid'),'Two-column card');
   ok(helper.helpContent.includes('data-umbra-passive="equilibreBalancedAttackChance"'),'Exclusive passive card');
   eq(helper.umbraHelperCalculations.equilibreAggroReductionTotal.value,e.stats.equilibreAggroReduction,'Helper agrees');

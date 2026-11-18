@@ -10,7 +10,8 @@ import {
   getAttackNatureRules,
   resolveAttackDefinitionForEntity,
 } from '../attackResolution.js';
-import { calculateStatsDisplay, createMovementDisplay, ensureMovementState } from '../damagesCalcul.js';
+import { createMovementDisplay, ensureMovementState } from '../damagesCalcul.js';
+import { calculateStatsDisplay } from './statDetails.js';
 import { getEntityCombatDetails, COMBAT_ROLES } from '../entityUpdatesStorage.js';
 import { createNicknameForm } from '../UpgradeEntity.js';
 import { stats } from '../data/statsData.js';

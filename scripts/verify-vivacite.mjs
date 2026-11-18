@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js');
+const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S=await import('../docs/js/entite/statSystem.js'),U=await import('../docs/js/UpgradeEntity.js');
 const P=globalThis.umbraProgression;
 let checks=0;
@@ -38,8 +38,8 @@ for(const threshold of [150,300])for(const v of [0,1,50,149,150,151,300,1000])fo
   }
   const time=Math.round(10000*(1-e.stats.velocity/100));
   eq(e.stats.speed,time,'Timing applies final percentage once');
-  eq(D.calculateStatsDisplay('velocity',e).velocityAdjustedSpeedMs,time,'Velocity helper matches timing');
-  eq(D.calculateStatsDisplay('vivacite',e).vivaciteTiming.adjustedSpeed,time,'Umbra card matches timing');
+  eq(DDisplay.calculateStatsDisplay('velocity',e).velocityAdjustedSpeedMs,time,'Velocity helper matches timing');
+  eq(DDisplay.calculateStatsDisplay('vivacite',e).vivaciteTiming.adjustedSpeed,time,'Umbra card matches timing');
   eq(D.calculateControlledSpeed(e),e.stats.controlledSpeed,'Movement reads game result');
 }
 for(const key of ['velocity','controlledSpeed']){
@@ -72,7 +72,7 @@ try{
   eq(L.calculate(input).results.velocity.total,e.stats.velocity,'Modified shared curve is live in Maj');
 }finally{Object.assign(P.progression.curve,settings);}
 for(const [velocity,chance] of [[0,50],[30,80],[50,100],[65,100]])eq(P.retreatChance(velocity),chance,'Flee barème preserved');
-const capped=D.calculateStatsDisplay('vivacite',entity({vivacite:150,agility:150})).umbraHelperCalculations.agileRetreat;
+const capped=DDisplay.calculateStatsDisplay('vivacite',entity({vivacite:150,agility:150})).umbraHelperCalculations.agileRetreat;
 eq(capped.parts[1].value,52.6130286825474,'Flee detail keeps the true velocity before its cap');
 eq(capped.value,100,'Flee detail reports the capped result');
 const preview=entity({vivacite:50,agility:50});preview.modifierStats.preview={statLeveled:{vivacite:10,agility:5}};
@@ -80,13 +80,13 @@ U.ComputeStatPreview(preview);
 const projected=entity({vivacite:60,agility:55});
 eq(preview.modifierStats.preview.total.velocity,projected.stats.velocity,'Level-up preview velocity matches confirmation');
 eq(preview.modifierStats.preview.total.speed,projected.stats.speed,'Level-up preview speed matches confirmation');
-eq(D.calculateStatsDisplay('velocity',preview).velocityAdjustedSpeedMs,projected.stats.speed,'Preview helper timing matches');
+eq(DDisplay.calculateStatsDisplay('velocity',preview).velocityAdjustedSpeedMs,projected.stats.speed,'Preview helper timing matches');
 const buffed=entity({vivacite:50,agility:50});buffed.battleBoosts={speed:[{mode:'flat',value:1000}]};
 E.recomputeEntityStats(buffed,{equippedItems:[],persistEquipment:false,skipReverseArchetype:true});
 eq(D.getSafe(buffed,'speed'),buffed.stats.speed+1000,'Flat speed buff still applies after velocity');
-eq(D.calculateStatsDisplay('velocity',buffed).velocityAdjustedSpeedMs,D.getSafe(buffed,'speed'),'Timing helper includes speed buffs');
+eq(DDisplay.calculateStatsDisplay('velocity',buffed).velocityAdjustedSpeedMs,D.getSafe(buffed,'speed'),'Timing helper includes speed buffs');
 buffed.battleBoosts.agility=[{mode:'flat',value:20}];
 const live=P.velocityTiming(D.getSafe(buffed,'velocity'),10000).adjustedSpeed+1000;
 eq(D.getSafe(buffed,'speed'),live,'Agility buffs immediately change the actual turn duration');
-eq(D.calculateStatsDisplay('vivacite',buffed).vivaciteTiming.adjustedSpeed,live,'Umbra helper reads the live duration');
+eq(DDisplay.calculateStatsDisplay('vivacite',buffed).vivaciteTiming.adjustedSpeed,live,'Umbra helper reads the live duration');
 console.log(`Vivacité: ${checks} checks passed.`);

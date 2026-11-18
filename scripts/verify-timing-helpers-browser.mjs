@@ -28,7 +28,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
     const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const E = await import('/js/entites.js');
     const U = await import('/js/UpgradeEntity.js');
     const R = await import('/js/entite/entityRules.js');
@@ -69,7 +69,7 @@ try {
         const before = JSON.stringify(entity);
         const timings = D.getEffectiveAttackTimings(attack, view);
         for (const [key, field] of fields(range)) {
-          const display = D.calculateStatsDisplay(key, view, { baseMs: 1001, reduc: timings.reduc });
+          const display = DDisplay.calculateStatsDisplay(key, view, { baseMs: 1001, reduc: timings.reduc });
           const model = display.helperDetails.timing;
           equal(model.effectiveMs, field === 'executionTime' ? timings.impactExecutionTime : timings.effective[field], `${key}: duration`);
           equal(model.sources.filter(source => !source.duration).reduce((sum, source) => sum + source.value, 0), model.bonus, `${key}: source sum`);
@@ -81,13 +81,13 @@ try {
         count++;
       }
     }
-    window.__timingAudit = { UI, D, E, U, R, fixture, attackFor, fields };
+    window.__timingAudit = { UI, D, DDisplay, E, U, R, fixture, attackFor, fields };
     return count;
   });
   const helper = page.locator('[data-umbra-pinned="true"]');
   const detail = page.locator('[data-umbra-detail]');
   const setup = async (range, preview, corner = 'bottom-right', base = 1001, amount = 2) => page.evaluate(({ range, preview, corner, base, amount }) => {
-    const { UI, D, U, R, fixture, attackFor } = window.__timingAudit;
+    const { UI, D, DDisplay, U, R, fixture, attackFor } = window.__timingAudit;
     UI.closeOpenHelpers();
     document.getElementById('timing-audit')?.remove();
     const entity = fixture(amount);
@@ -107,7 +107,7 @@ try {
     document.body.append(host);
     const view = UI.getBoundHelperEntity(root.querySelector('[data-timing-detail]'));
     const models = Object.fromEntries([...root.querySelectorAll('[data-timing-detail]')].map(node =>
-      [node.dataset.stat, D.calculateStatsDisplay(node.dataset.stat, view, JSON.parse(node.dataset.timingDetail)).helperDetails.timing]));
+      [node.dataset.stat, DDisplay.calculateStatsDisplay(node.dataset.stat, view, JSON.parse(node.dataset.timingDetail)).helperDetails.timing]));
     if (amount < 95 && !models.preparationTimeDetail.sources.some(source => source.category === 'equipment')) throw new Error('Fixture must exercise equipment sources');
     if (preview && !models.preparationTimeDetail.sources.some(source => source.category === 'stat')) throw new Error('Fixture must exercise preview sources');
     window.__timingAudit.entity = entity;

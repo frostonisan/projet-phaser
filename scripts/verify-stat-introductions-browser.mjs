@@ -63,9 +63,9 @@ try {
     const check = (ok, text) => { if (!ok) throw Error(`${label}: ${text}`); passed.push(`${label}: ${text}`); };
     const normalize = text => text.replace(/\s+/g, ' ').trim();
     const reference = node.cloneNode(true);
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const model = document.createElement('template');
-    model.innerHTML = D.calculateStatsDisplay(key, window.__introAudit.active).helpContent;
+    model.innerHTML = DDisplay.calculateStatsDisplay(key, window.__introAudit.active).helpContent;
     reference.querySelector('.short-descri').replaceWith(model.content.querySelector('.short-descri').cloneNode(true));node.parentElement.append(reference);
     const descriptionText = normalize(reference.querySelector('.short-descri').textContent);
     const normalizeIntroduction = normalize;

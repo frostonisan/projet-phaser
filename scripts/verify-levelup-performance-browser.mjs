@@ -92,7 +92,7 @@ try {
   const { profile } = await cdp.send('Profiler.stop');
   const checks = await page.evaluate(async () => {
     const { U, UI, S, actor } = window.__levelFixture;
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
     const form = document.querySelector('.level-up-section');
     const arrow = (key, direction) => form.querySelector(`.axis-line[data-key="${key}"] .${direction}-arrow`).click();
@@ -113,7 +113,7 @@ try {
     const host = document.querySelector('.codex-entity-scan .umbra-submenu [data-stat="vigueur"].stat-container');
     check(!!host, 'Live Umbra helper host exists');
     const helperEntity = UI.getBoundHelperEntity(host);
-    const expected = D.calculateStatsDisplay('vigueur', helperEntity);
+    const expected = DDisplay.calculateStatsDisplay('vigueur', helperEntity);
     host.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     await new Promise(done => setTimeout(done, 100));
     const helper = document.querySelector('.stat-hover[data-stat="vigueur"]');

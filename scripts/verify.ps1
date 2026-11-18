@@ -46,6 +46,12 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+Write-Host "Verification des regles de degats..."
+& $node --test (Join-Path $PSScriptRoot "verify-damage-rules.test.mjs")
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 Write-Host "Verification imports et assets statiques..."
 & $node (Join-Path $PSScriptRoot "verify-assets.mjs") $siteRoot
 if ($LASTEXITCODE -ne 0) {

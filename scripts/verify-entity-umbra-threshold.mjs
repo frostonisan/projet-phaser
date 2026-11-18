@@ -4,7 +4,7 @@ await installEntityTestEnvironment();
 const E = await import('../docs/js/entites.js');
 const S = await import('../docs/js/entite/statSystem.js');
 const R = await import('../docs/js/entite/entityRules.js');
-const D = await import('../docs/js/damagesCalcul.js');
+const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const U = await import('../docs/js/UpgradeEntity.js');
 const Storage = await import('../docs/js/GameStorage.js');
 const { stats } = await import('../docs/js/data/statsData.js');
@@ -125,7 +125,7 @@ recompute(restored);
 eq(restored.seuilUmbra, 300, 'Entity threshold survives save/reload');
 for (const key of keys) eq(restored.stats[key], 300, `${key}: reload retains the unlocked threshold`);
 for (const key of keys) {
-  const displayed = D.calculateStatsDisplay(key, restored);
+  const displayed = DDisplay.calculateStatsDisplay(key, restored);
   ok(!/NaN|undefined/.test(displayed.helpContent), `${key}: helper handles unlocked values`);
 }
 console.log(`Entity Umbra threshold: ${checks} checks passed across ${keys.length} Umbras.`);

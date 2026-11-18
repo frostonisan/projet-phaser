@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const R = await import('/js/items/resourceStocks.js');
     const S = await import('/js/GameStorage.js');
     const U = await import('/js/entityUpdatesStorage.js');
@@ -99,7 +99,7 @@ try {
     const beforePreview = JSON.stringify({ stats: entity.stats, stocks: entity.resourceStocks, equipment });
     entity.modifierStats.preview = { statLeveled: { shiftPlus: 4, agility: 10 } };
     P.ComputeStatPreview(entity);
-    const display = D.calculateStatsDisplay('shift', entity);
+    const display = DDisplay.calculateStatsDisplay('shift', entity);
     equal(display.shiftMax, 14, 'Preview capacity includes its bonus');
     equal(display.shiftCurrent, 8, 'Preview does not grant current charges');
     equal(display.shiftStartingCharges, D.calculateMovementStartingCharges({ stats: { movement: 14, agility: 27 } }) + 3, 'Daily helper preview includes remaining equipment');
@@ -351,7 +351,7 @@ try {
     equal(amplified.stats.shift.max, 14, 'Efficiency amplifies maximum independently');
     equal(R.getEquipmentResourceCurrent(amplified, 'shift'), 6, 'Five supplemental charges become six at 20 percent efficiency');
     equal(amplified.stats.shift.current, 11, 'Amplified reserve adds to existing natural charges once');
-    const movementSources = target => D.getStatisticSourceTotals(target, 'shift', D.calculateStatsDisplay('shift', target));
+    const movementSources = target => DDisplay.getStatisticSourceTotals(target, 'shift', DDisplay.calculateStatsDisplay('shift', target));
     let labeled = movementSources(amplified);
     check(labeled.every(source => source.label === (source.movementKind === 'max' ? 'Déplacements max' : 'Déplacements sup.')), 'Every movement source identifies max or supplemental');
     equal(labeled.filter(source => source.movementKind === 'max').reduce((sum, source) => sum + source.value, 0), 14, 'Maximum sources sum only to capacity');
@@ -368,7 +368,7 @@ try {
     const frozenAmplified = JSON.stringify({ stats: amplified.stats, stocks: amplified.resourceStocks });
     amplified.modifierStats.preview = { statLeveled: { weaponOrfevre: 80 } };
     P.ComputeStatPreview(amplified);
-    const previewAmplified = D.calculateStatsDisplay('shift', amplified);
+    const previewAmplified = DDisplay.calculateStatsDisplay('shift', amplified);
     equal(previewAmplified.shiftCurrent, 17, 'Efficiency preview scales remaining gear only, not consumables or spells');
     equal(previewAmplified.shiftMax, 16, 'Efficiency preview scales max separately');
     equal(previewAmplified.shiftEquipmentCharges, 7, 'Daily preview uses amplified remaining stock');
@@ -905,7 +905,7 @@ try {
     report.checks.push(`Real pointer held still: ${action} refreshes the open sub-helper without reopening`);
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js');
+    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const R = await import('/js/items/resourceStocks.js'), A = await import('/js/items/armor.js');
     const U = await import('/js/entityUpdatesStorage.js'), P = await import('/js/UpgradeEntity.js');
     const UI = await import('/js/GameInit.js'), S = await import('/js/GameStorage.js');
@@ -979,8 +979,8 @@ try {
         const row = document.querySelector('#stock-source-audit .stat-container');
         const before = JSON.stringify({ entity, draft, items: S.loadEquippedItems() });
         const view = UI.getBoundHelperEntity(row);
-        const display = D.calculateStatsDisplay(stat, view);
-        const totals = D.getStatisticSourceTotals(view, stat, display);
+        const display = DDisplay.calculateStatsDisplay(stat, view);
+        const totals = DDisplay.getStatisticSourceTotals(view, stat, display);
         const equipment = totals.filter(source => source.category === 'equipment');
         const reserves = equipment.filter(source => stat === 'shift' ? source.movementKind === 'sup'
           : ['armor', 'extraLife'].includes(stat) ? source.remainingStock : true);
@@ -1029,7 +1029,7 @@ try {
     }
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js');
+    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
     const R = await import('/js/items/resourceStocks.js'), A = await import('/js/items/armor.js');
     const U = await import('/js/entityUpdatesStorage.js'), P = await import('/js/UpgradeEntity.js');
     const UI = await import('/js/GameInit.js'), S = await import('/js/GameStorage.js');
@@ -1114,8 +1114,8 @@ try {
         const row = document.querySelector(`#swap-source-${entity.id} .stat-container`);
         const before = JSON.stringify({ actors, drafts, items: S.loadEquippedItems() });
         const view = UI.getBoundHelperEntity(row);
-        const display = D.calculateStatsDisplay(stat, view);
-        const totals = D.getStatisticSourceTotals(view, stat, display);
+        const display = DDisplay.calculateStatsDisplay(stat, view);
+        const totals = DDisplay.getStatisticSourceTotals(view, stat, display);
         const equipment = totals.filter(source => source.category === 'equipment');
         const reserves = equipment.filter(source => stat === 'shift' ? source.movementKind === 'sup'
           : ['armor', 'extraLife'].includes(stat) ? source.remainingStock : true);

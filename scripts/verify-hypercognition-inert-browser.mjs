@@ -25,7 +25,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
     const model = await import('/js/attackResolution.js');
-    const calc = await import('/js/damagesCalcul.js');
+    const calc = await import('/js/damagesCalcul.js'), calcDisplay = await import('/js/ui/statDetails.js');
     const ledger = await import('/js/essenceInventory.js');
     const essences = await import('/js/essenceur.js');
     const ui = await import('/js/GameInit.js');
@@ -109,7 +109,7 @@ try {
     check(withHyper.totalDamage - withoutHyper === 180 && withHyper.details.powerSources.hypercognition === 180
       && withHyper.details.powers.magical === restoredPreview.details.powers.magical,
       'Hyper adds one full flat bonus after ratios, without being multiplied by Psionic');
-    check(calc.calculateStatsDisplay('magicalDamage', owner).displayValue === 20
+    check(calcDisplay.calculateStatsDisplay('magicalDamage', owner).displayValue === 20
       && owner.stats.intelligence === 10 && owner.stats.magicalDamage === 20,
       'Displayed magical power excludes the separate flat bonus and leaves raw stats intact');
     const inertHyper = calc.calculateAttackDamagePreview(owner, inert);
@@ -176,7 +176,7 @@ try {
     target.stats.physicalResistance = 0; target.stats.magicalResistance = 0;
     applyDamage(target, 10, owner, { ...equipped, forceDamageSources: { magical: 10 } }, { magical: 10 });
     check(getEntityCombatDetails(owner).hypercognitionDamage === 10, 'Hypercognitive attacks record actual damage, not an invented separate bonus');
-    const helper = calc.calculateStatsDisplay('hypercognition', owner);
+    const helper = calcDisplay.calculateStatsDisplay('hypercognition', owner);
     check(JSON.stringify(helper).includes('essence-hyperco'), 'The Hypercognition helper contains the essence pictogram');
     const helperHost=document.createElement('div');helperHost.innerHTML=helper.helpContent;
     const helperText=helperHost.textContent.replace(/\s+/g,' ');
@@ -190,7 +190,7 @@ try {
       && helperHost.querySelector('.picto-stat.hypercognition')
       && !/chasse|recalcule|ench\u00e2ss|retire|maximum/.test(helper.helpContent),
       'The current Umbra helper retains its two capacities, lore and dynamic values');
-    const overrideHelper = calc.calculateStatsDisplay('hypercognition', owner, 1);
+    const overrideHelper = calcDisplay.calculateStatsDisplay('hypercognition', owner, 1);
     check(overrideHelper.hypercognitionBonus === 6 && overrideHelper.hypercognitionRatio === .5
       && overrideHelper.hypercognitionEssences === 1,
       'A stat preview override uses the same value for its bonus, ratio and essence count');

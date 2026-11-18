@@ -28,7 +28,7 @@ try {
   await page.evaluate(async () => {
     const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
     const UI = await import('/js/GameInit.js'), U = await import('/js/UpgradeEntity.js');
-    const D = await import('/js/damagesCalcul.js'), S = await import('/js/entite/statSystem.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'), S = await import('/js/entite/statSystem.js');
     const H = await import('/js/data/helpers.js');
     const P = await import('/js/items/permanentItems.js'), M = await import('/js/items/itemManager.js');
     const State = await import('/js/gameState.js');
@@ -109,11 +109,11 @@ try {
         const actualRow = S.getStatSystemResult(view, choice.stat);
         const expectedRow = S.getStatSystemResult(expected, choice.stat);
         if (actualRow && expectedRow) check(actualRow.value === expectedRow.value, 'Helper model includes the gain and pending preview once');
-        const expectedModels = D.calculateStatsDisplay(choice.stat, expected).umbraHelperCalculations || {};
+        const expectedModels = DDisplay.calculateStatsDisplay(choice.stat, expected).umbraHelperCalculations || {};
         for (const [key, model] of Object.entries(helper._umbraCalculations || {})) {
           if (expectedModels[key]) check(model.value === expectedModels[key].value, `${key}: pinned calculation is current`);
         }
-        const totals = D.getStatisticSourceTotals(view, choice.stat, D.calculateStatsDisplay(choice.stat, view));
+        const totals = DDisplay.getStatisticSourceTotals(view, choice.stat, DDisplay.calculateStatsDisplay(choice.stat, view));
         if (actualRow) check(Math.abs(totals.reduce((sum, row) => sum + row.value, 0) - actualRow.value) < 1e-5, 'Source totals reconcile without duplicate gains');
         if (choice.anchor === 'total' && actualRow) {
           const exclusive = [...detail.querySelectorAll('[data-contribution-value]')];

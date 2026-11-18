@@ -71,6 +71,37 @@ try {
     return failures;
   });
   assert.deepEqual(failures, []);
+  const feedback = await page.evaluate(async () => {
+    const F = await import('/js/rendering/damageFeedback.js');
+    const id = 'damage-feedback-audit';
+    const host = document.createElement('section');
+    host.innerHTML = `<div id="PopDow_${id}" class="combat-popup-status"></div><div id="effectsContainer_${id}"></div>`;
+    document.body.append(host);
+    const target = { id, name: 'Feedback', stats: { HP: { current: 50, max: 100 }, armor: { current: 9, max: 9 } } };
+    const before = JSON.stringify(target);
+    const result = Object.freeze({ indestructPercent: 40, minIndestructFloor: 0, roll: 10, success: false });
+    F.presentIndestructibilityResult(target, result);
+    const noFalseProc = !host.querySelector('.indestructibility');
+    F.presentIndestructibilityResult(target, { ...result, success: true });
+    F.presentEsoterismResult(target, { esoterismPercent: 40, roll: 10, success: true });
+    F.presentDodgeResult(target, target, { partial: true, boostedDodgeFlat: 0, boostedDodgePercent: 0,
+      baseDodgePercent: 40, totalDodgePercent: 40, precisionPercent: 0, adjustedDodgeChance: 40,
+      adjustedHitChance: 60, roll: 10, dodgeSuccess: true });
+    F.showResilienceCancellation(target, 'resilienceCancel');
+    F.presentBrokenSpell(target, 12.5);
+    F.AmbidextryVFX(target);
+    F.presentExecutionImpact(target);
+    F.attemptBattleRegen(target, 17);
+    const effects = ['indestructibility', 'esoterism', 'resilience', 'broken-spell', 'ambidextry', 'bloodfuryexec'];
+    const checks = { noFalseProc, visuals: effects.every(name => host.querySelector('img.' + name)),
+      partialDodge: host.textContent.includes('Esquive partielle !'),
+      resilience: host.textContent.includes('Résilience totale !'),
+      regen: host.querySelector('.battle-regen-hp-vfx')?.textContent.trim() === '+17 HP',
+      unchanged: JSON.stringify(target) === before, resultUnchanged: result.success === false };
+    host.remove();
+    return checks;
+  });
+  assert.ok(Object.values(feedback).every(Boolean), JSON.stringify(feedback));
   await page.screenshot({ path: resolve(output, 'nature-and-totals.png') });
   assert.deepEqual(errors, []);
   console.log('PASS damage popups: eight nature colors, critical icons and !!!, size tiers, execution criticals, zero damage, armor + HP totals, separate armor notice and unchanged gameplay data.');

@@ -1,7 +1,10 @@
 import { effectProvenance } from './effectRules.js';
 import { evaluateAttackEffect } from './effectParameters.js';
 import { getAttackEffect } from './data/attackEffects.js';
-import { getActionElapsed, getMovementElapsed, getPhaseElapsed, isEntityActionPaused, isEntityMovementBlocked } from './entityControl.js';
+import {
+  getActionElapsed, getMovementElapsed, getPhaseElapsed, isEntityActionPaused,
+  isEntityMovementBlocked
+} from './entityControl.js';
 import { removeCombatVisualAfter } from './combatClock.js';
 import { setTimeout, requestAnimationFrame, clockNow } from './combatClock.js';
 import { combatNow, combatDelay, deferCombatDeath } from './combatTimeline.js';
@@ -9,29 +12,15 @@ import { gameStorage as localStorage } from './sessionStorage.js';
 import { cachedResourceUrl } from "./data/loaderList.js";
 import { consumeFadedLife, consumeRechargeableLife } from './items/resourceStocks.js';
 import {
-  createAttackStatView,
-  toNumber,
-  attemptAttackerDamages,
-  attemptIndestructibility,
-  attemptEsoterism,
-  attemptAstrality,
-  attemptBloodFuryExec,
-  calculateBloodFuryTargetThreshold,
-  calculateBloodFuryExecutionPercent,
-  attemptCriticalHit,
-  attemptResilience,
-  attemptAlterationResistance, isAlterationEffect, isHindranceEffect,
-  attemptResilienceCritReduction, reduceCriticalSupplement, prepareResilienceEffect,
-  calculateExtraLifeResurrect,
-  attemptTranscendenceConsoProtection,
-  calculateRangeRatio,
-  caluclateIndestructibilityReductionTotal,
-  calculateEsoterismtotalReduction,
-  calculateMysticismTotalDamageBonus,
-  calculateOccultismShadowFragilityPercent,
-  calculateResilienceCritTotalBonus,
-  calculateResilienceAlterationTotalBonus,
-} from "./damagesCalcul.js";
+  createAttackStatView, toNumber, attemptAttackerDamages, attemptIndestructibility,
+  attemptEsoterism, attemptAstrality, attemptBloodFuryExec, calculateBloodFuryTargetThreshold,
+  calculateBloodFuryExecutionPercent, attemptCriticalHit, attemptResilience, attemptAlterationResistance,
+  isAlterationEffect, isHindranceEffect, attemptResilienceCritReduction, prepareResilienceEffect,
+  calculateExtraLifeResurrect, attemptTranscendenceConsoProtection, calculateRangeRatio, caluclateIndestructibilityReductionTotal,
+  calculateEsoterismtotalReduction, calculateMysticismTotalDamageBonus, calculateOccultismShadowFragilityPercent, calculateResilienceCritTotalBonus,
+  calculateResilienceAlterationTotalBonus
+} from './damagesCalcul.js';
+import { reduceCriticalSupplement } from './combat/damageRules.js';
 import { checkGameOver, OrderEntity} from './gameState.js';
 import {
   entites,

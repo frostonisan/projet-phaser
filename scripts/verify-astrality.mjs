@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js');
+const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
 const S=await import('../docs/js/entite/statSystem.js');
 const P=globalThis.umbraProgression;
 let checks=0;
@@ -35,7 +35,7 @@ for(const limit of [150,300])for(const a of [0,1,50,150,200,1000])for(const i of
  eq(D.calculateAstralCooldown(e).seconds,lab.results.fatalSurvival.cooldownDetails.seconds,'Maj common cooldown matches engine');
  eq(D.calculateAstralBody(e).seconds,lab.results.astralBody.bodyDetails.seconds,'Maj body duration');
  const parts=L.contributions(lab.results.fatalSurvival,'maj');eq(parts.fixed+parts.plus+parts.umbra,fatal.value,'No duplicate autonomous ratio');
- const h=D.calculateStatsDisplay('astrality',e);
+ const h=DDisplay.calculateStatsDisplay('astrality',e);
  ok(!/NaN|undefined/.test(h.helpContent),'Valid markup');
  ok(h.helpContent.includes('data-umbra-passive="astralBody"'),'Exclusive body card');
  ok(h.helpContent.includes('data-umbra-capacity="astralReturn"'),'Return card');

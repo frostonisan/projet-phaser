@@ -1,3 +1,4 @@
+import { splitDamageByNature } from './combat/damageRules.js';
 import { ATTACK_POWER_RATIO_FIELDS, ATTACK_ARRAY_KEYS, ATTACK_RUNTIME_STATE_KEYS, ENTITY_ATTACK_MODIFIER_LAYERS, ATTACK_ESSENCE_CONTENT_SOURCES, ATTACK_NATURE_TO_ESSENCE_COLORS, ATTACK_ESSENCE_COLOR_ALIASES } from './data/attackList.js';
 export { ENTITY_ATTACK_MODIFIER_LAYERS } from './data/attackList.js';
 import { isCombatInteractionBlocked, notifyCombatAction } from './combatClock.js';
@@ -699,18 +700,7 @@ export function getAttackResonance(attack, physicalPower, magicalPower) {
 }
 
 export function splitAttackNatureAmount(attack, amount) {
-  const { profile, key } = getAttackNatureRules(attack);
-  const value = Math.max(0, Number(amount) || 0);
-  const sources = { physical: 0, magical: 0, piercingDamage: 0, hybridalDamage: 0 };
-  if (key === 'hybrid') sources.hybridalDamage = value;
-  // Inert hits use the existing physical transport channel, with both defenses at resolution.
-  else if (key === 'none') sources.physical = value;
-  else if (profile.total) {
-    sources.physical = value * profile.red / profile.total;
-    sources.magical = value * profile.blue / profile.total;
-    sources.piercingDamage = value * profile.yellow / profile.total;
-  }
-  return sources;
+  return splitDamageByNature(getAttackNatureRules(attack), amount);
 }
 
 // A single dodge removes only the non-magical part of an impact.
