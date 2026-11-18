@@ -1,0 +1,2103 @@
+/* Affectations et keyframes centralisees depuis style.css. */
+.dialogue-continue .label:hover,.dialogue-continue-icon:hover {
+  animation: glowPulseFast 2s infinite;
+}
+.dialogue-choice .label:hover {
+  animation:textGlowPulseFast 2.4s ease-in-out infinite;
+}
+.dialogue-lore-image:hover {
+  animation: straighten 15s ease-in-out forwards;
+}
+.experience-01 {
+  animation: Consommablepulse 1s infinite ease-in-out, spin 10s linear infinite;
+}
+.experience-02 {
+  animation: Consommablepulse 10s infinite ease-in-out, spin 3s linear infinite;
+}
+.animation-sprite.dodge {
+  animation: dodgeEffectA 0.6s ease-out;
+}
+.dead.hbox {
+  animation: deathblink 2s forwards;
+}
+.atb-fill.cooldown-wait-pulse,
+.headsup-atb-fill.cooldown-wait-pulse,
+.atb-scan-fill.cooldown-wait-pulse {
+  animation: cooldownWaitAtbPulse 440ms ease-out;
+}
+
+@keyframes cooldownWaitAtbPulse {
+  0%, 100% { background-color: #FFD700; }
+  42%, 68% { background-color: #999; }
+}
+.atb-fill.target-search-pulse,
+.headsup-atb-fill.target-search-pulse,
+.atb-scan-fill.target-search-pulse {
+  animation:targetSearchAtbPulse 440ms ease-out;
+}
+
+@keyframes targetSearchAtbPulse {
+  0%, 100% { background-color:#FFD700; }
+  42% { background-color:#18a8ff; }
+  68% { background-color:#55c7ff; }
+}
+.target-search-indicator--searching {
+  animation:targetSearchMagnifier 1.2s ease-in-out infinite;
+}
+.target-search-indicator--failed {
+  animation:targetSearchFailed 620ms ease-out both;
+}
+
+@keyframes targetSearchMagnifier {
+  0%, 100% { transform:translateX(-50%) translate(-2px, 1px) rotate(-8deg); }
+  50% { transform:translateX(-50%) translate(3px, -2px) rotate(10deg); }
+}
+
+@keyframes targetSearchFailed {
+  0% { opacity:0; transform:translateX(-50%) translateY(-5px) scale(0.65); }
+  65% { opacity:1; transform:translateX(-50%) translateY(1px) scale(1.08); }
+  100% { opacity:1; transform:translateX(-50%) translateY(0) scale(1); }
+}
+.armor-fill::after {
+  animation: metallicPulse 3s ease-in-out infinite;
+}
+.attack-bar-fill.execution {
+  animation-name: blink;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+.attack-image.attack-executed {
+  animation: attackBoom 1s ease-out;
+}
+.role-img {
+  animation: GrowHexIcon 0.7s forwards;
+}
+.role-img.lord.last-target {
+  animation: blink 1s infinite;
+}
+.lord-focuslisting-target {
+  animation: Consommablepulse 1s infinite ease-in-out, grow 0.4s ease-in-out;
+}
+.TargetInfos.focused {
+  animation: floatingBuff 4s ease-in-out infinite;
+}
+/* Pour 2 détails */
+.detail-total-2.detail-1 {
+  animation-name: floatUpLeft;
+}
+.detail-total-2.detail-2 {
+  animation-name: floatUpRight;
+}
+/* Pour 3 détails */
+.detail-total-3.detail-1 {
+  animation-name: floatUpLeft;
+}
+.detail-total-3.detail-2 {
+  animation-name: floatUpRight
+}
+.detail-total-3.detail-3 {
+  animation-name: moveUp;
+}
+/* Pour 4 détails */
+.detail-total-4.detail-1 {
+  animation-name: floatUpRight
+}
+.detail-total-4.detail-2 {
+  animation-name: floatUpRight
+}
+.detail-total-4.detail-3 {
+  animation-name: moveRight;
+}
+.detail-total-4.detail-4 {
+  animation-name: moveLeft;
+}
+.focus-listing.Support .entite-role-detail-listing .entity-role-listing.target-zone::before {
+  animation: SoftPulsation 2.5s infinite ease-in-out;
+}
+.focus-listing.Attaquant .entite-role-detail-listing .entity-role-listing.target-zone::before {
+  animation: SoftPulsation 2.5s infinite ease-in-out;
+}
+.img-container.lord {
+  animation: dropShadowAnimation 3s infinite alternate;
+}
+.sprite-container.focused {
+  animation: focusedEntity 2s infinite alternate;
+}
+.sprite-container.B.focused {
+  animation: targetableEntitySideB 2s infinite alternate;
+}
+.sprite-container.targetable {
+  animation: targetableEntity 2s infinite alternate;
+}
+.sprite-container.supportable {
+  animation: supportableEntity 2s infinite alternate;
+}
+.hex.summonable .socle {
+  animation: summonableHex 2s infinite alternate;
+}
+.loading-h2.loaded {
+  animation: blink 2s infinite;
+}
+/* Déverrouillage du coffre : styles/animations uniquement. */
+
+.chest-unlock-shake {
+  animation: rotationchesthover 0.2s infinite ease-in-out;
+}
+.chest-sprite:has(.chest-unlocking-animation) {
+  animation: glowPulseUnlocking 2s infinite;
+}
+.chest-animation:has(.chest-unlocking-animation) {
+  animation: hardBounceRotate 0.35s ease-in-out;
+}
+/* .entite-loot-img{ */
+  /* width: 320px; */
+  /* height: 320px; */
+  /* text-align: center; */
+  /* color: #fff; */
+  /* background-size: cover; */
+  /* background-position: center;} */
+
+.entityLoot-img-container {
+  animation: dropShadowAnimation 3s infinite alternate;
+}
+.axis-line.can-invest {
+  animation: levelUpAttributeReadyPulse 4.8s ease-in-out infinite;
+}
+.umbra-ornement--blink {
+  animation: umbraSoftBlink var(--umbra-blink-duration) ease-in-out infinite;
+  animation-delay: var(--umbra-blink-delay);
+}
+.umbra-ornement.lvl-3.umbra-visible {
+  animation:
+    umbraFadeIn 2s ease-out forwards,
+    umbraLvl3Blink var(--umbra-lvl3-blink-duration, 4200ms) ease-in-out infinite;
+
+  animation-delay:
+    0s,
+    2s;
+}
+.chest-animation:has(.chest-loot.lootable.never-opened) {
+  animation: glowPulseLoot 2s infinite;
+}
+.chest-animation:has(.chest-loot.lootable.critical.cracked:hover) {
+  animation: glowPulseLootCritical 2s infinite;
+}
+.chest-animation:has(.chest-loot.lootable:hover) {
+  animation: glowPulseLoot 2s infinite;
+}
+.chest-animation:hover:has(.chest-loot.locked) {
+  animation: glowPulseLootLock 2s infinite;
+}
+.chest-loot.locked {
+  animation: chestAutoPulse 5s infinite ease-in-out;
+}
+.chest-animation:has(.chest-loot.spawn) {
+  animation: rotationchest 2s infinite ease-in-out, vibratechest 0.5s infinite linear;
+}
+.chest-animation:has(.chest-loot.is-prepared) {
+  animation: chest-angry-opening 0.5s linear infinite;
+}
+.chest-animation:has(.chest-loot.is-opened) {
+  animation: bounceRotate 0.4s ease-in forwards;
+}
+.chest-animation:has(.chest-loot.is-looted) {
+  animation:
+    chest-angry-opening 0.5s linear infinite,
+    chest-grow-opening 1.5s ease-in forwards;
+}
+.chest-container.spawn > .chest-animation {
+  animation: jumpchest 2s infinite ease-in-out, rotationchest 0.5s infinite ease-in-out;
+}
+.GameOverMessage .IngameAlert.victory-msg {
+  animation: gameOutcomeZoof 2s ease-in-out forwards;
+}
+/* Hover actif uniquement hors apparition et hors ouverture */
+.chest-container:not(.entrance)
+.chest-sprite:hover:not(:has(> .chest-loot.opening)):not(:has(> .chest-loot.destroyed)) {
+  animation: rotationchesthover 0.2s infinite ease-in-out;
+}
+.chest-container:not(.entrance)
+:not(:has(.chest-loot.opening))
+.chest-animation:has(.chest-sprite:hover) {
+  animation: chestpulse 3s infinite ease-in-out;
+}
+/* Animation d'apparition */
+.chest-container.entrance .chest-animation {
+  animation: bounce-in-top 2s ease-in-out !important;
+}
+/* Animation d'ouverture */
+.chest-animation:has(.chest-loot.opening) {
+  animation: chest-opening-animation 0.5s forwards;
+}
+.level-purify-button {
+  animation: glowBackDivine 5s infinite;
+}
+.xp-arrow.right-arrow {
+  animation: Consommablepulse 2s infinite ease-in-out, pulse 1.5s infinite;
+}
+
+@keyframes levelUpAttributeReadyPulse {
+  0%, 100% {
+    background:
+      linear-gradient(90deg, transparent, rgba(255, 214, 112, 0.025), transparent),
+      rgba(0, 0, 0, 0.18);
+    box-shadow: inset 0 0 0 rgba(255, 194, 47, 0);
+  }
+  50% {
+    background:
+      linear-gradient(90deg, transparent, rgba(255, 224, 140, 0.075), transparent),
+      rgba(31, 24, 5, 0.18);
+    box-shadow:
+      inset 0 0 18px rgba(255, 214, 112, 0.045),
+      0 0 18px rgba(255, 214, 112, 0.035);
+  }
+}
+.attack-essence-popup-equipped.universal .attack-essence-equipped-orb .essence-item-sprite-img.essence-agility-02,
+.attack-essence-popup-equipped.universal .attack-essence-equipped-orb .essence-item-sprite-img.essence-strength-02 {
+  animation: essenceSpriteFrontPulse 5s ease-in-out infinite, essenceSpriteFrontSpin 25s linear infinite;
+}
+.attack-essence-popup-equipped.universal .attack-essence-equipped-orb .essence-item-sprite-img.essence-agility-03,
+.attack-essence-popup-equipped.universal .attack-essence-equipped-orb .essence-item-sprite-img.essence-strength-03 {
+  animation: essenceSpriteBackPulse 6s ease-in-out infinite, essenceSpriteBackSpin 34s linear infinite;
+}
+.essence-item-sprite-img.essence-agility-02,
+.essence-item-sprite-img.essence-strength-02 {
+  animation: essenceSpriteFrontPulse 15s ease-in-out infinite, essenceSpriteFrontSpin 35s linear infinite;
+}
+.essence-item-sprite-img.essence-agility-03,
+.essence-item-sprite-img.essence-strength-03 {
+  animation: essenceSpriteBackPulse 15s ease-in-out infinite, essenceSpriteBackSpin 50s linear infinite;
+}
+.essence-item-sprite-nature.empty {
+  animation: essenceEmptySlowSpin 95s linear infinite;
+}
+
+
+@keyframes essenceEmptySlowSpin {
+  0% { transform: rotate(0deg) scale(0.92); }
+  50% { transform: rotate(180deg) scale(1.04); }
+  100% { transform: rotate(360deg) scale(0.92); }
+}
+
+
+@keyframes essenceSpriteBackSpin {
+  0% { transform: translate(-50%, -50%) rotate(0deg) scale(0.9); }
+  50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.08); }
+  100% { transform: translate(-50%, -50%) rotate(360deg) scale(0.9); }
+}
+
+
+@keyframes essenceSpriteFrontSpin {
+  0% { transform: translate(-50%, -50%) rotate(360deg) scale(0.82); }
+  50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.02); }
+  100% { transform: translate(-50%, -50%) rotate(0deg) scale(0.82); }
+}
+
+
+@keyframes essenceSpriteBackPulse {
+  0%, 100% { opacity: 0.96; }
+  50% { opacity: 1; }
+}
+
+
+@keyframes essenceSpriteFrontPulse {
+  0%, 100% { opacity:0.98; }
+  50% { opacity: 1; }
+}
+.sprite.runaway {
+  animation: runawayBounce 0.6s ease-in-out infinite;
+}
+.order-exclamation {
+  animation: dropIn 0.4s ease-out forwards, shake 0.2s infinite ease-in-out;
+}
+.hudbattletexte.runaway {
+  animation: dropIn 0.4s ease-out forwards, shake 0.2s infinite ease-in-out;
+}
+.order {
+  animation: jumpOnPlace 0.4s ease-in-out infinite;
+}
+.runaway-animate {
+  animation: runaway-shift 1s forwards;
+}
+.runaway-info {
+  /* filter: drop-shadow(0px 0px 2px rgb(255, 255, 255)); */
+  animation: popFade 0.3s ease-out, runawayBlink 0.5s ease-in-out infinite;
+}
+.game-over-decor-container {
+  animation: softblink 4s ease-in-out infinite;
+}
+.item-wrapper.selected {
+  animation: bounceOnce 0.5s ease;
+}
+.seller-button.buy {
+  animation: glowPulseFast 2s infinite;
+}
+.seller-button.buy:hover {
+  animation: glowFast 1.5s infinite;
+}
+.stuff-slot:not(.equiped) {
+  animation: glowSlow 2.5s infinite;
+}
+.game-popup-backdrop {
+  animation: inventoryTransferMessageFadeIn var(--popup-enter-duration, 250ms) ease-out forwards;
+}
+.game-popup-layer.is-leaving .game-popup-backdrop {
+  animation: inventoryTransferMessageFadeOut var(--popup-exit-duration, 1500ms) ease forwards;
+}
+.inventory-transfer-message {
+  animation: inventoryTransferMessageFadeIn var(--popup-enter-duration, 250ms) ease-out forwards;
+}
+.inventory-transfer-message.is-leaving {
+  animation: inventoryTransferMessageFadeOut var(--popup-exit-duration, 1500ms) ease forwards;
+}
+
+
+@keyframes inventoryTransferMessageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+
+@keyframes inventoryTransferMessageFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.inventory-item-icon:hover {
+  animation: glowPulseFast 1.5s infinite;
+}
+.quality-1 .inventory-item-icon, .quality-1 .item-icon,.quality-1.equipped-item-icon {
+  animation: glowFastCommon 2.5s infinite;
+}
+.quality-2 .inventory-item-icon, .quality-2 .item-icon,.quality-2.equipped-item-icon {
+  animation: glowFastUncommon 2.5s infinite;
+}
+.quality-3 .inventory-item-icon, .quality-3 .item-icon,.quality-3.equipped-item-icon {
+  animation: glowFastRare 2.5s infinite;
+}
+.quality-4 .inventory-item-icon, .quality-4 .item-icon,.quality-4.equipped-item-icon {
+  animation: glowFastEpic 2.5s infinite;
+}
+.quality-5 .inventory-item-icon, .quality-5 .item-icon,.quality-5.equipped-item-icon {
+  animation: glowFastLegendary 2.5s infinite;
+}
+.quality-6 .inventory-item-icon, .quality-6 .item-icon,.quality-6.equipped-item-icon {
+  animation: glowFastMythic 2.5s infinite;
+}
+.quality-7 .inventory-item-icon, .quality-7 .item-icon, .quality-7.equipped-item-icon {
+  animation: glowFastCommon 2.5s infinite;
+}
+.draggeditem {
+  animation: glowPulseFast 1.5s infinite;
+}
+.codex-entity-list.drag-over .codex-entity-sprite {
+  animation: glowPulseFast 1.5s infinite;
+}
+.TonkotsuRamen {
+  animation: glowFast 2.5s infinite;
+}
+.stuff-slot.drag-over {
+  animation: glowPulseFast 2s infinite;
+}
+.stuff-slot.drag-over.drop-no-equip {
+  animation: none;
+}
+.glitter {
+  animation: glitter-fade var(--speed, 2000ms) ease-in-out forwards;
+}
+.glitter-loot-container > .glitter-loot {
+  animation: glitterLootFloat var(--duration) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+.battle-ground-item {
+  animation: battleGroundItemFloat 3.8s ease-in-out infinite;
+}
+.battle-item-drop-recipient {
+  animation: battleItemRecipientGlow .8s ease-in-out infinite alternate;
+}
+.glitter-loot-container.is-dispersing > .glitter-loot.is-dispersing {
+  animation: glitterLootDisperse var(--burst-duration) cubic-bezier(.22, .61, .36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+.glitter-loot {
+  animation: none;
+}
+}
+.btn.levelup-btn {
+  animation: glowFast 2s infinite;
+}
+.btn.levelup-btn:hover {
+  animation: glowFast 1.5s infinite;
+}
+.levelup-icon {
+  animation: glowFast 2s infinite;
+}
+.attribut-eclipse {
+  animation: glowFast 2s infinite;
+}
+.attribut-entitySoul.one {
+  animation: spin 17s linear infinite;
+}
+.attribut-entitySoul.two {
+  animation: spin 50s linear infinite;
+}
+.stray .attribut-circleSoul {
+  animation: spin 30s linear infinite;
+}
+.attribut-circleSoul {
+  animation: none;
+}
+.eternalLife.animate {
+  animation: heartsoul 1.25s ease-in-out infinite, eternalLifePulse 1.25s ease-in-out infinite;
+}
+.picto-stat.eternalLife.inactive {
+  animation: vibrasoul 4s ease-in-out infinite;
+}
+.ex-picto--ready {
+  animation: extra-life 3.2s ease-in-out infinite alternate;
+}
+.anim-extraLife {
+  animation: extra-life 3.2s ease-in-out infinite alternate,softblink 4s ease-in-out infinite;
+}
+.anim-eternalLife {
+  animation: heartsoul 1.75s ease-in-out infinite, eternalLifePulse 1.75s ease-in-out infinite,softblink 6s ease-in-out infinite;
+}
+.faded-life {
+  animation: faded-life 0.2s ease-in-out infinite;
+}
+.anim-fadedLife {
+  animation: faded-life 0.2s ease-in-out infinite,softblink 3s ease-in-out infinite;
+}
+.archetype-title.changed {
+  animation: fallFromSky 0.8s ease-out forwards;
+}
+.milestone.attaque.lvl-3 {
+  animation: glowFastMythic 1.5s infinite;
+}
+.milestone.defense.lvl-3 {
+  animation: glowFastRare 1.5s infinite;
+}
+.milestone.utilitaire.lvl-3 {
+  animation: glowFastEpic 1.5s infinite;
+}
+.milestone.mutation.lvl-3 {
+  animation: glowFastUncommon 1.5s infinite;
+}
+.milestone.broken.lvl-3 {
+  animation: glowFastLegendary 1.5s infinite;
+}
+.milestone.lvl-3.has-essence-reward {
+  animation: none;
+}
+.milestone-essence.essence-item-card {
+  animation: milestoneEssenceFloat var(--essence-float-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--essence-float-delay, 0s);
+}
+.milestone-essence .essence-item-sprite-img.essence-agility-02,
+.milestone-essence .essence-item-sprite-img.essence-strength-02 {
+  animation-duration: var(--essence-front-pulse-duration, 15s), var(--essence-front-spin-duration, 35s);
+  animation-delay: var(--essence-front-pulse-delay, 0s), var(--essence-front-spin-delay, 0s);
+}
+.milestone-essence .essence-item-sprite-img.essence-agility-03,
+.milestone-essence .essence-item-sprite-img.essence-strength-03 {
+  animation-duration: var(--essence-back-pulse-duration, 15s), var(--essence-back-spin-duration, 50s);
+  animation-delay: var(--essence-back-pulse-delay, 0s), var(--essence-back-spin-delay, 0s);
+}
+
+
+@keyframes milestoneEssenceFloat {
+  0%, 100% { transform: translate(-50%, calc(-50% + 2px)); }
+  50% { transform: translate(-50%, calc(-50% - 3px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+.milestone-essence.essence-item-card,
+  .milestone-essence .essence-item-sprite-img {
+  animation: none;
+}
+}
+.codex-entity-sprite-container .levelup-icon {
+  animation: blink 2.5s infinite;
+}
+.codex-inner-menu .levelup-icon {
+  animation: blink 2.5s infinite;
+}
+.archetype-icon.preview {
+  animation: mediumPulse 1.5s ease-in-out infinite;
+}
+/* Halo */
+.archetype-icon.leveled::after {
+  /* pour passer derrière */
+    animation: clonePulse 1s ease-out;
+}
+.day-log {
+  animation: fadeIn 0.6s ease forwards;
+}
+.attack-bar-fill.preparation.mysticism-accelerated {
+  animation-name: mysticismBarBlink !important;
+  animation-duration: 0.45s !important;
+  animation-timing-function: linear !important;
+  animation-iteration-count: infinite !important;
+}
+.Attaquant .attack-bar-fill.preparation.occultism-slowed,
+.Defenseur .attack-bar-fill.preparation.occultism-slowed,
+.hud-ingame .attack-bar-fill.preparation.occultism-slowed,
+.attack-bar-fill.preparation.occultism-slowed {
+  animation-name: occultismBarSlowBlink !important;
+  animation-duration: 1.6s !important;
+  animation-timing-function: ease-in-out !important;
+  animation-iteration-count: infinite !important;
+}
+.movement-refill-pop {
+  animation: movementRefillPop 180ms ease-out;
+}
+.battle-regen-hp-vfx {
+  animation: battleRegenHpRise 1.2s ease-out forwards;
+}
+.essenceur-purchase-orb .essence-item-sprite-img.essence-agility-02,
+.essenceur-purchase-orb .essence-item-sprite-img.essence-strength-02,
+.inventory-essence-universal-orb .essence-item-sprite-img.essence-agility-02,
+.inventory-essence-universal-orb .essence-item-sprite-img.essence-strength-02 {
+  animation: essenceSpriteFrontPulse 5s ease-in-out infinite, essenceSpriteFrontSpin 25s linear infinite;
+}
+.attack-mastery-levelup {
+  animation: attackMasteryLevelUp 2s ease-out forwards;
+}
+
+@keyframes attackMasteryLevelUp {
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(.95); }
+  15%, 70% { opacity: 1; transform: translate(-50%, -10px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -25px); }
+}
+@media (prefers-reduced-motion: reduce) {
+.attack-mastery-levelup {
+  animation-name: attackMasteryLevelUpReduced;
+}
+}
+
+@keyframes attackMasteryLevelUpReduced { 0%, 85% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; transform: translateX(-50%); } }
+
+
+/* Définition des keyframes */
+@keyframes jumpchest {
+  0% {
+    top: 5%; /* Position au sol */
+  }
+  44% {
+    top: 5%; /* Montée dans les airs */
+  }
+  50% {
+    top: 2%; /* Montée dans les airs */
+  }
+  52% {
+    top: 6%; /* Montée dans les airs */
+  }
+  56% {
+    top: 5%; /* Montée dans les airs */
+  }
+  100% {
+    top: 5%; /* Retour au sol */
+  }
+}
+@keyframes runawayBounce {
+  0%   { transform: translateY(0); }
+  30%  { transform: translateY(-8px); }
+  50%  { transform: translateY(0); }
+  70%  { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+@keyframes rotationchesthover {
+  0% {
+   transform: rotate(0deg); /* Position au sol */
+  }  10% {
+    transform: rotate(2deg); /* Montée dans les airs */
+  }  20% {
+   transform: rotate(4deg); /* Montée dans les airs */
+  }  30% {
+    transform: rotate(2deg); /* Montée dans les airs */
+  }  40% {
+    transform: rotate(0deg); /* Montée dans les airs */
+  }50% {
+    transform: rotate(-2deg); /* Montée dans les airs */
+  }  60% {
+    transform: rotate(-4deg); /* Retour au sol */
+  }70% {
+    transform: rotate(-2deg); /* Retour au sol */
+  }80% {
+    transform: rotate(0deg); /* Retour au sol */
+  }90% {
+    transform: rotate(0deg); /* Retour au sol */
+  }100% {
+    transform: rotate(0deg); /* Retour au sol */
+  }
+}
+
+@keyframes straighten {
+  0% {
+    rotate: -8deg;
+    left:80px;
+  }
+
+ 20% {
+    rotate: 8deg;
+  }
+
+  100% {
+    rotate: 8deg;
+    left:-20px;
+  }
+}
+
+@keyframes rotationchest {
+  0% {
+   transform: rotate(0deg); /* Position au sol */
+  }
+  44% {
+    transform: rotate(0deg); /* Montée dans les airs */
+  }
+  40% {
+   transform: rotate(1deg); /* Montée dans les airs */
+  }
+  52% {
+    transform: rotate(3deg); /* Montée dans les airs */
+  }
+  60% {
+    transform: rotate(4deg); /* Montée dans les airs */
+  }62% {
+    transform: rotate(2deg); /* Montée dans les airs */
+  }
+  100% {
+    transform: rotate(0deg); /* Retour au sol */
+  }
+}
+@keyframes chestpulse {
+  0% {
+    transform: scale(1.2);filter: drop-shadow(0px 0 8px #ffd800)
+  }
+  25% {
+    transform: scale(1.3);filter: drop-shadow(0px 0 28px #ffd800)
+  }
+  100% {
+    transform: scale(1.2);filter: drop-shadow(0px 0 8px #ffd800)
+}}
+
+@keyframes bounce-in-top {
+  0% {
+    transform: translateY(-800px);
+    animation-timing-function: ease-in;
+    opacity: 0;
+  } 10% {
+    transform: translateY(-500px);
+    animation-timing-function: ease-in;
+    opacity: 0;
+  }
+  38% {
+    transform: translateY(0);
+    animation-timing-function: ease-out;
+    opacity: 1;
+  }
+  55% {
+    transform: translateY(-65px);
+    animation-timing-function: ease-in;
+  }
+  72% {
+    transform: translateY(0);
+    animation-timing-function: ease-out;
+  }
+  81% {
+    transform: translateY(-28px);
+    animation-timing-function: ease-in;
+  }
+  90% {
+    transform: translateY(0);
+    animation-timing-function: ease-out;
+  }
+  95% {
+    transform: translateY(-8px);
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: translateY(0);
+    animation-timing-function: ease-out;
+  }
+}
+
+@keyframes vibratechest {
+  0%, 100% {
+    transform: translateX(0); /* Pas de vibration */
+  }
+  25% {
+    transform: translateX(2px); /* Déplacement à droite */
+  }
+  50% {
+    transform: translateX(-2px); /* Déplacement à gauche */
+  }
+  75% {
+    transform: translateX(2px); /* Retour à droite */
+  }
+}
+
+@keyframes BattleTextDrop {
+    0% {
+        opacity: 1;
+        transform: translateY(0px) scale(1); /* Tombe du haut avec une taille plus grande */
+       transform-origin: center; /* Centrer la transformation */
+    }
+    
+    30% {
+        transform: translateY(0px) scale(1.5); /* Léger rebond vers le bas */
+     
+    }
+ }
+ 
+@keyframes focusedEntity {
+    0% {
+        filter: drop-shadow(0 0 1rem #bbe2ffd4);
+    }
+    100% {
+        filter: drop-shadow(0 0 1.5rem #ebf6ffd4);
+    }
+}
+
+@keyframes targetableEntity {
+    0% {
+        filter: drop-shadow(0 0 0.2rem #ff0000);
+    }
+    100% {
+        filter: drop-shadow(0 0 1.5rem #8c0000);
+    }
+}
+@keyframes targetableEntitySideB {
+    0% {
+        filter: drop-shadow(0 0 0.2rem #ff93b1);
+    }
+    100% {
+        filter: drop-shadow(0 0 1.5rem #8c0000);
+    }
+}
+
+@keyframes supportableEntity {
+    0% {
+        filter: drop-shadow(0 0 0.2rem #2844CE);
+    }
+    100% {
+        filter: drop-shadow(0 0 1.5rem #036eff);
+    }
+}
+@keyframes summonableHex {
+    0% {
+        filter: drop-shadow(0 0 0.2rem #53DE5D);
+    }
+    100% {
+        filter: drop-shadow(0 0 1.5rem #acffb2);
+    }
+}
+
+@keyframes floatingBuff {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dropShadowAnimation {
+    0% {
+        filter: drop-shadow(0 0 0.2rem #dcaa14d4);
+    }
+    100% {
+        filter: drop-shadow(0 0 1.5rem #ffdf6ea3);
+    }
+}
+@keyframes DotTextUp {
+     0% {
+        opacity: 1;
+        transform: translateY(0px) scale(1.5);
+
+  }  30% {
+        opacity: 1;
+		transform: translateY(0px) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+      transform: translateY(-4px) scale(1);
+    }
+}
+
+@keyframes floatUp {
+    0% {
+        opacity: 1; opacity: 1;
+		/* position:relative;line-height: 18px; */
+      transform-origin: center;
+		
+   }5% {
+
+		 font-size:2em;
+     }
+     30% {
+       opacity: 1;}
+     100% {
+        opacity: 0;
+		 font-size: 0.5em;
+        transform: translateY(-30px); /* L'élément monte de 30 pixels avant de disparaître */
+    }
+}
+
+@keyframes critPopFloat {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 0;
+  }
+  8%, 12% {
+    transform: translateY(-4px) scale(var(--crit-pop-peak, 2.2));
+    opacity: 1;
+  }
+  22% {
+    transform: translateY(-6px) scale(1.1);
+    opacity: 1;
+  }
+  32% {
+    transform: translateY(-8px) scale(var(--crit-pop-rebound, 1.2));
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(-16px) scale(var(--crit-pop-hold, 1));
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-38px) scale(0.9);
+    opacity: 0;
+  }
+}
+@keyframes floatUpLeft {
+     0% {
+	font-size: 1.1em;
+    transform: translate(0px, 0px);
+    opacity: 1;
+    }
+  5% {
+   
+    font-size: 1em;
+    transform: translate(10px, -10px); /* Monte */}
+  
+  10% {
+     font-size: 1.2em;
+     opacity: 1;
+    transform: translate(25px, -15px); /* Monte */
+   
+  }
+  43% {
+     opacity: 1;
+  }
+  100% {
+    font-size: 0.5em;
+    transform: translate(50px, 5px); /* Redescend */
+    opacity: 0;
+  }
+}
+
+
+@keyframes floatUpRight {
+  0% {
+    transform: translate(0px, 0px);
+    opacity: 1;
+   font-size: 1.1em;
+  }
+  5% {
+   
+    font-size: 1em;
+    transform: translate(-10px, -10px); /* Monte */}
+  
+  10% {
+     font-size: 1.1em;
+     opacity: 1;
+    transform: translate(-25px, -15px); /* Monte */
+   
+  }
+ 43% {
+     opacity: 1;
+  }
+  100% {
+    font-size: 0.5em;
+    transform: translate(-50px, 5px); /* Redescend */
+    opacity: 0;
+  }
+}
+
+/* Définition des animations */
+@keyframes moveLeft {
+    0% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(-50px); opacity: 0; }
+}
+
+@keyframes moveRight {
+    0% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(50px); opacity: 0; }
+}
+
+@keyframes moveUp {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-50px); opacity: 0; }
+}
+
+@keyframes moveUpLeft {
+    0% { transform: translate(0, 0); opacity: 1; }
+    100% { transform: translate(-30px, -50px); opacity: 0; }
+}
+
+@keyframes moveUpRight {
+    0% { transform: translate(0, 0); opacity: 1; }
+    100% { transform: translate(30px, -50px); opacity: 0; }
+}
+@keyframes Pulsation {
+  0% {
+    transform: scale(0.9);
+  }  45% {
+    transform: scale(1.3);
+  }
+    100% {
+    transform: scale(0.9);
+  }
+}
+@keyframes Zoof {
+  0% {
+    transform: translateX(-150%) scale(0.7);
+    opacity: 0;
+  } 12% {
+    transform: translateX(-20%);
+    opacity: 1;
+  } 85% {
+    transform: translateX(5%) scale(1.1);
+    opacity: 1;
+  }  100% {
+    transform: translateX(40%) scale(1.2);
+    opacity: 0;
+  }
+}
+@keyframes gameOutcomeZoof {
+  0% {
+    transform: translate(-260%, -50%) scale(0.82);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-60%, -50%) scale(1);
+    opacity: 1;
+  }
+  85% {
+    transform: translate(-30%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(260%, -50%) scale(0.9);
+    opacity: 0;
+  }
+}
+@keyframes glitterLootFloat {
+  0% {
+    transform:
+      translate3d(0, 20px, 0)
+      rotate(0deg)
+      scale(0.4);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.2;
+  }
+  25% {
+    opacity: 0.7;
+  }
+
+  70% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 0.5;
+  }
+  100% {
+    transform:
+      translate3d(
+        var(--move-x),
+        calc(var(--move-y) * -1),
+        0
+      )
+      rotate(var(--rotation))
+      scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes battleGroundItemFloat {
+  0%, 100% { transform: translate3d(0, 1px, 0); }
+  50% { transform: translate3d(0, -5px, 0); }
+}
+
+@keyframes battleItemRecipientGlow {
+  from { filter: drop-shadow(0 0 4px rgba(255, 228, 92, .55)); }
+  to { filter: drop-shadow(0 0 13px rgba(255, 238, 130, 1)); }
+}
+
+@keyframes glitterLootDisperse {
+  0% {
+    opacity: 1;
+    transform:
+      translate3d(0, 0, 0)
+      rotate(0deg)
+      scale(1);
+  }
+  70% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0.85;
+    transform:
+      translate3d(var(--burst-x), var(--burst-y), 0)
+      rotate(var(--burst-rotation))
+      scale(0.75);
+  }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeinblack {
+    to {
+        opacity: 1;
+    }
+}
+@keyframes SoftPulsation {
+  0% {
+    transform: scale(0.9);
+  }  50% {
+    transform: scale(1.1);
+  }
+    100% {
+    transform: scale(0.9);
+  }
+}
+@keyframes Consommablepulse {
+  0% {
+    transform: scale(1);filter: drop-shadow(0px 0 2px #ffd800)
+  }
+  25% {
+    transform: scale(1.05);filter: drop-shadow(0px 0 8px #ffd800)
+  }
+  100% {
+    transform: scale(1);filter: drop-shadow(0px 0 2px #ffd800)
+  }
+}
+@keyframes Profanationpulse {
+  0% {
+    transform: scale(0.8);filter: drop-shadow(0px 0 2px #BB0000)
+  }
+  25% {
+    transform: scale(1.05);filter: drop-shadow(0px 0 8px #000000)
+  }
+  100% {
+    transform: scale(0.6);filter: drop-shadow(0px 0 2px #BB0000)
+  }
+}
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes grow {
+    0% {
+        transform: scale(0);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+@keyframes GrowHexIcon {
+    0% {
+        transform:translate(-50%, -50%) scale(0);
+    }
+    90% {
+        transform: translate(-50%, -50%) scale(1);
+    } 100% {
+        transform:translate(-50%, -50%) scale(0.9);
+    }
+}
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+@keyframes softblink {
+    0%, 100% { opacity: 0.95; }
+    50% { opacity: 0.75; }
+}
+  @keyframes deathblink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+@keyframes fontpulse {
+  0%, 100% {
+    font-size: 1em; /* Taille de base */
+  }
+  50% {
+    font-size: 1.2em; /* Taille augmentée */
+  }
+}
+
+
+@keyframes dodgeEffectA {
+    0%   { transform: translateX(0) rotate(0); }
+    30%  { transform: translateX(-28px) rotate(8deg); }
+    60%  { transform: translateX(-16px) rotate(-3deg); }
+    85%  { transform: translateX(-6px) rotate(1deg); }
+    100% { transform: translateX(0) rotate(0); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.1; }
+}
+
+@keyframes chestOpenAnimation {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.5);
+    }
+}
+@keyframes rotationes {
+  from {
+    transform: rotate(0deg) scale(0);
+  }
+  to {
+    transform: rotate(360deg) scale(1.8);
+  }
+}
+@keyframes attackBoom {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0px rgba(255, 80, 80, 0));
+    opacity: 1;
+  }
+  20% {
+    transform: scale(1.25);
+    filter: drop-shadow(0 0 15px rgba(255, 80, 80, 0.6));
+  }
+  60% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 25px rgba(255, 80, 80, 0.3));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0px rgba(255, 80, 80, 0));
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+      0% { transform: translate(0px, 0px) rotate(0deg); }
+      25% { transform: translate(1px, -1px) rotate(-1deg); }
+      50% { transform: translate(-1px, 1px) rotate(1deg); }
+      75% { transform: translate(1px, 1px) rotate(0deg); }
+      100% { transform: translate(0px, 0px) rotate(-1deg); }
+    }
+	
+	@keyframes dropIn {
+  0% {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes jumpOnPlace {
+  0%   { transform: translateY(0); }
+  30%  { transform: translateY(-10px); }
+  60%  { transform: translateY(0); }
+  100% { transform: translateY(0); }
+}
+
+
+@keyframes runaway-shift {
+    0% {
+        transform: translateX(0) scaleX(-1);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(200px) scaleX(-1);
+        opacity: 0;
+    }
+}
+
+@keyframes popFade {
+  0% {
+    transform: scale(0);
+     }
+  20% {
+    transform: scale(1.1);
+     }
+  40% {
+    transform: scale(0.95);
+  }
+  60% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1);
+     }
+}
+
+@keyframes runawayBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+@keyframes glowPulseFast {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ffd800);
+  }
+  30% {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 10px #ffe700);
+  }
+
+  100% {
+    transform: scale(0.95);
+    filter: drop-shadow(0 0 4px #ffd800);
+  }
+}
+
+@keyframes textGlowPulseFast {
+  0%,
+  100% {
+    text-shadow:
+      0 0 3px rgba(255, 216, 0, 0.45),
+      0 0 8px rgba(255, 216, 0, 0.25);
+  }
+
+  50% {
+    text-shadow:
+      0 0 5px rgba(255, 231, 0, 0.75),
+      0 0 14px rgba(255, 231, 0, 0.45);
+  }
+}
+
+
+@keyframes glowPulseLoot {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ffd800);
+  }
+  20% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #ffe700);
+   }
+
+  50% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ffd800);
+   }
+
+  70% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ffd800);
+   }
+  90% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #ffe700);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ffd800);
+  }
+}
+@keyframes glowPulseLootCritical{
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ff7200);
+  }
+  20% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #ff3c00);
+   }
+
+  50% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ff7200);
+   }
+
+  70% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ff7200);
+   }
+  90% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #ff3c00);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #ff7200);
+  }
+}
+@keyframes glowPulseLootLock {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #980000);
+  }
+  20% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #ff0000);
+   }
+
+  50% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #980000);
+   }
+
+  70% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #980000);
+   }
+  90% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #ff0000);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #980000);
+  }
+}
+@keyframes glowPulseUnlocking {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #feffe2);
+  }
+  20% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #fffff2);
+   }
+
+  50% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #feffe2);
+   }
+
+  70% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #feffe2);
+   }
+  90% {
+    transform: scale(1.01);
+    filter: drop-shadow(0 0 10px #fffff2);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 4px #feffe2);
+  }
+}
+@keyframes glowFast {
+  0% {
+        filter: drop-shadow(0 0 4px #ffd800);
+  }
+  30% {
+       filter: drop-shadow(0 0 10px #ffe700);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 4px #ffd800);
+  }
+}
+@keyframes glowSlow {
+  0% {
+        filter: drop-shadow(0 0 4px var(--glow-slow-color, #ffd8007d));
+  }
+  30% {
+       filter: drop-shadow(0 0 10px var(--glow-slow-color, #ffd8007d));
+  }
+
+  100% {
+      filter: drop-shadow(0 0 4px var(--glow-slow-color, #ffd8007d));
+  }
+}
+@keyframes glowAura {
+  0% {
+    filter: drop-shadow(0 0 3px #ffd8005a);
+    opacity: 0.5;
+  }
+  30% {
+    filter: drop-shadow(0 0 5px #ffd8005a);
+    opacity: 0.8;
+  }
+  100% {
+    filter: drop-shadow(0 0 3px #ffd8005a);
+    opacity: 0.5;
+  }
+}
+@keyframes glowFastCommon {
+  0% {
+        filter: drop-shadow(0 0 1px #ffffffad);
+  }
+  30% {
+       filter: drop-shadow(0 0 3px #ffffffad);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 1px #ffffffad);
+  }
+}
+@keyframes glowFastUncommon {
+  0% {
+        filter: drop-shadow(0 0 2px #4ce055c9);
+  }
+  30% {
+       filter: drop-shadow(0 0 4x #4ce055c9);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 2px #4ce055c9);
+  }
+}
+@keyframes glowFastRare {
+  0% {
+        filter: drop-shadow(0 0 2px #0048ffb2);
+  }
+  30% {
+       filter: drop-shadow(0 0 4px #0048ffb2);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 2px #0048ffb2);
+  }
+}
+@keyframes glowFastEpic {
+  0% {
+        filter: drop-shadow(0 0 3px #c000ffb0);
+  }
+  30% {
+       filter: drop-shadow(0 0 5px #c000ffb0);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 3px#c000ffb0);
+  }
+}
+@keyframes glowFastLegendary {
+0% {
+        filter: drop-shadow(0 0 4px #ffb400bd);
+  }
+  30% {
+       filter: drop-shadow(0 0 6px #ffb400bd);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 4px #ffb400bd);
+  }
+}
+@keyframes glowFastMythic {
+ 0% {
+        filter: drop-shadow(0 0 6px #e60000e8);
+  }
+  30% {
+       filter: drop-shadow(0 0 8px #e60000e8);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 6px #e60000e8);
+  }
+}
+@keyframes glowBackDivine {
+ 0% {
+        background: rgba(104, 255, 229, 0.1);
+  }
+  30% {
+       background: rgba(104, 255, 229, 0.3);
+  }
+
+  100% {
+      background: rgba(104, 255, 229, 0.1);
+  }
+}
+@keyframes bounceOnce {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes bounceRotate {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  50% {
+    transform: scale(1.2) rotate(12deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+ @keyframes glitter-fade {
+      0% { opacity: 0; transform: scale(0.5); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0; transform: scale(0.3); }
+    }
+	
+@keyframes hardBounceRotate {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.2) rotate(20deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+} 
+@keyframes fallFromSky {
+  0% {
+    opacity: 0;
+    transform: translateY(-40px) scale(1.1);
+    color: #ff6600;
+    text-shadow: 0 0 10px rgba(255, 100, 0, 0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(5px) scale(1.05);
+    color: #ffcc00;
+    text-shadow: 0 0 15px rgba(255, 180, 0, 0.7);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    color: inherit;
+    text-shadow: none;
+  }
+}
+@keyframes metallicPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+@keyframes critPop {
+  0% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  10% {
+    transform: scale(1.5);
+    opacity: 1;
+  } 15% {
+	  transform: scale(1);
+    opacity: 1;
+   
+  } 90% {
+	  transform: scale(1);
+    opacity: 1;
+   
+  }
+  100% {
+	   transform: scale(0.8);
+
+    opacity: 0;
+   
+  }
+}
+
+@keyframes hypercognitionAura {
+  0% {
+        filter: drop-shadow(0 0 3px #C100AFCC);
+  }
+  30% {
+       filter: drop-shadow(0 0 5px #C100AFCC);
+  }
+
+  100% {
+      filter: drop-shadow(0 0 3px #C100AFCC);
+  }
+}
+
+@keyframes milestonePulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+    70% {
+        opacity: 0.15;
+    }
+    100% {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+@keyframes clonePulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    70% {
+        opacity: 1;
+    }
+    100% {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+@keyframes mediumPulse {
+    0% {
+        transform: scale(1);
+
+    }
+    50% {
+        transform: scale(0.7);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes heartsoul {
+  0%   { transform: scale(1.01); }
+  10%  { transform: scale(1.10); } /* 1er battement */
+  18%  { transform: scale(1.04); }
+  28%  { transform: scale(1.08); } /* 2e battement */
+  36%  { transform: scale(1.10); }
+  100% { transform: scale(1.15); } /* pause */
+}
+@keyframes eternalLifePulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px rgba(255,255,255,.25))
+            drop-shadow(0 0 8px rgba(255,255,255,.10));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px rgba(255,255,255,.75))
+            drop-shadow(0 0 14px rgba(255,255,255,.28));
+  }
+}
+
+@keyframes vibrasoul {
+  0%, 100% {
+    transform: translateX(0);
+opacity:1;	
+    transform: scale(1);
+    
+  }
+  25% {
+    transform: translateY(2px);
+  
+  }
+  50% {
+    transform: translateY(-1px);
+    
+	opacity:0.7;	
+  }
+  75% {
+    transform: translateY(2px); 
+      transform: scale(0.95);
+	opacity:1;	
+  }
+}
+
+.fadedLife.animate {
+  animation-name: faded-life;
+  animation-duration: var(--desync-duration, 0.468s);
+  animation-delay: var(--desync-delay, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* extraLife -> levitate */
+.extraLife.animate {
+  animation-name: extra-life;
+  animation-duration: var(--desync-duration, 4.2s);
+  animation-delay: var(--desync-delay, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes faded-life{
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25%      { transform: translate(0.5px, -0.5px) rotate(0.5deg); }
+  50%      { transform: translate(0, -0.5px) rotate(0deg); }
+  75%      { transform: translate(-0.5px, -0.5px) rotate(-0.5deg); }
+}
+@keyframes extra-life {
+  0% {
+    transform-origin: center;
+    transform: translate3d(0px, 0px, 0px)
+              rotateX(0.15deg) rotateY(-0.15deg) rotateZ(0.10deg);
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+  }
+
+  33% {
+    transform: translate3d(0.6px, 1px, 0.3px)
+              rotateX(-0.10deg) rotateY(0.20deg) rotateZ(-0.08deg);
+  }
+
+  66% {
+    transform: translate3d(-0.5px, 0.2px, -0.2px)
+              rotateX(0.20deg) rotateY(-0.10deg) rotateZ(0.06deg);
+    filter: drop-shadow(0 0 5px rgba(255, 211, 34, 0.9));
+  }
+
+  80% {
+    transform: translate3d(0.2px, -1px, 0.1px)
+              rotateX(-0.12deg) rotateY(0.12deg) rotateZ(-0.10deg);
+  }  100% {
+    transform: translate3d(0.2px, 0px, 0.1px)
+              rotateX(-0deg) rotateY(0deg) rotateZ(0deg);
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+  }
+}
+
+
+@keyframes mysticismFadeOut {
+  from {
+   transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+     }
+
+  to {
+     transform: translate(-50%, -50%) scale(0);
+
+    opacity: 0;
+  }
+}
+@keyframes mysticismScaleIn {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+   
+ opacity:0;
+  }
+
+  50% {
+   transform: translate(-50%, -50%) scale(1);
+    
+    opacity:1;
+  }
+}
+@keyframes overkillScale {
+  0%   { transform: scale(0) translateY(20px); }
+  7%   { transform: scale(1.1); }
+  10%  { transform: scale(1); }
+  100% { transform: scale(1.05)translateY(-10px); }
+}
+
+@keyframes overkillBlink {
+  0%, 70% { opacity: 1; }
+
+  74% { opacity: 0; }
+  78% { opacity: 1; }
+
+  82% { opacity: 0; }
+  86% { opacity: 1; }
+
+  89% { opacity: 0; }
+  92% { opacity: 1; }
+
+  94% { opacity: 0; }
+  96% { opacity: 1; }
+
+  100% { opacity: 0; }
+}
+@keyframes bloodCrazyPopIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes bloodCrazyAuraVibrate {
+	0% { transform: scale(1); 
+	} 8% { 
+	transform: scale(1.18); 
+	} 16% { 
+	transform: scale(1); 
+	} 26% {
+	transform: scale(1.18); 
+	} 36% {
+		transform: scale(1); 
+		} 100% { 
+		transform: scale(1.18); 
+		} } 
+		
+	@keyframes bloodCrazyConsumed { 0% { transform: scale(1); opacity: 1; } 35% { transform: scale(1.4); opacity: 1; } 100% { transform: scale(0); opacity: 0; } }
+	
+	@keyframes umbraSoftBlink {
+  0%, 100% {
+    opacity: var(--umbra-opacity-min);
+  }
+
+  50% {
+    opacity: var(--umbra-opacity-max);
+  }
+}
+@keyframes umbraFadeIn {
+  from { opacity: 0; }
+  to { opacity: 0.9; }
+}
+
+@keyframes umbraLvl3Blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes chest-grow-opening {
+    /* Pulsation 1 */
+    0% {
+        transform: scale(1);
+    }
+
+    6% {
+        transform: scale(0.98);
+    }
+
+    14% {
+        transform: scale(1.10);
+    }
+
+    22% {
+        transform: scale(1.01);
+    }
+
+    /* Pulsation 2 */
+    29% {
+        transform: scale(0.97);
+    }
+
+    38% {
+        transform: scale(1.22);
+    }
+
+    46% {
+        transform: scale(1.07);
+    }
+
+    /* Pulsation 3 */
+    53% {
+        transform: scale(1.01);
+    }
+
+    62% {
+        transform: scale(1.38);
+    }
+
+    69% {
+        transform: scale(1.16);
+    }
+
+    /* Pulsation 4 */
+    75% {
+        transform: scale(1.08);
+    }
+
+    83% {
+        transform: scale(1.46);
+    }
+
+    89% {
+        transform: scale(1.28);
+    }
+
+    /* Pulsation 5 rapide */
+    93% {
+        transform: scale(1.18);
+    }
+
+    97% {
+        transform: scale(1.57);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+@keyframes chest-angry-opening {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+
+    10% {
+        transform: translate(-8px, 3px) rotate(-4deg);
+    }
+
+    20% {
+        transform: translate(7px, -5px) rotate(5deg);
+    }
+
+    30% {
+        transform: translate(-5px, -8px) rotate(-3deg);
+    }
+
+    40% {
+        transform: translate(9px, 6px) rotate(4deg);
+    }
+
+    50% {
+        transform: translate(-9px, 1px) rotate(-5deg);
+    }
+
+    60% {
+        transform: translate(5px, 8px) rotate(3deg);
+    }
+
+    70% {
+        transform: translate(8px, -3px) rotate(5deg);
+    }
+
+    80% {
+        transform: translate(-6px, 7px) rotate(-4deg);
+    }
+
+    90% {
+        transform: translate(3px, -7px) rotate(3deg);
+    }
+
+    100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+}
+
+@keyframes chestAutoPulse {
+  0%, 3%, 8%, 12%, 16%,100% {
+    transform: rotate(0deg);
+  }
+
+  2%,6%, 10%,14%, 18% {
+    transform: rotate(2deg);
+  }
+
+  7%, 13% {
+    transform: rotate(-2deg);
+  }
+}
+@keyframes occultismBarSlowBlink {
+  0% {
+    background-position: 0% 50%;
+    filter: brightness(0.75) saturate(0.85);
+    box-shadow:
+      0 0 5px rgba(90, 45, 18, 0.55),
+      0 0 12px rgba(110, 63, 28, 0.35),
+      0 0 22px rgba(90, 45, 18, 0.25);
+  }
+
+  50% {
+    background-position: 100% 50%;
+    filter: brightness(1.15) saturate(1.15);
+    box-shadow:
+      0 0 10px rgba(150, 90, 40, 1),
+      0 0 22px rgba(170, 105, 52, 0.85),
+      0 0 36px rgba(120, 68, 30, 0.65);
+  }
+
+  100% {
+    background-position: 0% 50%;
+    filter: brightness(0.75) saturate(0.85);
+    box-shadow:
+      0 0 5px rgba(90, 45, 18, 0.55),
+      0 0 12px rgba(110, 63, 28, 0.35),
+      0 0 22px rgba(90, 45, 18, 0.25);
+  }
+}
+@keyframes battleRegenHpRise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(.75);
+  }
+
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -70px) scale(1.08);
+  }
+}
+@keyframes surprise-attack-squeeze {
+            0% {
+                opacity: 0;
+                transform: translate3d(100vw, -50%, 0) scaleX(0.2);
+            }
+            5% { opacity: 1; }
+            10% {
+                transform: translate3d(-50%, -50%, 0) scaleX(1.3);
+            }
+            15% {
+                transform: translate3d(-50%, -50%, 0) scaleX(0.88);
+            }
+            20%, 80% {
+                opacity: 1;
+                transform: translate3d(-50%, -50%, 0) scaleX(1);
+            }
+            90% {
+                opacity: 1;
+                transform: translate3d(calc(-100vw - 100%), -50%, 0) scaleX(0.25);
+            }
+            100% {
+                opacity: 0;
+                transform: translate3d(calc(-100vw - 100%), -50%, 0) scaleX(0.15);
+            }
+        }
+.melee-clone-death {
+    filter: drop-shadow(0 0 6px #a00000) !important;
+    pointer-events: none;
+}
+
+.melee-clone-death-blood {
+    position: fixed;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 10000;
+}
+
+.attack-active-spark {
+  animation: attackActiveSparkOrbit 3.6s linear infinite reverse;
+  animation-delay: var(--attack-spark-phase, -500ms);
+}
+
+.attack-active-trail-point {
+  animation: attackActiveSparkOrbit 3.6s linear infinite reverse;
+  animation-delay: calc(var(--attack-spark-phase, -500ms) + (var(--attack-trail-index) * 36ms));
+}
+
+.attack-details.Attaquant { --glow-slow-color: #ff3b477d; }
+.attack-details.Support { --glow-slow-color: #3f8cff7d; }
+
+.attack-image-frame--active > .attack-image {
+  animation: glowSlow 2.5s ease-in-out infinite;
+}
+
+@keyframes attackActiveSparkOrbit {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attack-active-spark { animation: none; offset-distance: 0%; }
+  .attack-active-trail-point { display: none; }
+  .attack-image-frame--active > .attack-image { animation: none; filter: drop-shadow(0 0 4px var(--glow-slow-color, #ffd8007d)); }
+}

@@ -1,0 +1,1046 @@
+import { getActionElapsed, getPhaseElapsed, waitPreparationPulse, getExecutionProgress, getControlState, getCombatSide, isCombatEnemy, isCharmedEnemyTarget, getActionResumeTime, isEntityActionPaused, isEntitySilenced, waitForEntityControl } from '../entityControl.js';
+import { setTimeout, clearTimeout } from '../combatClock.js';
+import { combatNow, combatDelay, scheduleCombatImpactTask, cancelCombatTask, hasPendingCombatDeath } from '../combatTimeline.js';
+import { registerCombatState } from '../combatClock.js';
+import { combatData, combatReference, combatTarget } from '../combatClock.js';
+import { getAttackResolutionFlags, splitDodgeDamageSources, normArr, awardAttackMastery, startAttackCooldown } from "../attackResolution.js";
+import {
+  createAttackStatView,
+  attemptAttackerDamages,
+  attemptDodge,
+  attemptInvisibleTargetAccuracy,
+  getRangePenaltyDetails,
+  calculateAmbidextryTotalChance,
+  calculateAmbidextryDamageBonus,
+  AmbidextryVFX,
+  getFinalAttackCooldownReduc,
+  getFinalAttackPreparationReduc,
+  getFinalAttackExecutionReduc,
+  getFinalAttackRecoveryReduc,
+  getFinalAttackProjectileSpeed,
+  clampPercent,
+  getHastePoints,
+  applyReducToMs,
+  attemptRangeBrokenSpell,
+  attemptMeleeBrokenSpell,
+  attemptMeleeExecBonus,
+  attemptMysticismTrance,
+  attemptEquilibreAttack,
+  attemptOccultismInvisibility,
+  clearOccultismInvisibleState,
+  calculateOccultismPreparationSpeedDebuff,
+  applyOccultismExitCritBoost,
+  shouldApplyForcedInvisibleTargetAccuracy,
+  totalPiercingRecupReductionWithAgi,
+  totalTranspiercingRecupReductionWithAgi,
+} from "../damagesCalcul.js";
+import {
+  getEntityManualMovementVersion,
+  recordEntityCombatAmount,
+  recordEntityCombatProc,
+  recordEntityDefenseHp,
+} from "../entityUpdatesStorage.js";
+import { OrderEntity, checkGameOver, isBattleFinished } from "../gameState.js";
+import { entites } from "../entites.js";
+import { updateTimerDisplay } from "../dom.js";
+import {
+  runPhaseTimer,
+  runEntityRecovery,
+  LifeandDeath,
+  applyDamage,
+  applyDamageToDead,
+  applyDamageToHex,
+  updateBonusLifeCounters,
+  estimateCancelledAttackHp,
+} from "../entityAttributs.js";
+import { updateTargetStatut } from "../fight.js";
+import {
+  animatePreparation,
+  animationProjectile,
+  animationMelee, getMeleeFlightVisual,
+  mysticismBoostedAttackAnimation,
+  mysticismAttackGif,
+} from "../entitesAnimation.js";
+import { updateHealthBar } from "../UpgradeEntity.js";
+import { EffectMessage } from "../attackEffectMecanics.js";
+import { battleLogs } from "../battleLogs.js";
+import { attackEffects } from "../data/attackEffects.js";
+import { isLord } from "../entite/entityRules.js";
+import { getFootprintOccupant } from '../board.js';
+
+// Projectile flight, launch snapshots and impact targeting.
+const OMIT_COMBAT_VALUE = Symbol('omit-combat-value');
+let battleGeneration = 0;
+if (typeof window !== 'undefined') {
+  const expireFlights = () => { battleGeneration++; };
+  window.addEventListener('battleResolved', expireFlights);
+  window.addEventListener('battleStopped', expireFlights);
+}
+
+function sanitizeCombatData(value, path, dropped, seen) {
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    dropped.push(path);
+    return OMIT_COMBAT_VALUE;
+  }
+  if (value === null || typeof value !== 'object') return value;
+  if (typeof Node !== 'undefined' && value instanceof Node) {
+    dropped.push(path);
+    return OMIT_COMBAT_VALUE;
+  }
+  if (seen.has(value)) return seen.get(value);
+  if (value instanceof Date) return new Date(value.getTime());
+
+  const clone = Array.isArray(value) ? [] : {};
+  seen.set(value, clone);
+  Object.entries(value).forEach(([key, entry]) => {
+    const clean = sanitizeCombatData(entry, `${path}.${key}`, dropped, seen);
+    if (clean !== OMIT_COMBAT_VALUE) clone[key] = clean;
+  });
+  return clone;
+}
+
+export function cloneCombatSnapshot(value, label = 'combat-data') {
+  const dropped = [];
+  const clone = sanitizeCombatData(value, label, dropped, new WeakMap());
+  if (dropped.length) {
+    console.warn(`[AttackFlight] Donnees runtime retirees de ${label}`, {
+      dropped,
+    });
+  }
+  return clone === OMIT_COMBAT_VALUE ? null : clone;
+}
+
+export const isHexTarget = target => target?.nodeType === 1 && target.classList.contains('hex');
+export const isAttackEntityAlive = entity => Boolean(entity && !entity.isDEAD && Number(entity.stats?.HP?.current) > 0);
+
+export function getEntityHex(entity) {
+  if (isHexTarget(entity)) return entity.isConnected ? entity : null;
+  return document.getElementById(`Box_Entite_${entity?.id}`)?.closest('.hex') || null;
+}
+
+export function getHexEntity(hex, entities) {
+  const box = getFootprintOccupant(hex);
+  return box ? entities.find(entity => String(entity.id) === box.id.replace('Box_Entite_', '')) || null : null;
+}
+
+export function getFlightMode(attack) {
+  const flags = getAttackResolutionFlags(attack);
+  if (!flags.isRange) return 'melee';
+  const physical = flags.hasPhysical || flags.hasHybridal;
+  const magical = flags.hasMagicalBehavior;
+  if (physical && magical && flags.hasPiercing) return 'triple';
+  if (magical && flags.hasPhysicalBehavior) return 'mixed';
+  return magical ? 'magical' : 'physical';
+}
+
+// Camp determines selection only. An in-flight action retains its original function.
+export function acceptsImpactTarget(attack, target) {
+  const targets = normArr(attack.attackTarget);
+  if (isHexTarget(target)) return targets.includes('hexa') && target.isConnected;
+  if (!targets.some(type => type === 'ally' || type === 'enemy') || !target || !getEntityHex(target)?.isConnected) return false;
+  if (normArr(attack.deadTarget).includes('yes')) {
+    return target.isDEAD === true && !target.corpseConsumed && !target.corpseDestroyed;
+  }
+  return isAttackEntityAlive(target);
+}
+
+export function acceptsSelectedTarget(attacker, attack, target) {
+  if ((attack.folieTargeting || attacker._folieAtLaunch || getControlState(attacker, 'folie')) && !isHexTarget(target))
+    return Boolean(target && !target.hasFled && getEntityHex(target)?.isConnected);
+  if (!acceptsImpactTarget(attack, target)) return false;
+  if (isHexTarget(target)) return true;
+  const targets = normArr(attack.attackTarget);
+  return targets.includes('enemy') && isCombatEnemy(attacker, target)
+    || targets.includes('ally') && getCombatSide(attacker) === getCombatSide(target);
+}
+
+// Recheck the current allegiance and charm priority at the preparation boundary.
+// Released attacks keep their launch-time targeting and never use this check.
+export function acceptsExecutionTarget(attacker, attack, target) {
+  const currentAttack = { ...attack, folieTargeting: false };
+  if (target?.hasFled || !acceptsSelectedTarget(attacker, currentAttack, target)) return false;
+  if (getControlState(attacker, 'folie') || isHexTarget(target)
+      || !normArr(attack.attackTarget).includes('enemy') || !isCharmedEnemyTarget(attacker, target)) return true;
+  return !entites.some(candidate => !candidate.hasFled && isAttackEntityAlive(candidate)
+    && getCombatSide(candidate) !== getCombatSide(attacker)
+    && acceptsSelectedTarget(attacker, currentAttack, candidate));
+}
+
+export function createAttackFlight(attacker, target, attack, sources = {}, saved = null) {
+  const generation = battleGeneration;
+  const definition = cloneCombatSnapshot(attack, 'attack');
+  const flags = getAttackResolutionFlags(definition);
+  const mode = getFlightMode(definition);
+  const remnantNature = mode === 'mixed' && flags.hasPiercing && !flags.hasPhysical && !flags.hasHybridal
+    ? 'piercing'
+    : mode === 'mixed' ? 'physical' : null;
+  const aimedHex = saved ? combatTarget(saved.aimedHex, entites) : getEntityHex(target);
+  const projected = createAttackStatView(attacker, attack);
+  const stats = saved?.stats ?? cloneCombatSnapshot(projected.stats || {}, 'attacker.stats');
+  const modifiers = saved?.modifiers ?? cloneCombatSnapshot(projected.modifierStats || {}, 'attacker.modifierStats');
+  const boosts = saved?.boosts ?? cloneCombatSnapshot(projected.battleBoosts || {}, 'attacker.battleBoosts');
+  const baseStats = saved?.baseStats ?? cloneCombatSnapshot(attacker.baseStats || {}, 'attacker.baseStats');
+  const statOverrides = saved?.statOverrides ?? cloneCombatSnapshot(projected._statSystemOverrides || {}, 'attacker.statOverrides');
+  const seuilUmbra = saved?.seuilUmbra ?? attacker.seuilUmbra;
+  const level = saved?.level ?? cloneCombatSnapshot(attacker.level, 'attacker.level');
+  const side = saved?.side ?? getCombatSide(attacker);
+  const folieAtLaunch = saved?.folieAtLaunch ?? Boolean(definition.folieTargeting || getControlState(attacker, 'folie'));
+  const movementAtLaunch = saved?.movementAtLaunch ?? getEntityManualMovementVersion(target);
+  // Calculations use launch-time stats; resource writes and counters still reach the entity.
+  const resources = new Set(['HP', 'armor', 'extraLife']);
+  const statView = new Proxy(stats, {
+    get: (snapshot, key) => resources.has(key) ? attacker.stats[key] : snapshot[key],
+  });
+  const source = new Proxy(attacker, {
+    get: (entity, key) => key === 'stats' ? statView
+      : key === 'modifierStats' ? modifiers : key === 'battleBoosts' ? boosts : key === 'baseStats' ? baseStats
+      : key === '_statSystemOverrides' ? statOverrides : key === 'seuilUmbra' ? seuilUmbra
+      : key === 'currentAttack' ? definition : key === 'side' || key === '_combatSideAtLaunch' ? side
+      : key === '_folieAtLaunch' ? folieAtLaunch : key === 'level' ? level : entity[key],
+  });
+  if (!saved) definition.rangePenaltyAtLaunch = getRangePenaltyDetails(source, definition);
+  const invisibleTargetAccuracy = saved ? saved.invisibleTargetAccuracy : attacker.flags?.forcedInvisibleTargetAccuracy
+    ? { ...attacker.flags.forcedInvisibleTargetAccuracy } : null;
+  const flight = {
+    id: `flight-${crypto.randomUUID()}`,
+    attacker, target, attack: definition, source, mode, remnantNature, aimedHex, invisibleTargetAccuracy,
+    sources: cloneCombatSnapshot(sources, 'damageSources'),
+    casterLost: false,
+    targetMoved: false,
+    guidanceLost: false,
+    lockedHex: mode === 'physical' ? aimedHex : null,
+    magicalLossConsumed: false,
+    manualAvoidanceRecorded: false,
+    snapshot() {
+      return combatData({ id: this.id, attacker: attacker.id, target: combatReference(target), attack: definition,
+        sources: this.sources, stats, modifiers, boosts, baseStats, statOverrides, seuilUmbra, level, side, folieAtLaunch,
+        movementAtLaunch, invisibleTargetAccuracy, aimedHex: combatReference(this.aimedHex),
+        lockedHex: this.lockedHex ? combatReference(this.lockedHex) : null,
+        casterLost: this.casterLost, targetMoved: this.targetMoved, guidanceLost: this.guidanceLost,
+        magicalLossConsumed: this.magicalLossConsumed, manualAvoidanceRecorded: this.manualAvoidanceRecorded });
+    },
+    recordManualAvoidance() {
+      const locked = this.lockedHex || this.aimedHex;
+      if (this.manualAvoidanceRecorded || this.expired() || definition.combatFunction !== 'Attaquant'
+        || isHexTarget(target) || !isAttackEntityAlive(target)
+        || !(mode === 'physical' || mode === 'mixed' && this.guidanceLost)
+        || !getEntityHex(target) || getEntityHex(target) === locked
+        || getEntityManualMovementVersion(target) <= movementAtLaunch) return;
+      this.manualAvoidanceRecorded = true;
+      recordEntityCombatAmount(target, 'physicalProjectilesAvoided', 1);
+    },
+    expired() { return this.aborted === true || generation !== battleGeneration; },
+    sample() {
+      // A render frame can run while simultaneous effects are settling. Zero
+      // HP is provisional until healing/additional lives have been resolved.
+      const casterJustLost = !this.casterLost && !isAttackEntityAlive(attacker) && !hasPendingCombatDeath(attacker);
+      this.casterLost ||= casterJustLost;
+      if (mode === 'mixed' && casterJustLost) {
+        this.guidanceLost = true;
+        this.lockedHex = isHexTarget(target) ? target : getEntityHex(target);
+        this.aimedHex = this.lockedHex;
+      }
+      if (mode === 'physical') {
+        this.targetMoved ||= !isHexTarget(target) && getEntityHex(target) !== this.lockedHex;
+      } else if (mode === 'mixed' && this.guidanceLost) {
+        this.targetMoved ||= !isHexTarget(target) && getEntityHex(target) !== this.lockedHex;
+      }
+      return casterJustLost;
+    },
+    consumeMagicalLoss() {
+      this.sample();
+      if (mode !== 'mixed' || !this.guidanceLost || this.magicalLossConsumed) return false;
+      this.magicalLossConsumed = true;
+      return true;
+    },
+    cancelled() {
+      this.sample();
+      return this.expired() || (mode === 'magical' || mode === 'melee') && this.casterLost;
+    },
+    resolveTarget(entities) {
+      this.sample();
+      if (isHexTarget(target)) return this.aimedHex?.isConnected ? this.aimedHex : null;
+      if (mode === 'physical' || mode === 'mixed' && this.guidanceLost) {
+        return getHexEntity(this.lockedHex || this.aimedHex, entities);
+      }
+      return target;
+    },
+    impactSources() {
+      this.sample();
+      const result = { ...this.sources };
+      if (mode !== 'mixed' || !this.casterLost) return result;
+      // Remove only the magical contribution. Cinétique never enters mixed mode.
+      // Hybrid damage is resolved as two equal halves by the damage pipeline.
+      const half = Number(result.hybridalDamage || 0) / 2;
+      result.physical = Number(result.physical || 0) + half;
+      result.magical = 0;
+      result.hybridalDamage = 0;
+      return result;
+    },
+  };
+  if (saved) {
+    for (const key of ['id', 'casterLost', 'targetMoved', 'guidanceLost', 'magicalLossConsumed', 'manualAvoidanceRecorded']) flight[key] = saved[key];
+    flight.lockedHex = saved.lockedHex ? combatTarget(saved.lockedHex, entites) : null;
+  }
+  return flight;
+}
+
+// Attack preparation, execution and recovery.
+const DAMAGE_SOURCE_KEYS = ["piercingDamage", "physical", "magical", "hybridalDamage"];
+
+function buildScaledDamageSources(sources, targetTotal) {
+  const total = Math.max(0, Math.round(Number(targetTotal) || 0));
+  const cleanSources = Object.fromEntries(
+    DAMAGE_SOURCE_KEYS.map(key => [key, Math.max(0, Number(sources?.[key] || 0))])
+  );
+  const sourceTotal = DAMAGE_SOURCE_KEYS.reduce((sum, key) => sum + cleanSources[key], 0);
+
+  if (total <= 0) {
+    return { piercingDamage: 0, physical: 0, magical: 0, hybridalDamage: 0 };
+  }
+
+  if (sourceTotal <= 0) {
+    return { piercingDamage: 0, physical: total, magical: 0, hybridalDamage: 0 };
+  }
+
+  const parts = DAMAGE_SOURCE_KEYS.map(key => {
+    const exact = (cleanSources[key] / sourceTotal) * total;
+    const value = Math.floor(exact);
+    return {
+      key,
+      exact,
+      value,
+      remainder: exact - value,
+    };
+  });
+
+  let assigned = parts.reduce((sum, part) => sum + part.value, 0);
+  let missing = total - assigned;
+
+  parts
+    .slice()
+    .sort((a, b) => b.remainder - a.remainder)
+    .forEach(part => {
+      if (missing <= 0) return;
+      part.value += 1;
+      missing -= 1;
+    });
+
+  return Object.fromEntries(
+    DAMAGE_SOURCE_KEYS.map(key => [
+      key,
+      parts.find(part => part.key === key)?.value || 0,
+    ])
+  );
+}
+
+function getProjectileEffectClasses(attack = {}) {
+  return normArr(attack?.effets)
+    .map(effectName => attackEffects.find(effect => effect.effectName === effectName)?.effectProjectile)
+    .flatMap(value => Array.isArray(value) ? value : [value])
+    .map(value => String(value || "").trim())
+    .filter(value => value && value !== "none");
+}
+
+// =========================
+// HASTE TIMINGS BUILDER
+// =========================
+async function runDynamicPreparationTimerWithMysticism(attacker, basePreparationMs, canContinue) {
+  const tickDelay = 50;
+
+  const action = attacker._combatAction;
+  const canPrepare = () => attacker._combatAction === action && canContinue();
+  if (!action || !canPrepare()) return false;
+  const state = action.preparation ||= { progress: 0, lastTick: combatNow(), recordedSlow: false };
+  let virtualProgressMs = state.progress;
+  let lastTick = state.lastTick;
+  if (state.nextAt != null) {
+    await waitPreparationPulse(attacker, Math.max(0, state.nextAt - combatNow()));
+    state.nextAt = null;
+  }
+  if (!canPrepare()) return false;
+  let recordedOccultismSlow = state.recordedSlow;
+
+  const totalDuration = Math.max(1, Number(basePreparationMs) || 1);
+
+  attacker.preparationTime = totalDuration - virtualProgressMs;
+  attacker.preparationProgressRatio = virtualProgressMs / totalDuration;
+
+  updateTimerDisplay(attacker);
+
+  let initialBar = document.getElementById(`currentAttackBar_${attacker.id}`);
+
+  if (initialBar) {
+    initialBar.style.transition = "width 0.05s linear";
+    initialBar.style.width = `${attacker.preparationProgressRatio * 100}%`;
+    initialBar.classList.remove("mysticism-accelerated", "occultism-slowed");
+  }
+
+  while (virtualProgressMs < totalDuration) {
+    if (!canPrepare()) return false;
+
+    const now = combatNow();
+    const progressFrom = lastTick;
+    lastTick = now;
+
+const mysticActive =
+  Boolean(attacker.mysticTrance?.active) &&
+  Number(attacker.mysticTrance?.endsAt || 0) >= now;
+
+const occultismActive =
+  Boolean(attacker.flags?.occultismInvisible) ||
+  Boolean(attacker.isInvisible) ||
+  Boolean(attacker.invisible);
+
+const mysticismSpeedMultiplier = mysticActive
+  ? Math.max(0.01, Number(attacker.mysticTrance?.speedMultiplier || 1))
+  : 1;
+
+const occultismDebuff = occultismActive
+  ? Math.max(0, Number(calculateOccultismPreparationSpeedDebuff(attacker)) || 0)
+  : 0;
+if (occultismDebuff > 0 && !recordedOccultismSlow) {
+  recordedOccultismSlow = true;
+  recordEntityCombatProc(attacker, 'occultismSlow');
+}
+
+const occultismSpeedMultiplier = occultismActive
+  ? 1 / (1 + occultismDebuff / 100)
+  : 1;
+
+const rawSpeedMultiplier =
+  mysticismSpeedMultiplier *
+  occultismSpeedMultiplier;
+
+const speedMultiplier = Number.isFinite(rawSpeedMultiplier)
+  ? Math.max(0.01, rawSpeedMultiplier)
+  : 1;
+
+const recoils = action.preparationRecoils || [];
+let cursor = progressFrom;
+for (const recoil of recoils.splice(0)) {
+  const at = Math.max(cursor, Math.min(now, recoil.at));
+  virtualProgressMs += getPhaseElapsed(attacker, cursor, at, 'preparationTime') * speedMultiplier;
+  virtualProgressMs = Math.max(0, virtualProgressMs - totalDuration * recoil.percent / 100);
+  cursor = at;
+}
+virtualProgressMs += getPhaseElapsed(attacker, cursor, now, 'preparationTime') * speedMultiplier;
+
+    if (virtualProgressMs > totalDuration) {
+      virtualProgressMs = totalDuration;
+    }
+
+    const remainingMs = Math.max(0, totalDuration - virtualProgressMs);
+    const progressRatio = Math.max(
+      0,
+      Math.min(1, virtualProgressMs / totalDuration)
+    );
+
+    attacker.preparationTime = remainingMs;
+    attacker.preparationProgressRatio = progressRatio;
+
+    updateTimerDisplay(attacker);
+
+    const currentBar = document.getElementById(`currentAttackBar_${attacker.id}`);
+
+    if (currentBar) {
+      currentBar.style.transition = "width 0.05s linear";
+      currentBar.style.width = `${(progressRatio * 100).toFixed(2)}%`;
+      currentBar.classList.toggle("mysticism-accelerated", mysticActive);
+currentBar.classList.toggle("occultism-slowed", occultismActive);
+    }
+
+    if (remainingMs <= 0) break;
+    Object.assign(state, { progress: virtualProgressMs, lastTick, recordedSlow: recordedOccultismSlow });
+    state.nextAt = state.nextAt > combatNow() ? state.nextAt
+      : combatNow() + Math.max(1, Math.ceil(Math.min(tickDelay, remainingMs / speedMultiplier)));
+    await waitPreparationPulse(attacker, Math.max(0, state.nextAt - combatNow()));
+    state.nextAt = null;
+  }
+
+  if (!canPrepare()) return false;
+  const launchedAt = combatNow();
+
+  const wasLaunchedUnderMysticism =
+    Boolean(attacker.mysticTrance?.active) &&
+    Number(attacker.mysticTrance?.endsAt || 0) >= launchedAt;
+
+  attacker.attackLaunchedUnderMysticism = wasLaunchedUnderMysticism;
+
+  if (attacker.currentAttack) {
+    attacker.currentAttack.isLaunchedUnderMysticism = wasLaunchedUnderMysticism;
+  }
+
+  console.log(
+    `🔮 Lancement sous Mysticisme : ${wasLaunchedUnderMysticism ? "OUI" : "NON"}`
+  );
+const equilibreAttack = attemptEquilibreAttack(attacker);
+attacker.equilibreAttackDebug = equilibreAttack;
+if (equilibreAttack.success) recordEntityCombatProc(attacker, 'equilibre');
+  if (attacker.mysticismTranceEndTO) {
+    clearTimeout(attacker.mysticismTranceEndTO);
+    attacker.mysticismTranceEndTO = null;
+  }
+
+  if (typeof attacker.stopMysticismAnimation === "function") {
+    attacker.stopMysticismAnimation(true);
+    attacker.stopMysticismAnimation = null;
+  }
+
+  attacker.isMysticTrance = false;
+
+  if (attacker.mysticTrance) {
+    attacker.mysticTrance.active = false;
+  }
+
+  attacker.preparationTime = 0;
+  attacker.preparationProgressRatio = 1;
+
+  updateTimerDisplay(attacker);
+
+  const finalBar = document.getElementById(`currentAttackBar_${attacker.id}`);
+
+  if (finalBar) {
+   finalBar.classList.remove("mysticism-accelerated", "occultism-slowed");
+    finalBar.style.width = "100%";
+  }
+}
+
+export function buildAttackTimingsWithHaste(attacker, attack) {
+  const { preparationTime, executionTime, recoveryTime, cooldown } = attack;
+
+  const prepReducPct = clampPercent(getFinalAttackPreparationReduc(attacker));
+  const cdReducPct = clampPercent(getFinalAttackCooldownReduc(attacker));
+  const execReducPct = clampPercent(getFinalAttackExecutionReduc(attacker));
+  const recupReducPct = clampPercent(getFinalAttackRecoveryReduc(attacker));
+  const flags = getAttackResolutionFlags(attack);
+  const attackNatures = normArr(attack?.attacknature);
+  const hasBaseNature =
+    attackNatures.includes("physicalDamage") ||
+    attackNatures.includes("magicalDamage") ||
+    attackNatures.includes("hybridalDamage");
+  const hasPiercingNature =
+    attackNatures.includes("piercingDamage") ||
+    attackNatures.includes("transpiercingDamage");
+  const isTranspiercing =
+    attackNatures.includes("transpiercingDamage") ||
+    (attackNatures.includes("piercingDamage") && !hasBaseNature);
+  const isPiercing =
+    hasPiercingNature &&
+    !isTranspiercing;
+  const projectileSpeedPct = flags.isRange
+    ? clampPercent(getFinalAttackProjectileSpeed(attacker))
+    : 0;
+  const totalExecutionReducPct = flags.isRange
+    ? clampPercent(execReducPct + projectileSpeedPct)
+    : execReducPct;
+  const piercingRecupReducPct = isPiercing
+    ? totalPiercingRecupReductionWithAgi(attacker, attack)
+    : 0;
+  const transpiercingRecupReducPct = isTranspiercing
+    ? totalTranspiercingRecupReductionWithAgi(attacker, attack)
+    : 0;
+  const specificRecoveryReducPct = isTranspiercing
+    ? transpiercingRecupReducPct
+    : isPiercing
+      ? piercingRecupReducPct
+      : 0;
+  const totalRecoveryReducPct = clampPercent(recupReducPct + specificRecoveryReducPct);
+
+  const timings = {
+    preparationTime: applyReducToMs(preparationTime, prepReducPct),
+    executionTime: applyReducToMs(executionTime, totalExecutionReducPct),
+    recoveryTime: applyReducToMs(recoveryTime, totalRecoveryReducPct),
+    cooldown: applyReducToMs(cooldown, cdReducPct),
+  };
+
+  const hastePoints = getHastePoints(attacker);
+
+  const debug = {
+    hastePoints,
+    prepReducPct,
+    cdReducPct,
+    execReducPct,
+    projectileSpeedPct,
+    totalExecutionReducPct,
+    recupReducPct,
+    isPiercing,
+    isTranspiercing,
+    piercingRecupReducPct,
+    transpiercingRecupReducPct,
+    specificRecoveryReducPct,
+    totalRecoveryReducPct,
+    base: { preparationTime, executionTime, recoveryTime, cooldown },
+    final: { ...timings },
+  };
+
+  return {
+    timings,
+    debug,
+    reductions: {
+      prepReducPct,
+      cdReducPct,
+      execReducPct,
+      projectileSpeedPct,
+      totalExecutionReducPct,
+      recupReducPct,
+      piercingRecupReducPct,
+      transpiercingRecupReducPct,
+      specificRecoveryReducPct,
+      totalRecoveryReducPct
+    }
+  };
+}
+function startMysticismPreparationState(attacker, basePreparationMs) {
+  attacker.attackLaunchedUnderMysticism = false;
+  attacker.attackBalancedNoAggro = false;
+
+  if (attacker.currentAttack) {
+    attacker.currentAttack.isLaunchedUnderMysticism = false;
+    attacker.currentAttack.isBalancedNoAggro = false;
+  }
+  
+  if (attacker.mysticismTranceEndTO) {
+    clearTimeout(attacker.mysticismTranceEndTO);
+    attacker.mysticismTranceEndTO = null;
+  }
+
+  const trance = attemptMysticismTrance(attacker);
+  attacker.mysticismDebug = trance;
+
+  if (!trance.success) {
+    attacker.isMysticTrance = false;
+
+    attacker.mysticTrance = {
+      active: false,
+      startedAt: null,
+      endsAt: null,
+      durationMs: 0,
+      accelerationPercent: 0,
+      speedMultiplier: 1,
+      basePreparationMs,
+    };
+
+    return trance;
+  }
+
+  recordEntityCombatProc(attacker, 'mysticism');
+
+  const speedMultiplier = 1 + trance.accelerationPercent / 100;
+  const startedAt = combatNow();
+  const endsAt = startedAt + trance.durationMs;
+console.log("🔮 Mysticisme timing", {
+  attacker: attacker.name,
+  durationMs: trance.durationMs,
+  accelerationPercent: trance.accelerationPercent,
+  speedMultiplier,
+  startedAt,
+  endsAt,
+});
+  attacker.isMysticTrance = true;
+
+  attacker.mysticTrance = {
+    active: true,
+    startedAt,
+    endsAt,
+    durationMs: trance.durationMs,
+    accelerationPercent: trance.accelerationPercent,
+    speedMultiplier,
+    basePreparationMs,
+  };
+
+attacker.mysticismTranceEndTO = setTimeout(() => {
+  if (!attacker.mysticTrance) return;
+
+  attacker.mysticTrance.active = false;
+  attacker.isMysticTrance = false;
+
+  console.log(
+    `🔮 Transe mystique terminée pour ${attacker.name} après ${combatNow() - startedAt}ms.`
+  );
+}, trance.durationMs);
+
+  return trance;
+}
+const sumSources = sources => DAMAGE_SOURCE_KEYS.reduce((sum, key) => sum + Number(sources[key] || 0), 0);
+const pause = combatDelay;
+
+function refreshTarget(target) {
+  if (!target?.stats?.HP) return;
+  updateHealthBar(target.stats.HP.current, target.stats.HP.max, target.stats.armor?.current || 0, target.stats.armor?.max || 0, target.id);
+  updateBonusLifeCounters(target);
+}
+
+// Used by every transport and every repeat. No relation check is made here.
+const activeFlights = new Map(), delayedFlights = new Map();
+export function getAttackTransportDeadline(entity) {
+  if (entity._combatAction?.stage !== 'transport') return 0;
+  return Math.max(0, ...(entity._combatAction.flights || []).map(id =>
+    activeFlights.get(id)?.at ?? delayedFlights.get(id)?.at ?? 0));
+}
+
+export function cancelEntityAttackAction(entity) {
+  const action = entity._combatAction;
+  if (action) {
+    // Already launched projectiles keep their own trajectory. A melee action
+    // cannot land later after its abandoned turn has been restarted.
+    if (getAttackResolutionFlags(action.attack).isMelee) for (const id of action.flights || []) {
+      const record = activeFlights.get(id);
+      if (record) { record.flight.aborted = true; cancelCombatTask(record.task); activeFlights.delete(id); }
+      delayedFlights.delete(id);
+    }
+    delete entity._combatAction;
+  }
+  entity.stopPreparationAnimation?.();
+  clearOccultismInvisibleState(entity);
+  clearTimeout(entity.mysticismTranceEndTO);
+  entity.stopMysticismAnimation?.(true);
+  if (entity.mysticTrance) entity.mysticTrance.active = false;
+  entity.isMysticTrance = false;
+}
+
+export function resolveAttackImpact(flight, options = {}) {
+  const at = options.at ?? combatNow();
+  const record = { flight, options, at, promise: null };
+  const prepare = () => {
+    // A melee execution belongs to its caster's action clock. Projectiles have
+    // their own flight clock and never enter this branch. Re-check at impact so
+    // controls received after launch also postpone the hit, including in replays.
+    if (options.actionDuration != null && !isBattleFinished() && !flight.expired()) {
+      const remaining = Math.max(0, options.actionDuration
+        - getExecutionProgress(flight.attacker, options.actionStartedAt, combatNow(), options.actionDuration));
+      const resumeAt = getActionResumeTime(flight.attacker);
+      // Epoch-sized timestamps can lose a fraction of a microsecond on addition.
+      if (remaining > 0.001 || resumeAt > combatNow()) {
+        record.at = combatNow() + (resumeAt > combatNow() ? Math.min(50, resumeAt - combatNow()) : Math.max(0.001, remaining));
+        return schedule(record.at);
+      }
+    }
+    return prepareAttackImpact(flight, options);
+  };
+  const schedule = deadline => {
+    record.task = scheduleCombatImpactTask(deadline, prepare);
+    return record.task.promise;
+  };
+  record.promise = schedule(at);
+  activeFlights.set(flight.id, record);
+  const forget = () => { if (activeFlights.get(flight.id) === record) activeFlights.delete(flight.id); };
+  record.promise.then(forget, forget);
+  return record.promise;
+}
+
+function prepareAttackImpact(flight, { secondHit = false, ambidextry = false, broken = false } = {}) {
+  if (isBattleFinished() || flight.expired()) return 'miss';
+  const target = flight.resolveTarget(entites);
+  if (flight.cancelled()) return 'dispelled';
+  flight.recordManualAvoidance();
+  if (!acceptsImpactTarget(flight.attack, target)) return 'miss';
+  const attack = {
+    ...flight.attack, launchContextId: flight.id,
+    isAmbidextry: secondHit,
+    ambidextryHitIndex: ambidextry ? secondHit ? 2 : 1 : null,
+    logVariant: ambidextry ? secondHit ? 'ambidextry_2' : 'ambidextry_1' : 'normal',
+    natureSignatureSuppressed: flight.mode === 'mixed' && flight.casterLost,
+  };
+  const flags = getAttackResolutionFlags(attack);
+  let sources = flight.impactSources();
+  let damage = sumSources(sources);
+  if (flight.mode === 'mixed') {
+    console.log('[HybridImpact]', JSON.stringify({
+      flightId: flight.id, attacker: flight.attacker.name, target: target?.name,
+      targetMoved: flight.targetMoved, casterLost: flight.casterLost,
+      launchSources: flight.sources, impactSources: sources,
+      launchDamage: sumSources(flight.sources), impactDamage: damage,
+    }));
+  }
+  const offensive = attack.combatFunction === 'Attaquant';
+  if (flight.mode === 'mixed' && damage <= 0) return 'miss';
+
+  const deadTarget = target.isDEAD;
+  return async () => {
+  if (isHexTarget(target)) {
+    const status = await applyDamageToHex(target, flight.source, attack);
+    if (status === 'hit' && !broken) awardAttackMastery(flight.attacker, attack, { impact: true });
+    return status;
+  }
+  if (deadTarget) {
+    const status = await applyDamageToDead(target, damage, flight.source, attack);
+    if (status === 'hit' && !broken) awardAttackMastery(flight.attacker, attack, { impact: true });
+    refreshTarget(target);
+    return status;
+  }
+  // Support spells never roll accuracy, dodge or resistances.
+  if (offensive && !broken) {
+    if (!(flags.hasMagical && !flags.hasPhysicalBehavior)
+      && shouldApplyForcedInvisibleTargetAccuracy({ flags: { forcedInvisibleTargetAccuracy: flight.invisibleTargetAccuracy } }, target)
+      && !attemptInvisibleTargetAccuracy(flight.source, target)) {
+      EffectMessage(target, 'Raté !');
+      return 'miss';
+    }
+    const dodge = splitDodgeDamageSources(sources);
+    const partial = sumSources(dodge.remaining) > 0;
+    if (flags.canBeDodged && sumSources(dodge.avoided) > 0 && attemptDodge(flight.source, target, { partial })) {
+      recordEntityCombatProc(target, 'dodge');
+      const avoidedHp = Math.max(0, estimateCancelledAttackHp(flight.source, target, attack, sources)
+        - (partial ? estimateCancelledAttackHp(flight.source, target, attack, dodge.remaining) : 0));
+      recordEntityDefenseHp(target, { dodge: avoidedHp });
+      battleLogs('attack_dodged', { attacker: flight.attacker, target, attack, partial });
+      if (!partial) return 'dodged';
+      sources = dodge.remaining;
+      damage = sumSources(sources);
+    }
+  }
+  if (ambidextry && !secondHit) AmbidextryVFX(target);
+  const outcome = applyDamage(target, damage, flight.source, { ...attack, forceDamageSources: sources },
+    sources, broken ? [] : attack.selfEffects);
+  if (outcome?.hit && !broken) awardAttackMastery(flight.attacker, attack, { impact: true, critical: outcome.critical });
+  refreshTarget(target);
+  LifeandDeath(target);
+  return outcome?.hit ? 'hit' : 'miss';
+  };
+}
+
+async function launchAttackTransport(flight, options = {}, restored = null) {
+  const { attacker, target, attack } = flight;
+  if (isBattleFinished() || attacker.battleStopped) return 'cancelled-before-launch';
+  if (!restored && (!entites.includes(attacker) || !isAttackEntityAlive(attacker) || !acceptsSelectedTarget(flight.source, attack, target))) return 'cancelled-before-launch';
+  const flags = getAttackResolutionFlags(attack);
+  if (!restored && !options.secondHit && !options.broken) awardAttackMastery(attacker, attack, { launch: true });
+  if (!flags.isRange && !flags.isMelee) return 'unsupported-range';
+  const duration = flags.isRange ? attack.executionTime : Math.max(options.secondHit ? 120 : 200, attack.executionTime);
+  const impact = resolveAttackImpact(flight, { ...options,
+    ...(flags.isMelee ? { actionStartedAt: options.actionStartedAt ?? combatNow(),
+      actionDuration: options.actionDuration ?? duration } : {}),
+    at: restored?.at ?? combatNow() + duration });
+  if (flags.isRange) {
+    // The visual follows the scheduled impact, never the other way round.
+    void animationProjectile(attacker, target, () => impact, {
+      id: flight.id, attackId: attack.attackId, attacknature: attack.attacknature,
+      executionTime: duration, effectProjectileClasses: getProjectileEffectClasses(attack),
+      isLaunchedUnderMysticism: Boolean(attack.isLaunchedUnderMysticism),
+      aura: options.secondHit ? 'ambidextry' : undefined,
+      flight, impactPromise: impact, restoredVisual: restored?.visual,
+    }).catch(error => console.error('[ProjectileVisual]', error));
+    return impact;
+  }
+  const controller = (restored && getMeleeFlightVisual(flight.id))
+    || animationMelee(attacker, target, Boolean(options.secondHit), { duration, flightId: flight.id });
+  const status = await impact;
+  // Display completion must not delay the next gameplay phase.
+  void controller?.resolveImpact?.(status === 'hit');
+  return status;
+}
+
+function queueSecondFlight(data) {
+  const record = { ...data, promise: null };
+  delayedFlights.set(data.id, record);
+  record.promise = (async () => {
+    await combatDelay(Math.max(0, data.at - combatNow()));
+    if (delayedFlights.get(data.id) !== record) return;
+    const attacker = entites.find(entity => entity.id === data.attacker);
+    const target = combatTarget(data.target, entites);
+    if (!attacker || !isAttackEntityAlive(attacker) || attacker.battleStopped || isBattleFinished() || OrderEntity(attacker)) return;
+    recordEntityCombatProc(attacker, 'ambidextry');
+    const flight = createAttackFlight(attacker, target, data.attack, data.sources);
+    // The id persists across the delay and the flight so melee can await it after reload.
+    flight.id = data.id;
+    delayedFlights.delete(data.id);
+    return launchAttackTransport(flight, { secondHit: true, ambidextry: true });
+  })().finally(() => delayedFlights.delete(data.id));
+  return record.promise;
+}
+
+registerCombatState('flights', () => ({
+  active: [...activeFlights.values()].map(record => ({ flight: record.flight.snapshot(), options: record.options,
+    at: record.at, visual: record.flight.attacker.projectiles?.find(p => p.id === record.flight.id)?.visual })),
+  delayed: [...delayedFlights.values()].map(({ promise, ...data }) => data),
+}), (snapshot, { removed = [] }) => {
+  const actors = [...entites, ...removed];
+  activeFlights.clear(); delayedFlights.clear();
+  for (const entry of snapshot.active) {
+    const attacker = actors.find(entity => entity.id === entry.flight.attacker);
+    const target = combatTarget(entry.flight.target, actors);
+    if (!attacker || !target) throw new Error('Cible ou lanceur absent du combat sauvegardé.');
+    const flight = createAttackFlight(attacker, target, entry.flight.attack, entry.flight.sources, entry.flight);
+    void launchAttackTransport(flight, entry.options, entry);
+  }
+  for (const data of snapshot.delayed) void queueSecondFlight(data);
+});
+for (const event of ['battleStopped', 'battleResolved']) window.addEventListener(event, () => {
+  activeFlights.clear(); delayedFlights.clear();
+});
+
+export async function executeAttack(attacker, target, selectedAttack, { onStart = null, canContinue = () => true } = {}) {
+  let state = attacker._combatAction;
+  const canAct = () => isAttackEntityAlive(attacker) && !attacker.battleStopped
+    && (!state || attacker._combatAction === state)
+    && !state?.invalidated
+    && !isBattleFinished() && !OrderEntity(attacker) && canContinue()
+    && !attacker._combatAction?.interruptedBySilence && !getControlState(attacker, 'effroi');
+  if (!attacker._combatAction) {
+    if (isEntitySilenced(attacker)) return 'silenced';
+    if (isEntityActionPaused(attacker) && !await waitForEntityControl(attacker, canAct)) return;
+    if (isEntitySilenced(attacker)) return 'silenced';
+  }
+  const restoring = Boolean(state);
+  if (!state) {
+    const definition = selectedAttack || attacker.currentAttack;
+    if (!definition || !canAct()) return;
+    if (!acceptsSelectedTarget(attacker, definition, target)) return 'target-invalid';
+    const attack = cloneCombatSnapshot(definition, 'selectedAttack');
+    attack.folieTargeting = Boolean(getControlState(attacker, 'folie'));
+    const { timings, debug } = buildAttackTimingsWithHaste(attacker, attack);
+    state = attacker._combatAction = { stage: 'preparation', attack, timings, debug, target: combatReference(target), flights: [] };
+    onStart?.();
+    startAttackCooldown(attacker, attack, timings.cooldown);
+    Object.assign(attacker, timings, { hasteDebug: debug, baseTimings: debug.base });
+    attacker.currentAttack = { ...attack, ...timings, baseTimings: debug.base };
+    attacker.lastAttackTime = combatNow();
+    attacker.currentPhase = 'attack_1';
+  }
+  const { attack, timings, debug } = state;
+  const flags = getAttackResolutionFlags(attack);
+  attacker.projectiles ||= [];
+  let stopPreparationAnimation = null;
+  try {
+    if (state.stage === 'preparation') {
+      if (state.interruptedBySilence || isEntitySilenced(attacker)) {
+        state.interruptedBySilence = true;
+        return 'silenced';
+      }
+      if (!restoring) {
+        clearOccultismInvisibleState(attacker);
+        attacker.occultismInvisibilityDebug = attemptOccultismInvisibility(attacker);
+        if (attacker.occultismInvisibilityDebug?.success) recordEntityCombatProc(attacker, 'occultism');
+        startMysticismPreparationState(attacker, timings.preparationTime);
+      }
+      stopPreparationAnimation = animatePreparation(attacker, attack, timings.preparationTime);
+      const prepared = await runDynamicPreparationTimerWithMysticism(attacker, timings.preparationTime, canAct);
+      if (attacker._combatAction !== state) return;
+      const wasInvisible = Boolean(attacker.flags?.occultismInvisible || attacker.isInvisible || attacker.invisible);
+      clearOccultismInvisibleState(attacker);
+      if (state.interruptedBySilence || isEntitySilenced(attacker)) return 'silenced';
+      if (state.invalidated) return 'retry';
+      if (prepared === false || !canAct()) return;
+      if (isEntityActionPaused(attacker) && !await waitForEntityControl(attacker, canAct)) {
+        return state.interruptedBySilence ? 'silenced' : undefined;
+      }
+      if (state.interruptedBySilence || isEntitySilenced(attacker)) return 'silenced';
+      if (!acceptsExecutionTarget(attacker, attack, target)) {
+        state.targetInvalidated = true;
+        return 'target-invalid';
+      }
+      if (wasInvisible) applyOccultismExitCritBoost(attacker);
+      Object.assign(attack, timings, {
+        effectiveExecutionTime: timings.executionTime,
+        isLaunchedUnderMysticism: attacker.currentAttack.isLaunchedUnderMysticism,
+        isBalancedNoAggro: attacker.currentAttack.isBalancedNoAggro,
+      });
+      if (attack.isLaunchedUnderMysticism) {
+        mysticismBoostedAttackAnimation(attacker.id); mysticismAttackGif(attacker.id);
+      }
+      if (!isHexTarget(target)) {
+        target.targetStatut = 'activeTarget';
+        if (isLord(attacker)) updateTargetStatut(attacker, target);
+      }
+      let secondDelay = applyReducToMs(500, debug.totalExecutionReducPct);
+      if (flags.isMelee) {
+        const melee = attemptMeleeExecBonus(attacker, attack, debug.base.executionTime);
+        attack.executionTime = melee.finalExecMs;
+        attacker.executionTime = melee.finalExecMs;
+        attacker.meleeExecDebug = melee.debug;
+        secondDelay = applyReducToMs(500, Number(melee.debug?.totalReduc) || 0);
+      }
+      const damageContext = attemptAttackerDamages(attacker, attack);
+      attacker.currentPhase = flags.isRange ? 'attack_2' : 'attack_3';
+      attacker.currentAttack.executionTime = attack.executionTime;
+      const offensive = attack.combatFunction === 'Attaquant' && !normArr(attack.deadTarget).includes('yes');
+      const broken = offensive && flags.canBrokenSpell
+        ? flags.isRange ? attemptRangeBrokenSpell(attacker, target, attack) : attemptMeleeBrokenSpell(attacker, target, attack)
+        : null;
+      state.stage = 'transport';
+      if (broken?.success) {
+        recordEntityCombatProc(attacker, 'brokenSpell');
+        state.backfireSources = buildScaledDamageSources(damageContext.totalDamageSources,
+          Math.round(damageContext.totalDamage * broken.damagePct / 100));
+        state.backfireAttack = { ...attack, launchContextId: `backfire-${crypto.randomUUID()}`,
+          isBrokenSpell: true, attackTarget: ['enemy'], selfEffects: [] };
+        if (flags.isMelee) {
+          const flight = createAttackFlight(attacker, target, state.backfireAttack, state.backfireSources);
+          state.flights.push(flight.id);
+          void launchAttackTransport(flight, { broken: true });
+        }
+      } else {
+        const attackView = createAttackStatView(attacker, attack);
+        const ambidextry = flags.canAmbidextry && Math.random() * 100 < calculateAmbidextryTotalChance(attackView);
+        const flight = createAttackFlight(attacker, target, attack, damageContext.totalDamageSources);
+        state.flights.push(flight.id);
+        const primary = launchAttackTransport(flight, { ambidextry });
+        let secondary = Promise.resolve();
+        if (ambidextry) {
+          const sources = buildScaledDamageSources(flight.sources,
+            Math.round(damageContext.totalDamage * calculateAmbidextryDamageBonus(attackView) / 100));
+          const id = `second-${crypto.randomUUID()}`;
+          state.flights.push(id);
+          secondary = queueSecondFlight({ id, at: combatNow() + secondDelay, attacker: attacker.id,
+            target: combatReference(target), attack: combatData(attack), sources });
+        }
+        if (flags.isRange) Promise.all([primary, secondary]).then(() => checkGameOver(entites))
+          .catch(error => console.error('[AttackFlight]', flight.id, error));
+      }
+    }
+    if (state.stage === 'transport') {
+      if (flags.isMelee) await Promise.all(state.flights.map(id =>
+        activeFlights.get(id)?.promise || delayedFlights.get(id)?.promise));
+      if (attacker._combatAction !== state) return;
+      if (state.backfireSources && !state.backfireApplied && isAttackEntityAlive(attacker)) {
+        state.backfireApplied = true;
+        applyDamage(attacker, sumSources(state.backfireSources), attacker,
+          { ...state.backfireAttack, forceDamageSources: state.backfireSources }, state.backfireSources, []);
+      }
+      attacker.executionTime = 0;
+      if (target && !isHexTarget(target)) {
+        target.targetStatut = 'lastTarget';
+        if (isLord(attacker)) updateTargetStatut(attacker, target);
+      }
+      state.stage = 'recovery';
+    }
+    if (!canAct()) return;
+    await runEntityRecovery(attacker, timings.recoveryTime, { canContinue: canAct, source: 'attack' });
+  } finally {
+    const ownsAction = attacker._combatAction === state;
+    if (ownsAction) delete attacker._combatAction;
+    if (ownsAction && (state.interruptedBySilence || state.targetInvalidated)) {
+      attacker.preparationTime = 0;
+      attacker.preparationProgressRatio = 0;
+      attacker.executionTime = 0;
+      updateTimerDisplay(attacker);
+    }
+    stopPreparationAnimation?.();
+    if (ownsAction || !attacker._combatAction) {
+      clearOccultismInvisibleState(attacker);
+      clearTimeout(attacker.mysticismTranceEndTO);
+      attacker.stopMysticismAnimation?.(true);
+      if (attacker.mysticTrance) attacker.mysticTrance.active = false;
+      attacker.isMysticTrance = false;
+    }
+  }
+}
+
+registerCombatState('trances', () => true, (_, { entities }) => {
+  for (const entity of entities) if (entity.mysticTrance?.active) {
+    entity.mysticismTranceEndTO = setTimeout(() => {
+      entity.mysticTrance.active = false; entity.isMysticTrance = false;
+    }, Math.max(0, entity.mysticTrance.endsAt - combatNow()));
+  }
+});
+
+window.addEventListener('restoredMysticismAnimation', ({ detail }) => {
+  const entity = entites.find(e => e.id === detail.entityId);
+  if (entity) entity.stopMysticismAnimation = detail.stop;
+});
+
+window.addEventListener('restoredOccultismAnimation', ({ detail }) => {
+  const entity = entites.find(e => e.id === detail.entityId);
+  if (entity) entity.stopOccultismAnimation = detail.stop;
+});

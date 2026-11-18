@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Index 16 · Cases groupées</title>
+  <link rel="icon" href="media/assets/ui/favicon.png">
+  <link rel="stylesheet" href="css/board.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/animation.css">
+  <link rel="stylesheet" href="css/monstre.css">
+  <link rel="stylesheet" href="css/battle-infos.css">
+  <link rel="stylesheet" href="css/spell.css">
+  <link rel="stylesheet" href="css/monstre-hitbox.css">
+  <link rel="stylesheet" href="css/vfx-calibrator.css">
+  <link rel="preload" as="image" href="media/assets/effects/dodge-smoke.gif">
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #111619; color: #e7ecee; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: auto; height: auto; overflow: auto; font-family: system-ui, sans-serif; background: #111619; color: #e7ecee; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, [tabindex]:focus-visible { outline: 2px solid #e4c478; outline-offset: 4px; }
+    main { max-width: 1350px; margin: auto; padding: 26px 30px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+    .eyebrow { color: #b4a782; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { font: 32px/1.2 Georgia, serif; color: #f2e5c7; margin: 8px 0; }
+    .intro { color: #abb8bd; font-size: 14px; margin: 0; }
+    .reset { border: 1px solid #51606a; background: #202a30; color: #ecf0f2; padding: 10px 16px; border-radius: 5px; }
+    .roster { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 22px 0 16px; }
+    .entity-panel { min-width: 0; background: #1b2429; border: 1px solid #35434b; border-left: 3px solid var(--color); padding: 13px 16px; border-radius: 4px; }
+    .entity-panel[data-selected=true] { background: #263239; border-color: var(--color); }
+    .entity-card { display: block; width: 100%; text-align: left; background: none; color: #e7ecee; border: 0; padding: 0; }
+    .card-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+    .card-size { color: var(--color); font-size: 12px; white-space: nowrap; }
+    .card-detail { display: block; color: #aebcc3; margin-top: 5px; font-size: 12px; }
+    .size-controls { display: grid; grid-template-columns: 30px minmax(0,1fr) 30px; gap: 9px; align-items: center; margin-top: 13px; }
+    .size-controls button { width: 30px; height: 30px; border: 1px solid #586a74; border-radius: 4px; background: #182127; color: #e7ecee; font-size: 21px; line-height: 1; }
+    .size-controls button:disabled { opacity: .3; cursor: default; }
+    .size-controls input { min-width: 0; width: 100%; margin: 0; accent-color: var(--color); }
+    .size-steps { display: flex; justify-content: space-between; margin: 4px 39px 0; color: #8c9fa8; font-size: 10px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; padding: 12px 0 16px; font-size: 13px; color: #bfccd1; }
+    .toolbar label { display: flex; align-items: center; gap: 8px; }
+    input { accent-color: #8edbd0; }
+    .toolbar .hint { margin-left: auto; font-size: 12px; color: #82969f; }
+    .board-shell { border: 1px solid #3a4850; border-radius: 6px; background: #151e23; overflow: hidden; }
+    .board-viewport { overflow: auto; overscroll-behavior: contain; }
+    .board-stage { position: relative; margin-inline: auto; }
+    .board-world { position: absolute; inset: 0 auto auto 0; transform-origin: top left; user-select: none; touch-action: none; isolation: isolate; }
+    svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .base-cell { stroke: #526069; stroke-width: 1; fill: #253038; }
+    .base-cell.alternate { fill: #202a31; }
+    .cell-label { fill: #6e838d; font: 10px system-ui; text-anchor: middle; pointer-events: none; }
+    .role-label { fill: #9aaab1; font: 8px system-ui; text-anchor: middle; pointer-events: none; }
+    .hide-roles .role-label { display: none; }
+    .group-cell { fill: var(--color); fill-opacity: .22; stroke: none; }
+    .group-boundary { fill: none; stroke: var(--color); stroke-width: 3; stroke-linejoin: round; pointer-events: none; }
+    .logical-group { cursor: grab; }
+    .logical-group.selected .group-cell { fill-opacity: .36; }
+    .logical-group.selected .group-boundary { stroke-width: 4; }
+    .logical-group.source { opacity: .35; }
+    .logical-group.source .group-boundary { stroke-dasharray: 7 5; }
+    .logical-group.displaced .group-boundary { stroke: #f6bd7d; stroke-dasharray: 6 4; }
+    #preview { pointer-events: none; }
+    .preview-cell { stroke: none; fill: var(--preview-color); fill-opacity: .19; }
+    .preview-boundary { stroke: var(--preview-color); stroke-width: 3; fill: none; stroke-dasharray: 6 4; }
+    .move-arrow { stroke: #f6bd7d; stroke-width: 2; stroke-dasharray: 5 4; fill: none; }
+    .actor-anchor { position: absolute; width: var(--sprite-w,120px); height: var(--sprite-h,120px); padding: 0; border: 0; background: none; transform: translate(-50%,-100%); pointer-events: none; }
+    /* The restored battle tree lives on a plane facing the camera. The native
+       drag-box counter-rotation, base .85 and size layer remain unchanged. */
+    .actor-anchor > .entite-box { top: calc(var(--sprite-h) - var(--entity-foot-y) * var(--entity-base-scale)); transform: rotateX(50deg); transform-origin: center 100px; }
+    .entity-size-layer { transform: scale(var(--entity-size-scale,1)); transform-origin: center var(--entity-foot-y,120px); transition: transform 160ms ease-out; }
+    .actor-anchor .sprite { pointer-events: auto; cursor: grab; }
+    .actor-anchor.dragging { z-index: 1000 !important; }
+    .actor-anchor.dragging .sprite { cursor: grabbing; animation-play-state: paused; }
+    .actor-anchor.dragging canvas { filter: drop-shadow(0 14px 7px #000b); }
+    .actor-anchor.pushing .sprite { animation-play-state: paused; }
+    .push-smoke { position: absolute; left: 50%; bottom: -8px; width: var(--smoke-width); height: auto; transform: translateX(-50%) scaleX(var(--smoke-facing,1)); pointer-events: none; }
+    .group-caption { position: absolute; transform: translateX(-50%); color: var(--color); font-size: 11px; font-weight: 600; padding: 3px 7px; background: #111b22e8; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+    .board-footer { padding: 13px 16px; border-top: 1px solid #35434b; display: flex; align-items: baseline; gap: 16px; justify-content: space-between; }
+    #status { margin: 0; font-size: 13px; color: #cbd8de; min-height: 20px; }
+    #status[data-kind=invalid] { color: #ff9d9d; }
+    #status[data-kind=push] { color: #f6bd7d; }
+    #status[data-kind=valid] { color: #94ddbd; }
+    #count { color: #80959f; font-size: 11px; white-space: nowrap; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 23px; font-size: 12px; color: #a2b3bc; margin-top: 14px; }
+    .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+    .note { font-size: 12px; color: #859aa5; margin-top: 14px; }
+    details { margin-top: 22px; font-size: 12px; color: #8da1aa; }
+    details p { max-width: 900px; line-height: 1.6; }
+    #load-error { padding: 14px; color: #ffc1bb; }
+    @media (max-width: 720px) { main { padding: 18px 12px; } h1 { font-size: 26px; } header { align-items: flex-start; } .reset { padding: 8px; font-size: 12px; } .roster { gap: 6px; } .entity-panel { padding: 10px 8px; } .card-head { flex-direction: column; font-size: 13px; } .card-detail { font-size: 11px; } .size-controls { grid-template-columns: 1fr 1fr; gap: 6px; } .size-controls input { grid-column: 1/-1; grid-row: 1; } .size-controls button { grid-row: 2; } .size-controls button:last-child { justify-self: end; } .size-steps { margin-inline: 0; } .toolbar .hint { margin-left: 0; } .board-footer { flex-direction: column; gap: 5px; } }
+    @media (prefers-reduced-motion: reduce) { .actor-anchor .sprite { animation: none !important; } .entity-size-layer { transition: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><div><span class="eyebrow">Index 16 · Laboratoire de placement</span><h1>Un hex, plusieurs cases.</h1><p class="intro">Agrandis ou réduis les mouches : les cases se regroupent et les voisins sont repoussés en direct.</p></div><button class="reset" id="reset" type="button">Réinitialiser</button></header>
+  <div class="roster" id="roster" aria-label="Les trois mouches"></div>
+  <div class="toolbar">
+    <label><input id="push" type="checkbox" checked>Repousser les voisins</label>
+    <label><input id="roles" type="checkbox" checked>Rôles des cases</label>
+    <span class="hint">Glisser pour déplacer · Échap pour annuler</span>
+  </div>
+  <div class="vfx-workbench">
+  <section class="board-shell" aria-label="Damier hexagonal">
+    <div class="board-viewport" id="viewport"><div class="board-stage" id="stage"><div class="board-world" id="world">
+      <svg id="board" aria-label="Cases du plateau"><defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7Z" fill="#f6bd7d"/></marker></defs><g id="cells"></g><g id="groups"></g><g id="preview"></g></svg>
+      <div id="actors"></div>
+    </div></div></div>
+    <div class="board-footer"><p id="status" role="status" aria-live="polite">Chargement des mouches…</p><span id="count">3 entités · 11 cases réservées</span></div>
+  </section>
+  <aside class="vfx-panel" aria-labelledby="vfx-title">
+    <div class="vfx-heading"><div><span class="eyebrow">Aperçu CSS en direct</span><h2 id="vfx-title">Calibrer un VFX</h2></div><span id="vfx-count">0 réglage</span></div>
+    <fieldset id="vfx-controls" disabled>
+      <label class="vfx-select-label" for="vfx-effect">Effet à régler</label><select id="vfx-effect"></select>
+      <div class="vfx-actions"><label><input type="checkbox" id="vfx-visible" checked>Afficher</label><label><input type="checkbox" id="vfx-loop" checked>Boucler</label><button type="button" id="vfx-replay">Relancer</button></div>
+      <label class="vfx-select-label" for="vfx-target">Aperçu sur</label><select id="vfx-target"><option value="all">Les trois entités</option><option value="yellow">Mouche jaune</option><option value="cyan">Mouche turquoise</option><option value="purple">Mouche violette</option></select>
+      <div class="vfx-control" data-vfx-field="top"><label for="vfx-top">Position verticale <code>top</code></label><div><input id="vfx-top" type="range" min="-150" max="200" step="0.1"><input id="vfx-top-number" type="number" min="-500" max="500" step="0.1" aria-label="Valeur de top"><select id="vfx-top-unit" aria-label="Unité de top"><option value="%">%</option><option value="px">px</option></select></div></div>
+      <div class="vfx-control" data-vfx-field="x"><label for="vfx-x">Position horizontale <select id="vfx-side" aria-label="Ancrage horizontal"><option value="left">left</option><option value="right">right</option></select></label><div><input id="vfx-x" type="range" min="-150" max="200" step="0.1"><input id="vfx-x-number" type="number" min="-500" max="500" step="0.1" aria-label="Position horizontale"><select id="vfx-x-unit" aria-label="Unité horizontale"><option value="%">%</option><option value="px">px</option></select></div></div>
+      <div class="vfx-control" data-vfx-field="width"><label for="vfx-width">Largeur</label><div><input id="vfx-width" type="range" min="1" max="200" step="0.1"><input id="vfx-width-number" type="number" min="1" max="500" step="0.1" aria-label="Largeur du VFX"><select id="vfx-width-unit" aria-label="Unité de largeur"><option value="%">%</option><option value="px">px</option></select></div></div>
+      <div class="vfx-control" data-vfx-field="ratio"><label for="vfx-ratio">Hauteur <small>% de la largeur</small></label><div><input id="vfx-ratio" type="range" min="10" max="300" step="0.1"><input id="vfx-ratio-number" type="number" min="1" max="1000" step="0.1" aria-label="Hauteur en pourcentage de la largeur"><span>%</span></div></div>
+      <div class="vfx-control" data-vfx-field="cap"><label for="vfx-cap">Largeur maximale <small>avant agrandissement</small></label><div><input id="vfx-cap" type="range" min="10" max="300" step="1"><input id="vfx-cap-number" type="number" min="1" max="1000" step="1" aria-label="Plafond de largeur"><span>px</span></div></div>
+      <div class="vfx-actions"><label><input type="checkbox" id="vfx-guides" checked>Gabarit</label><label><input type="checkbox" id="vfx-mirror">Côté B</label><button id="vfx-reset" type="button">Réinitialiser cet effet</button></div>
+    </fieldset>
+    <p class="vfx-explanation">Même gabarit et mêmes paliers que le combat : ×1, ×1,35, ×1,65 et ×2,5. Les % se rapportent à la taille CSS du sprite, avant agrandissement.</p>
+    <div class="vfx-code-heading"><label for="vfx-css">Règle CSS appliquée</label><button id="vfx-copy" type="button" disabled>Copier</button></div>
+    <textarea id="vfx-css" readonly spellcheck="false" aria-label="Règle CSS du VFX">Chargement…</textarea>
+    <div class="vfx-actions"><button id="vfx-copy-all" type="button" disabled>Copier tous les réglages</button><span id="vfx-feedback" role="status" aria-live="polite"></span></div>
+    <p class="vfx-explanation">À coller en fin de <code>battle-infos.css</code>. Chaque effet garde ses réglages pendant cette session.</p>
+  </aside>
+  </div>
+  <div class="legend"><span><i class="dot" style="background:#94ddbd"></i>Placement libre</span><span><i class="dot" style="background:#f6bd7d"></i>Voisin à déplacer</span><span><i class="dot" style="background:#ff9393"></i>Placement impossible</span></div>
+  <p class="note">Taille : curseur ou boutons − / +, de 1 à 6 cases. Le groupement grandit depuis sa case d’ancrage ; réduire libère les cases. Glisse une mouche ou son groupe pour la déplacer.</p>
+  <p id="load-error" role="alert" hidden></p>
+  <details><summary>À propos de cet essai</summary><p>Quatre paliers : une case simple, puis les groupements de 2, 3 et 6 hexagones du croquis. Un occupant et un rôle majoritaire par groupe. Le curseur applique chaque palier immédiatement. Les voisins sont replacés au plus près, avec leurs groupes entiers. Taille et déplacements sont validés ensemble ; si l’agrandissement est impossible, la taille précédente et le plateau sont conservés. Réduire ne ramène pas les voisins à leur ancienne place. Au clavier, les flèches du curseur changent la taille ; les flèches sur le nom d’une mouche la déplacent.</p><p>Structure DOM et feuilles CSS du combat : dimensions mesurées une fois au montage, facteur de base 0,85 et paliers d’échelle du jeu. Le sprite et sa tremblote viennent du jeu. Cette page autonome ne charge pas le moteur de combat et n’utilise aucune sauvegarde.</p></details>
+</main>
+<template id="fly-template">
+  <div class="actor-anchor" role="button" tabindex="0">
+    <div class="entite-box side-A role-gueux" data-battle-id="Box_Entite">
+      <div class="cast-animation-container" data-battle-id="Cast_Animation"></div>
+      <div class="drag-box">
+        <div class="effects-container entity-effects-calibrated vfx-calibration-frame" data-battle-id="effectsContainer"></div>
+        <div class="entitesContainer sbire A">
+          <div class="entity-size-layer">
+            <div class="sprite-container A" data-battle-id="spriteContainer">
+              <div class="img-container img-side-A sbire" data-battle-id="imgContainer">
+                <div class="animation-sprite mouche-asticoteuse side-A" data-battle-id="Animationsprite">
+                  <div class="aura-container side-A mouche-asticoteuse" data-battle-id="auraContainer"></div>
+                  <div class="sprite side-A mouche-asticoteuse hb iddle" data-battle-id="DragSprite"><canvas class="sprite-canvas side-A mouche-asticoteuse" data-battle-id="spriteCanvas" width="500" height="500" aria-hidden="true"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pop-up-txt combat-popup-damages" data-battle-id="PopUp"></div>
+          <div class="pop-down-txt combat-popup-status" data-battle-id="PopDow"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id), NS = 'http://www.w3.org/2000/svg';
+  const R = 42, W = Math.sqrt(3) * R, ROWS = 7, COLS = 13, PAD_X = 64, PAD_Y = 166;
+  const WIDTH = PAD_X * 2 + (COLS - .5) * W, HEIGHT = PAD_Y + (ROWS - 1) * R * 1.5 + 100;
+  const roleNames = { gueux: 'Gueux', mage: 'Mage', tank: 'Tank', fantassin: 'Fantassin' };
+  const roleOrder = ['gueux', 'mage', 'tank', 'fantassin'];
+  const cells = [], byAxial = new Map(), byId = new Map(), views = new Map();
+  const sizes = [
+    { scale: 1, shape: [[0,0]] },
+    { scale: 1.35, shape: [[0,0],[1,0]] },
+    { scale: 1.65, shape: [[0,0],[1,0],[0,1]] },
+    { scale: 2.5, shape: [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]] },
+  ];
+  const models = [
+    { id: 'yellow', name: 'Mouche jaune', color: '#f1d45c', initialSize: 1, initial: [2,4] },
+    { id: 'cyan', name: 'Mouche turquoise', color: '#68dedb', initialSize: 2, initial: [4,4] },
+    { id: 'purple', name: 'Mouche violette', color: '#d490f0', initialSize: 3, initial: [8,2] },
+  ];
+  const modelById = new Map(models.map(m => [m.id,m]));
+  const pushMotions = new Map(), reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const PUSH_DURATION = 420, SMOKE_DURATION = 600;
+  let smokeSequence = 0;
+  const metrics = { spriteMeasurements: 0, geometryReads: 0, plans: 0, commits: 0 };
+  let state = new Map(), sizeById = new Map(), occupied = new Map(), logicalHexes = new Map(), selected = 'yellow', drag = null, frame = 0, boardScale = 1;
+  const sizeFor = id => sizes[sizeById.get(id)];
+  const caseLabel = count => `${count} case${count>1?'s':''}`;
+  const axialKey = (q,r) => `${q},${r}`;
+  // Same odd-row offset / axial convention as board.js and board.hexDistance.
+  const point = (q,r) => ({ x: PAD_X + W * (q + r / 2), y: PAD_Y + R * 1.5 * r });
+  const svg = (name, attrs = {}) => { const n = document.createElementNS(NS,name); for (const [k,v] of Object.entries(attrs)) n.setAttribute(k,v); return n; };
+  const corners = p => Array.from({length:6}, (_,i) => { const a = (i * 60 - 90) * Math.PI / 180; return {x:p.x+R*Math.cos(a), y:p.y+R*Math.sin(a)}; });
+  const polygon = p => corners(p).map(v=>`${v.x},${v.y}`).join(' ');
+  function boundary(members) {
+    const edges = new Map(), vertex = p => `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
+    for (const cell of members) {
+      const vertices = corners(cell);
+      for (let i=0;i<6;i++) {
+        const a=vertices[i], b=vertices[(i+1)%6], key=[vertex(a),vertex(b)].sort().join('|');
+        if(edges.has(key)) edges.delete(key); else edges.set(key,`M${a.x},${a.y}L${b.x},${b.y}`);
+      }
+    }
+    return [...edges.values()].join('');
+  }
+  for(let row=0;row<ROWS;row++) for(let col=0;col<COLS;col++) {
+    const q=col-(row-(row&1))/2, id=`${String.fromCharCode(65+col)}${row+1}`;
+    const role=row===0||row===ROWS-1 ? 'gueux' : col<4 ? 'mage' : col<8 ? 'tank' : 'fantassin';
+    const cell={id,q,r:row,col,row,role,index:cells.length,...point(q,row)};
+    cells.push(cell);byId.set(id,cell);byAxial.set(axialKey(q,row),cell);
+    const group=svg('g',{'data-cell':id});
+    group.append(svg('polygon',{points:polygon(cell),class:`base-cell ${(row+col)%2?'alternate':''}`}));
+    const label=svg('text',{x:cell.x,y:cell.y+R*.67,class:'cell-label'});label.textContent=id;group.append(label);
+    const roleLabel=svg('text',{x:cell.x,y:cell.y-R*.55,class:'role-label'});roleLabel.textContent=roleNames[role].toUpperCase();group.append(roleLabel);
+    $('cells').append(group);
+  }
+  // Geometry is shared by size and cached once; changing size does not remeasure the sprite.
+  for(const size of sizes) {
+    size.offset=point(size.shape.reduce((s,p)=>s+p[0],0)/size.shape.length,size.shape.reduce((s,p)=>s+p[1],0)/size.shape.length);
+    size.offset.x-=PAD_X;size.offset.y-=PAD_Y;
+    size.placements=new Map();
+    for(const anchor of cells) {
+      const members=size.shape.map(([q,r])=>byAxial.get(axialKey(anchor.q+q,anchor.r+r)));
+      if(members.some(c=>!c)) continue;
+      size.placements.set(anchor.id,{anchor:anchor.id,members,
+        center:{x:anchor.x+size.offset.x,y:anchor.y+size.offset.y},outline:boundary(members)});
+    }
+  }
+  function placement(id,anchor,sizeIndex=sizeById.get(id)) {
+    const base=sizes[sizeIndex]?.placements.get(anchor);
+    return base&&{...base,id:`hex-${id}`,occupant:id,sizeIndex,scale:sizes[sizeIndex].scale};
+  }
+  function majority(hex, previous) {
+    const counts=new Map(roleOrder.map(role=>[role,0]));
+    for(const cell of hex.members) counts.set(cell.role,counts.get(cell.role)+1);
+    const max=Math.max(...counts.values()), winners=roleOrder.filter(role=>counts.get(role)===max);
+    return winners.includes(previous) ? previous : winners[0];
+  }
+  function rebuild() {
+    const nextOccupied=new Map(), nextHexes=new Map();
+    for(const [id,anchor] of state) {
+      const base=placement(id,anchor);
+      if(!base) throw Error('Groupement hors du plateau.');
+      const hex={...base,role:majority(base,logicalHexes.get(id)?.role)};
+      nextHexes.set(id,hex);
+      for(const cell of hex.members) {
+        if(nextOccupied.has(cell.id)) throw Error('Deux occupants sur la même case.');
+        nextOccupied.set(cell.id,id);
+      }
+    }
+    occupied=nextOccupied;logicalHexes=nextHexes;
+  }
+  // One logical cell is exposed for a group; every free elementary cell remains a singleton.
+  function logicalAt(cellId) {
+    const owner=occupied.get(cellId), cell=byId.get(cellId);
+    return owner ? logicalHexes.get(owner) : cell ? {id:`hex-${cellId}`,occupant:null,anchor:cellId,members:[cell],center:point(cell.q,cell.r),role:cell.role} : null;
+  }
+  function neighbors(hex) {
+    const own=new Set(hex.members.map(c=>c.id)), result=new Map();
+    for(const c of hex.members) for(const [q,r] of [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]]) {
+      const cell=byAxial.get(axialKey(c.q+q,c.r+r));
+      if(cell&&!own.has(cell.id)) {const logical=logicalAt(cell.id);result.set(logical.id,logical);}
+    }
+    return [...result.values()];
+  }
+  function planMove(id,anchor,canPush=$('push').checked,sizeIndex=sizeById.get(id)) {
+    metrics.plans++;
+    const desired=placement(id,anchor,sizeIndex);
+    if(!desired) return {valid:false,reason:'Le groupement entier doit rester sur le plateau.'};
+    const collisions=new Set(desired.members.map(c=>occupied.get(c.id)).filter(owner=>owner&&owner!==id));
+    if(collisions.size&&!canPush) return {valid:false,reason:'Ce groupement est occupé. Active le déplacement des voisins.'};
+    const fixed=new Set(desired.members.map(c=>c.id));
+    for(const [other,hex] of logicalHexes) if(other!==id&&!collisions.has(other)) for(const c of hex.members) fixed.add(c.id);
+    const moving=[...collisions].sort((a,b)=>sizeFor(b).shape.length-sizeFor(a).shape.length||a.localeCompare(b));
+    // Reuse findNearestAvailableHex's squared visual-distance ranking, on cached cell coordinates.
+    // Reserve entire logical cells, and choose the least total displacement for the two possible neighbours.
+    const candidates=moving.map(other=>{
+      const origin=logicalHexes.get(other).center;
+      return [...sizeFor(other).placements.values()].filter(h=>h.members.every(c=>!fixed.has(c.id)))
+        .map(hex=>({hex,cost:(hex.center.x-origin.x)**2+(hex.center.y-origin.y)**2}))
+        .sort((a,b)=>a.cost-b.cost||byId.get(a.hex.anchor).index-byId.get(b.hex.anchor).index);
+    });
+    let best=null,bestCost=Infinity;
+    const search=(index,reserved,moves,cost)=>{
+      if(cost>=bestCost) return;
+      if(index===moving.length) {best=new Map(moves);bestCost=cost;return;}
+      for(const candidate of candidates[index]) {
+        if(cost+candidate.cost>=bestCost) break;
+        if(candidate.hex.members.some(c=>reserved.has(c.id))) continue;
+        const next=new Set(reserved);candidate.hex.members.forEach(c=>next.add(c.id));
+        moves.set(moving[index],candidate.hex.anchor);search(index+1,next,moves,cost+candidate.cost);moves.delete(moving[index]);
+      }
+    };
+    search(0,fixed,new Map([[id,anchor]]),0);
+    return best ? {valid:true,moves:best,pushed:moving,hex:desired,sizeIndex} : {valid:false,reason:'Pas assez de place pour déplacer tous les groupes. Rien ne bouge.'};
+  }
+  function message(text,kind='') { $('status').textContent=text;$('status').dataset.kind=kind; }
+  function drawShape(parent,hex,color,preview=false) {
+    const group=svg('g',{style:`--${preview?'preview-color':'color'}:${color}`});
+    for(const member of hex.members) group.append(svg('polygon',{points:polygon(member),class:preview?'preview-cell':'group-cell'}));
+    group.append(svg('path',{d:hex.outline||boundary(hex.members),class:preview?'preview-boundary':'group-boundary'}));parent.append(group);return group;
+  }
+  function render() {
+    $('groups').replaceChildren();
+    for(const model of models) {
+      const hex=logicalHexes.get(model.id), view=views.get(model.id);
+      const group=drawShape($('groups'),hex,model.color);group.dataset.entity=model.id;group.classList.add('logical-group');
+      group.classList.toggle('selected',selected===model.id);group.classList.toggle('source',drag?.id===model.id);
+      const title=svg('title');title.textContent=`${model.name} · ${caseLabel(hex.members.length)} · ${roleNames[hex.role]}`;group.append(title);
+      if(!view) continue;
+      const sizeText=`${caseLabel(hex.members.length)} · ×${String(hex.scale).replace('.',',')}`;
+      view.actor.style.setProperty('--entity-size-scale',hex.scale);
+      view.actor.style.left=`${hex.center.x}px`;view.actor.style.top=`${hex.center.y+R*.23}px`;view.actor.style.zIndex=Math.round(hex.center.y);
+      view.caption.style.left=`${hex.center.x}px`;view.caption.style.top=`${hex.center.y+R*.64}px`;
+      view.caption.textContent=`${caseLabel(hex.members.length)} · ${roleNames[hex.role]}`;
+      view.actor.setAttribute('aria-label',`${model.name}, ${caseLabel(hex.members.length)}, ${roleNames[hex.role]}`);
+      view.panel.dataset.selected=String(selected===model.id);
+      view.card.setAttribute('aria-pressed',String(selected===model.id));
+      view.card.querySelector('.card-size').textContent=sizeText;
+      view.card.querySelector('.card-detail').textContent=`${roleNames[hex.role]} · ${hex.members.map(c=>c.id).join(' · ')}`;
+      view.slider.value=hex.sizeIndex;view.slider.setAttribute('aria-valuetext',sizeText);
+      view.minus.disabled=hex.sizeIndex===0;view.plus.disabled=hex.sizeIndex===sizes.length-1;
+    }
+    $('count').textContent=`${models.length} entités · ${occupied.size} cases réservées`;
+  }
+  // Only presentation moves: destination cells are reserved before the compositor starts sliding.
+  function visibleCenter(id) {
+    const motion=pushMotions.get(id);
+    if(!motion) return logicalHexes.get(id).center;
+    const progress=motion.slide.effect.getComputedTiming().progress ?? (motion.slide.playState==='finished'?1:0);
+    return {x:motion.from.x+(motion.to.x-motion.from.x)*progress,y:motion.from.y+(motion.to.y-motion.from.y)*progress};
+  }
+  function clearPush(id) {
+    const motion=pushMotions.get(id);if(!motion) return;
+    clearTimeout(motion.timer);motion.slide.onfinish=null;
+    motion.slide.cancel();motion.caption.cancel();motion.smoke.remove();
+    views.get(id).actor.classList.remove('pushing');pushMotions.delete(id);
+  }
+  function clearPushes() { for(const id of pushMotions.keys()) clearPush(id); }
+  function animatePush(id,from) {
+    clearPush(id);
+    const view=views.get(id),hex=logicalHexes.get(id),to=hex.center;
+    const dx=from.x-to.x,dy=from.y-to.y;
+    if(!view||reducedMotion.matches||Math.hypot(dx,dy)<.1) return;
+    const timing={duration:PUSH_DURATION,easing:'cubic-bezier(.22,.65,.3,1)',fill:'both'};
+    const slide=view.actor.animate([
+      {transform:`translate(${dx}px,${dy}px) translate(-50%,-100%)`},
+      {transform:'translate(0px,0px) translate(-50%,-100%)'},
+    ],timing);
+    const caption=view.caption.animate([
+      {transform:`translate(${dx}px,${dy}px) translateX(-50%)`},
+      {transform:'translate(0px,0px) translateX(-50%)'},
+    ],timing);
+    const smoke=new Image();smoke.className='push-smoke';smoke.alt='';smoke.setAttribute('aria-hidden','true');smoke.draggable=false;
+    // A distinct fragment restarts this GIF instance without changing its HTTP cache URL.
+    smoke.src=`media/assets/effects/dodge-smoke.gif#push-${++smokeSequence}`;
+    smoke.style.setProperty('--smoke-width',`${Math.max(64,Math.min(158,80*Math.sqrt(hex.scale)))}px`);
+    smoke.style.setProperty('--smoke-facing',to.x>from.x?-1:1);
+    view.actor.append(smoke);view.actor.classList.add('pushing');
+    const motion={from:{...from},to:{...to},slide,caption,smoke,timer:0};pushMotions.set(id,motion);
+    slide.onfinish=()=>{if(pushMotions.get(id)===motion) view.actor.classList.remove('pushing');};
+    // One GIF cycle, then release both the VFX and animation objects; no permanent RAF loop.
+    motion.timer=setTimeout(()=>{if(pushMotions.get(id)===motion) clearPush(id);},SMOKE_DURATION);
+  }
+  function commit(plan,id,resizing=false) {
+    if(!plan.valid) {message(plan.reason,'invalid');return false;}
+    const starts=new Map();
+    for(const owner of plan.moves.keys()) {
+      if(plan.pushed.includes(owner)||pushMotions.has(owner)) starts.set(owner,visibleCenter(owner));
+      clearPush(owner);
+    }
+    // Size and all positions change together, only after the full placement has passed validation.
+    sizeById.set(id,plan.sizeIndex);
+    for(const [owner,anchor] of plan.moves) state.set(owner,anchor);
+    rebuild();metrics.commits++;render();
+    for(const [owner,from] of starts) animatePush(owner,from);
+    message(`${modelById.get(id).name} ${resizing?`occupe maintenant ${caseLabel(plan.hex.members.length)}`:'déplacée'}${plan.pushed.length ? ` · ${plan.pushed.map(p=>modelById.get(p).name.toLowerCase()).join(' et ')} replacée${plan.pushed.length>1?'s':''} au plus près` : ''}.`,plan.pushed.length?'push':'valid');return true;
+  }
+  function setEntitySize(id,value) {
+    const next=Number(value);
+    if(!Number.isInteger(next)||next<0||next>=sizes.length) return;
+    stopDrag(true);selected=id;
+    if(next===sizeById.get(id)) {render();return;}
+    const plan=planMove(id,state.get(id),$('push').checked,next);
+    if(!plan.valid) {render();message(`Taille conservée : ${plan.reason}`,'invalid');return;}
+    commit(plan,id,true);
+  }
+  function clearPreview() { $('preview').replaceChildren();document.querySelectorAll('.logical-group.displaced').forEach(g=>g.classList.remove('displaced')); }
+  function refreshGeometry() { if(drag){drag.rect=$('world').getBoundingClientRect();metrics.geometryReads++;} }
+  function updateDrag(clientX,clientY) {
+    if(!drag) return;
+    const p={x:(clientX-drag.rect.left)/boardScale,y:(clientY-drag.rect.top)/boardScale};
+    const size=sizeFor(drag.id),center={x:p.x-drag.grab.x,y:p.y-drag.grab.y};
+    const view=views.get(drag.id);view.actor.style.left=`${center.x}px`;view.actor.style.top=`${center.y+R*.23}px`;
+    const aim={x:center.x-size.offset.x,y:center.y-size.offset.y};
+    const anchor=cells.find(c=>{const x=Math.abs(aim.x-c.x),y=Math.abs(aim.y-c.y);return x<=W/2+.01&&x+Math.sqrt(3)*y<=Math.sqrt(3)*R+.01;});
+    const key=anchor?.id||null;if(key===drag.candidate) return;drag.candidate=key;clearPreview();
+    drag.plan=key?planMove(drag.id,key):{valid:false,reason:'Dépose le groupement sur le plateau.'};
+    const plan=drag.plan,color=!plan.valid?'#ff9393':plan.pushed.length?'#f6bd7d':'#94ddbd';
+    if(anchor) {
+      const loose={members:size.shape.map(([q,r])=>point(anchor.q+q,anchor.r+r))};
+      drawShape($('preview'),plan.hex||loose,color,true);
+    }
+    if(plan.valid) for(const other of plan.pushed) {
+      const from=logicalHexes.get(other).center,to=placement(other,plan.moves.get(other));
+      drawShape($('preview'),to,'#f6bd7d',true);
+      $('preview').append(svg('path',{d:`M${from.x},${from.y}L${to.center.x},${to.center.y}`,class:'move-arrow','marker-end':'url(#arrow)'}));
+      document.querySelector(`.logical-group[data-entity="${other}"]`)?.classList.add('displaced');
+    }
+    message(plan.valid?(plan.pushed.length?`${plan.pushed.length} voisin${plan.pushed.length>1?'s':''} sera replacé${plan.pushed.length>1?'s':''}. Relâche pour valider.`:'Placement libre. Relâche pour valider.'):plan.reason,plan.valid?(plan.pushed.length?'push':'valid'):'invalid');
+  }
+  function stopDrag(cancel=false) {
+    if(!drag) return;
+    cancelAnimationFrame(frame);frame=0;
+    const current=drag;drag=null;views.get(current.id).actor.classList.remove('dragging');
+    if($('world').hasPointerCapture(current.pointer)) $('world').releasePointerCapture(current.pointer);
+    clearPreview();
+    if(cancel) message('Déplacement annulé.');else commit(current.plan,current.id);
+    render();
+  }
+  $('world').addEventListener('pointerdown',event=>{
+    if(event.button!==0||drag||!views.size) return;
+    const id=event.target.closest('[data-entity]')?.dataset.entity||occupied.get(event.target.closest('[data-cell]')?.dataset.cell);
+    if(!id) return;
+    event.preventDefault();selected=id;
+    const rect=$('world').getBoundingClientRect(),center=visibleCenter(id);metrics.geometryReads++;clearPush(id);
+    drag={id,pointer:event.pointerId,rect,grab:{x:(event.clientX-rect.left)/boardScale-center.x,y:(event.clientY-rect.top)/boardScale-center.y},candidate:undefined,plan:{valid:false,reason:'Déplacement annulé.'},x:event.clientX,y:event.clientY};
+    $('world').setPointerCapture(event.pointerId);views.get(id).actor.classList.add('dragging');render();updateDrag(event.clientX,event.clientY);
+  });
+  $('world').addEventListener('pointermove',event=>{
+    if(!drag||drag.pointer!==event.pointerId) return;drag.x=event.clientX;drag.y=event.clientY;
+    if(!frame) frame=requestAnimationFrame(()=>{frame=0;if(drag) updateDrag(drag.x,drag.y);});
+  });
+  $('world').addEventListener('pointerup',event=>{if(drag?.pointer===event.pointerId){updateDrag(event.clientX,event.clientY);stopDrag();}});
+  for(const event of ['pointercancel','lostpointercapture']) $('world').addEventListener(event,()=>stopDrag(true));
+  window.addEventListener('blur',()=>stopDrag(true));
+  document.addEventListener('visibilitychange',()=>{if(document.hidden) {stopDrag(true);clearPushes();}});
+  reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches) clearPushes();});
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape') {stopDrag(true);return;}
+    const control=event.target.closest('.actor-anchor,.entity-card');
+    if(drag||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)||!control) return;
+    event.preventDefault();selected=control.dataset.entity;
+    const anchor=byId.get(state.get(selected)),[dc,dr]=({ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]})[event.key];
+    const destination=cells.find(c=>c.col===anchor.col+dc&&c.row===anchor.row+dr);commit(planMove(selected,destination?.id),selected);
+  });
+  $('viewport').addEventListener('scroll',refreshGeometry,{passive:true});
+  function resize() {
+    stopDrag(true);boardScale=Math.max(.42,Math.min(1,$('viewport').clientWidth/WIDTH));
+    $('stage').style.width=`${WIDTH*boardScale}px`;$('stage').style.height=`${HEIGHT*boardScale}px`;
+    $('world').style.transform=`scale(${boardScale})`;
+  }
+  $('world').style.width=`${WIDTH}px`;$('world').style.height=`${HEIGHT}px`;$('board').setAttribute('viewBox',`0 0 ${WIDTH} ${HEIGHT}`);
+  new ResizeObserver(resize).observe($('viewport'));
+  $('roles').addEventListener('change',()=>{$('world').classList.toggle('hide-roles',!$('roles').checked);});
+  $('push').addEventListener('change',()=>stopDrag(true));
+  function reset() {
+    stopDrag(true);clearPushes();state=new Map(models.map(m=>[m.id,cells.find(c=>c.col===m.initial[0]&&c.row===m.initial[1]).id]));
+    sizeById=new Map(models.map(m=>[m.id,m.initialSize]));
+    logicalHexes=new Map();selected='yellow';rebuild();render();message('Agrandis la mouche jaune à 6 cases pour voir sa voisine être repoussée.');
+  }
+  $('reset').addEventListener('click',reset);reset();resize();
+  const ready=(async()=>{
+    const image=new Image();image.src='media/sprites/mouche-asticoteuse.png';await image.decode();
+    for(const model of models) {
+      const actor=$('fly-template').content.firstElementChild.cloneNode(true);actor.dataset.entity=model.id;actor.style.setProperty('--entity-size-scale',sizeFor(model.id).scale);
+      actor.querySelector('canvas').getContext('2d').drawImage(image,0,0,500,500);$('actors').append(actor);
+      for (const node of actor.querySelectorAll('[data-battle-id]')) node.id=`${node.dataset.battleId}_${model.id}`;
+      const sprite=actor.querySelector('.sprite'), layer=actor.querySelector('.entity-size-layer');
+      const style=getComputedStyle(sprite);metrics.spriteMeasurements++;
+      const width=parseFloat(style.width),height=parseFloat(style.height);
+      if(!(width>0&&height>0)) throw Error('Dimensions du sprite invalides.');
+      // Same local, untransformed calibration as combatPopups.calibrateEntityVisuals.
+      // This document also works via file://, without loading combat modules.
+      let top=0;for(let node=sprite;node&&node!==layer;node=node.offsetParent) top+=node.offsetTop;
+      const left=parseFloat(getComputedStyle(actor.querySelector('.img-container')).left)||0;
+      const root=actor.querySelector('.entite-box'),drag=actor.querySelector('.drag-box'),dragCSS=getComputedStyle(drag);
+      const baseScale=new DOMMatrixReadOnly(getComputedStyle(actor.querySelector('.entitesContainer')).transform).a;
+      const vars={'--popup-sprite-w':`${width}px`,'--popup-sprite-h':`${height}px`,'--entity-visual-left':`${left}px`,'--entity-foot-y':`${top+height}px`,
+        '--entity-base-scale':baseScale,'--entity-cast-left':'50%','--entity-drag-top':`${drag.offsetTop}px`,
+        '--entity-drag-origin-y':dragCSS.transformOrigin.split(' ')[1],'--entity-drag-transform':dragCSS.transform};
+      const auraX=sprite.offsetLeft,auraY=sprite.offsetTop;
+      actor.style.setProperty('--sprite-w',`${width}px`);actor.style.setProperty('--sprite-h',`${height}px`);
+      for(const [key,value] of Object.entries(vars)) root.style.setProperty(key,value);
+      root.dataset.spriteWidth=width;root.dataset.spriteHeight=height;
+      layer.style.setProperty('--entity-foot-y',`${top+height}px`);layer.style.transformOrigin=`calc(50% + ${left}px) var(--entity-foot-y)`;
+      const aura=actor.querySelector('.aura-container');aura.style.setProperty('--aura-local-x',`${auraX}px`);aura.style.setProperty('--aura-local-y',`${auraY}px`);
+      root.classList.add('entity-visual-calibrated');
+      const caption=document.createElement('span');caption.className='group-caption';caption.style.setProperty('--color',model.color);$('actors').append(caption);
+      const panel=document.createElement('article');panel.className='entity-panel';panel.style.setProperty('--color',model.color);
+      const card=document.createElement('button');card.type='button';card.className='entity-card';card.dataset.entity=model.id;
+      card.innerHTML=`<span class="card-head"><span>${model.name}</span><span class="card-size"></span></span><span class="card-detail"></span>`;
+      const controls=document.createElement('div');controls.className='size-controls';
+      const slider=document.createElement('input');slider.type='range';slider.min=0;slider.max=sizes.length-1;slider.step=1;slider.dataset.sizeFor=model.id;
+      slider.setAttribute('aria-label',`Taille de la ${model.name.toLowerCase()}`);slider.addEventListener('input',()=>setEntitySize(model.id,slider.value));
+      const stepButton=(symbol,delta)=>{
+        const button=document.createElement('button');button.type='button';button.textContent=symbol;button.dataset.sizeStep=delta;
+        button.setAttribute('aria-label',`${delta<0?'Réduire':'Agrandir'} la ${model.name.toLowerCase()}`);
+        button.addEventListener('click',()=>setEntitySize(model.id,sizeById.get(model.id)+delta));return button;
+      };
+      const minus=stepButton('−',-1),plus=stepButton('+',1);controls.append(minus,slider,plus);
+      const steps=document.createElement('div');steps.className='size-steps';steps.setAttribute('aria-hidden','true');steps.innerHTML='<span>1</span><span>2</span><span>3</span><span>6 cases</span>';
+      const select=()=>{selected=model.id;render();};card.addEventListener('click',select);actor.addEventListener('focus',select);
+      panel.append(card,controls,steps);$('roster').append(panel);views.set(model.id,{actor,caption,card,panel,slider,minus,plus});
+    }
+    render();
+  })().catch(error=>{$('load-error').hidden=false;$('load-error').textContent=`Impossible de charger le banc d’essai : ${error.message}`;message('Chargement incomplet.','invalid');throw error;});
+  // Read-only inspection for this stand-alone lab and its browser checks.
+  window.hexGroupLab={ready,snapshot:()=>({entities:[...logicalHexes.values()].map(h=>({id:h.occupant,anchor:h.anchor,sizeIndex:h.sizeIndex,scale:h.scale,role:h.role,members:h.members.map(c=>c.id),center:{...h.center},neighbors:neighbors(h).map(n=>n.id)})),occupied:Object.fromEntries(occupied),metrics:{...metrics},scale:boardScale}),logicalAt:id=>{const h=logicalAt(id);return h&&{id:h.id,occupant:h.occupant,role:h.role,members:h.members.map(c=>c.id)};}};
+})();
+</script>
+<script src="js/vfxCalibrator.js"></script>
+</body>
+</html>
