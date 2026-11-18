@@ -1,7 +1,7 @@
-import { getAttackControlValue } from './entityControl.js';
-import { previewAttackEffects } from './effectParameters.js';
+import { getAttackControlValue } from "../entityControl.js";
+import { previewAttackEffects } from "../effectParameters.js";
 // Attack cards, descriptions, progression and combat controls.
-import { clockNow, requestAnimationFrame, cancelAnimationFrame } from './combatClock.js';
+import { clockNow, requestAnimationFrame, cancelAnimationFrame } from "../combatClock.js";
 import {
   buildAttackLightDescription,
   renderAttackDescription,
@@ -13,13 +13,13 @@ import {
   buildAttackUmbraCompatibilityHelper,
   buildInertEnergyHelper,
   buildAttackMasteryHelper,
-} from './data/helpers.js';
-import { cachedResourceUrl } from './data/loaderList.js';
-import { attackDetails } from './data/attackList.js';
-import { balanceData } from './data/balanceData.js';
-import { isAdminMode } from './GameStorage.js';
-import { getSafe } from './entite/entityRules.js';
-import { entites } from './entites.js';
+} from "../data/helpers.js";
+import { cachedResourceUrl } from "../data/loaderList.js";
+import { attackDetails } from "../data/attackList.js";
+import { balanceData } from "../data/balanceData.js";
+import { isAdminMode } from "../GameStorage.js";
+import { getSafe } from "../entite/entityRules.js";
+import { entites } from "../entites.js";
 import {
   ATTACK_ESSENCE_MAX_SLOTS,
   attackSelectionKey,
@@ -42,33 +42,33 @@ import {
   refreshEntityCurrentAttackDefinition,
   setAllAttacksEnabled,
   getAttackResonance,
-} from './attackResolution.js';
+} from "../attackResolution.js";
 import {
   createAttackStatView, getAttackPurity, calculateAttackDamagePreview, calculateDirectAttackDps,
   calculateDirectAttackHps, calculateProfanationSummonLevel, getFinalAttackProjectileSpeed, getEffectiveAttackTimings,
   calculateCritTotalChance, getRangePenaltyDetails, totalPiercingRecupReductionWithAgi, totalTranspiercingRecupReductionWithAgi,
   calculateMeleeExecBonus, getAttackUmbraAccess
-} from './damagesCalcul.js';
-import { calculateStatsDisplay } from './ui/statDetails.js';
-import { saveEntityAttackSelection } from './entityUpdatesStorage.js';
-import { resolveAttackEffects, describeAttackEffect, EFFECT_TYPES } from './data/attackEffects.js';
-import { normArr } from './entityAttributs.js';
-import { createAttackEssenceSocketsElement } from './essenceur.js';
+} from "../damagesCalcul.js";
+import { calculateStatsDisplay } from "./statistics/details.js";
+import { saveEntityAttackSelection } from "../entityUpdatesStorage.js";
+import { resolveAttackEffects, describeAttackEffect, EFFECT_TYPES } from "../data/attackEffects.js";
+import { normArr } from "../entityAttributs.js";
+import { createAttackEssenceSocketsElement } from "../essenceur.js";
 import {
   getCodexFocusedAttackKey,
   setCodexFocusedAttackKey,
   getPendingInventoryCodexAttackTarget,
-} from './ui/menuNavigation.js';
+} from "./navigation.js";
 import {
   bindHelperEntity, getBoundHelperEntity, layoutOpenStatHelpers, cssEscape,
   escape, statSourcesHelper
-} from './ui/statHelpers.js';
-import { resolvePowerOwner, createAttackPowerValue } from './ui/powerViews.js';
-import { applyAttackEssenceSocketChoice, applyAdminAttackCardChange } from './ui/essenceInterface.js';
-import { createFullStatDom, createEntityStatsTitleNode } from './ui/statElements.js';
-import { removeCombatVisualAfter } from './combatClock.js';
-import { gameStarted } from './gameState.js';
-import { createLifeBars, CreateATBEntity } from './createEntity.js';
+} from "./statistics/helpers.js";
+import { resolvePowerOwner, createAttackPowerValue } from "./statistics/components.js";
+import { applyAttackEssenceSocketChoice, applyAdminAttackCardChange } from "./essences.js";
+import { createFullStatDom, createEntityStatsTitleNode } from "./statistics/components.js";
+import { removeCombatVisualAfter } from "../combatClock.js";
+import { gameStarted } from "../gameState.js";
+import { createLifeBars, CreateATBEntity } from "../createEntity.js";
 
 function generateAttackDescription(attack, attacker) {
   const preview = calculateAttackDamagePreview(attacker, attack);
@@ -2556,7 +2556,7 @@ export {
   createAttackSubmenu,
 };
 
-export { statSourcesHelper } from './ui/statHelpers.js';
+export { statSourcesHelper } from "./statistics/helpers.js";
 
 // Register shared handlers once, after the complete module graph is initialized.
 let initialized = false;

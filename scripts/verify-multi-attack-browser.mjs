@@ -28,7 +28,7 @@ try {
     const { setEntityAttackDefinitions, readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
     const selection = await import("/js/attackResolution.js");
     const { selectAttackDecision, runAttackCooldownWait, entiteTurn } = await import('/js/fight.js');
-    const { MultiAttackDisplay } = await import('/js/GameInit.js');
+    const { MultiAttackDisplay } = await import("/js/ui/attacks.js");
     const { setGameOver, setOrderSide } = await import('/js/gameState.js');
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); };
@@ -426,7 +426,7 @@ try {
   console.log(surprises.join('\n'));
   const surfaces = await page.evaluate(async () => {
     const { entites, entitesNestUp } = await import('/js/entites.js');
-    const { createCodexEntityScan, EntityNewGameStarter, createEntityAttackDisplay, createAttackLightDescription, AttackDetailInfos } = await import('/js/GameInit.js');
+    const { createCodexEntityScan, EntityNewGameStarter, createEntityAttackDisplay, createAttackLightDescription, AttackDetailInfos } = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const { readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
     const { createEntiteScanInDOM } = await import('/js/createEntity.js');
     const reports = [];
@@ -572,7 +572,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
     const { entitesNestUp } = await import('/js/entites.js');
-    const { EntityNewGameStarter } = await import('/js/GameInit.js');
+    const { EntityNewGameStarter } = await import("/js/ui/application.js");
     document.querySelectorAll('#multi-fixture, .entitylootContainer, #black-overlay, .stat-hover').forEach(node => node.remove());
     const fixture = document.createElement('div');
     fixture.id = 'starter-visual-fixture';
@@ -606,7 +606,7 @@ try {
   await page.locator('#starter-visual-fixture .starter-select-button:not([hidden])').click();
   assert.equal(await page.locator('#starter-visual-fixture .entitylootContainer').count(), 0, 'Real pointer click validates selected starter');
   await page.evaluate(async () => {
-    const { EntityNewGameStarter } = await import('/js/GameInit.js');
+    const { EntityNewGameStarter } = await import("/js/ui/application.js");
     const { entitesNestUp } = await import('/js/entites.js');
     EntityNewGameStarter([entitesNestUp.find(e => e.serial === 11).id], 'starter-visual-fixture');
   });

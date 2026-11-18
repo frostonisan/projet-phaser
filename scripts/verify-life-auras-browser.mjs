@@ -30,7 +30,7 @@ try {
   checks.push(...await page.evaluate(async () => {
     const E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js');
     const A = await import('/js/entityAttributs.js');

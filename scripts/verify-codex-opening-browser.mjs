@@ -9,12 +9,14 @@ const root = resolve('docs');
 const output = resolve('outputs/codex-opening');
 await mkdir(output, { recursive: true });
 const probes = {
-  '/js/ui/codex.js': [
+  "/js/ui/codex/index.js": [
     ['function  createCodexEntityScan(entite, container, codexId, positionClass = \'\') {', 'buildCodex'],
     ['function EntityCodexDetails(entiteId, shiftKey = false) {', 'openCodexHandler'],
   ],
-  '/js/damagesCalcul.js': [
+  '/js/ui/statistics/details.js': [
     ['export function calculateStatsDisplay(statKey, entite, statValue, options = {}) {', 'displayStat', 'statKey'],
+  ],
+  '/js/damagesCalcul.js': [
     ['export function getStatContributions(entity, stat, { resolveLabels = true, includePreview = false, includePlus = false } = {}) {', 'statContributions'],
   ],
   '/js/entites.js': [
@@ -47,7 +49,7 @@ try {
   page.on('pageerror', e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const fixture = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js');
     const G = await import('/js/gameState.js');

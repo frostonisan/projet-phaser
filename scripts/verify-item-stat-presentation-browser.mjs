@@ -35,7 +35,7 @@ try {
     const H = await import('/js/data/helpers.js');
     const { stats } = await import('/js/data/statsData.js');
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const U = await import('/js/UpgradeEntity.js');
     setAdminMode(true);
     document.body.innerHTML = '<div class="Game-helper"></div><div id="anchor"></div><div id="equipment-anchor"></div>';

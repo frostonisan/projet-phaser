@@ -28,7 +28,7 @@ try {
     const S = await import('/js/GameStorage.js');
     const E = await import('/js/entites.js');
     const A = await import('/js/admin.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const N = await import('/js/newgame.js');
     S.setAdminMode(true);
     window.levelRunning = 'worldmap';

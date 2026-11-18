@@ -33,7 +33,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
     const triggered = await page.evaluate(async ({ mode, baseStats }) => {
       const { enrichEntityStats, levelDetails } = await import('/js/entites.js');
-      const { createCodexEntityScan } = await import('/js/GameInit.js');
+      const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
       const { setPlayerExperience, getCycleForKey } = await import('/js/UpgradeEntity.js');
       const { STAT_INDEX } = await import("/js/entite/entityRules.js");
       const entity = { id: 930001, name: 'Test Eveil', side: 'A', type: 'sbire', class: 'TestReset', level: 1,
@@ -157,7 +157,7 @@ try {
         const host = document.createElement('main');
         host.id = 'awakening-test-host';
         document.body.appendChild(host);
-        (await import('/js/GameInit.js')).createCodexEntityScan(entity, host, `codex-entity_${entity.id}`);
+        (await import("/js/ui/codex/index.js")).createCodexEntityScan(entity, host, `codex-entity_${entity.id}`);
         host.querySelector('.codex-inner-menu:has(.codex-soul)').click();
       });
     }

@@ -31,12 +31,12 @@ try {
     const { attackDetails: catalog } = await import('/js/data/attackList.js');
     const { enrichEntityStats, recomputeEntityStats, entites } = await import('/js/entites.js');
     const { getStatSystemResult } = await import('/js/entite/statSystem.js');
-    const damage = await import('/js/damagesCalcul.js'), damageDisplay = await import('/js/ui/statDetails.js');
+    const damage = await import('/js/damagesCalcul.js'), damageDisplay = await import("/js/ui/statistics/details.js");
     const combat = await import('/js/combat/attacks.js');
     const { createAttackFlight } = await import("/js/combat/attacks.js");
     const { selectAttackDecision, entiteTurn } = await import('/js/fight.js');
-    const progressionUI = await import('/js/attackInterface.js');
-    const ui = await import('/js/GameInit.js');
+    const progressionUI = await import("/js/ui/attacks.js");
+    const ui = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/attacks.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const reports = [];
     const check = (condition, name) => { if (!condition) throw Error(name); reports.push(name); };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

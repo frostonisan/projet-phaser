@@ -1,27 +1,27 @@
 // Army and entity Codex navigation, composition and focused attack routing.
-import { getStatSystemResult } from '../entite/statSystem.js';
-import { HELPER_TEXT } from '../data/helpers.js';
-import { cachedResourceUrl } from '../data/loaderList.js';
-import { attackDetails } from '../data/attackList.js';
-import { balanceData } from '../data/balanceData.js';
-import { isAdminMode, loadFromLocalStorage, purgeStatPreview } from '../GameStorage.js';
-import { getSafe } from '../entite/entityRules.js';
-import { entites, calculateTranscendenceExtraLife, getMovementWeightMalus, getStatMalusSources } from '../entites.js';
-import { attackSelectionKey } from '../attackResolution.js';
-import { calculateTotalRegenAmount, calculateMysticismTranceDuration } from '../damagesCalcul.js';
-import { createLevelUpForm, LevelupSignal } from '../UpgradeEntity.js';
-import { setAdminSelectedEntity, closeAdminEntityFormOnly } from '../admin.js';
+import { getStatSystemResult } from "../../entite/statSystem.js";
+import { HELPER_TEXT } from "../../data/helpers.js";
+import { cachedResourceUrl } from "../../data/loaderList.js";
+import { attackDetails } from "../../data/attackList.js";
+import { balanceData } from "../../data/balanceData.js";
+import { isAdminMode, loadFromLocalStorage, purgeStatPreview } from "../../GameStorage.js";
+import { getSafe } from "../../entite/entityRules.js";
+import { entites, calculateTranscendenceExtraLife, getMovementWeightMalus, getStatMalusSources } from "../../entites.js";
+import { attackSelectionKey } from "../../attackResolution.js";
+import { calculateTotalRegenAmount, calculateMysticismTranceDuration } from "../../damagesCalcul.js";
+import { createLevelUpForm, LevelupSignal } from "../../UpgradeEntity.js";
+import { setAdminSelectedEntity, closeAdminEntityFormOnly } from "../../admin.js";
 import {
   removeItemDescription,
   DropInventorytoCodex,
   equippedHoverDescription,
   clearItemDescriptions,
-} from '../items/itemManager.js';
-import { createLifeBars, createLifeCounter, createArmorCounter, createMovementCounter } from '../createEntity.js';
-import { goldTitle } from '../ui.js';
-import { syncEntityAuras } from '../entitesAura.js';
-import { closeAttackEssenceSocketPopups } from '../essenceur.js';
-import { getStageAccess, requireSafeMenuAccess } from '../gameState.js';
+} from "../../items/itemManager.js";
+import { createLifeBars, createLifeCounter, createArmorCounter, createMovementCounter } from "../../createEntity.js";
+import { goldTitle } from "../display.js";
+import { syncEntityAuras } from "../../entitesAura.js";
+import { closeAttackEssenceSocketPopups } from "../../essenceur.js";
+import { getStageAccess, requireSafeMenuAccess } from "../../gameState.js";
 import {
   bindCodexNavigationMemory,
   getCodexMenuIndex,
@@ -39,9 +39,9 @@ import {
   clearPendingInventoryCodexAttackTarget,
   findInventoryEntityById,
   setPendingInventoryCodexAttackTarget,
-} from './menuNavigation.js';
-import { bindHelperEntity, getBoundHelperEntity } from './statHelpers.js';
-import { createEntityPowerValue } from './powerViews.js';
+} from "../navigation.js";
+import { bindHelperEntity, getBoundHelperEntity } from "../statistics/helpers.js";
+import { createEntityPowerValue } from "../statistics/components.js";
 import {
   createCodexInformationBattlePage,
   createCodexProfileSummary,
@@ -49,7 +49,7 @@ import {
   ensureDirectEntityView,
   removeDirectEntityView,
   createEntityLore,
-} from './codexProfile.js';
+} from "./profile.js";
 import {
   createUmbraBlock,
   createStatSection,
@@ -60,22 +60,22 @@ import {
   entityHasKey,
   readEntityKey,
   createValideStatDom,
-} from './statElements.js';
+} from "../statistics/components.js";
 import {
   normalizeInventoryLookupValue,
   getInventoryAttackKeyCandidates,
   createAttackReadOnlyOverview,
   createAttackSubmenu,
-} from '../attackInterface.js';
+} from "../attacks.js";
 import {
   renderCodexUmbraSubstatPanel,
   createSoulSubmenu,
   createStatsSubmenu,
   createSoulGraphPanel,
   createArchetypesList,
-} from './codexStats.js';
-import { getCodexStableEquipmentCharge } from './equipment.js';
-import { applyCombatProfileView } from '../load-entity.js';
+} from "./stats.js";
+import { getCodexStableEquipmentCharge } from "./profile.js";
+import { applyCombatProfileView } from "../../load-entity.js";
 
 function escapeInventorySelectorValue(value = '') {
     const text = String(value ?? '');

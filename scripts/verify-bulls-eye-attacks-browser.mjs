@@ -23,7 +23,7 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await import('/js/GameInit.js'), D = await import('/js/damagesCalcul.js');
+    const E = await import('/js/entites.js'), UI = await import("/js/ui/codex/index.js"), D = await import('/js/damagesCalcul.js');
     const S = await import('/js/GameStorage.js'), R = await import('/js/attackResolution.js'), G = await import('/js/gameState.js');
     const U = await import('/js/UpgradeEntity.js');
     window.levelRunning = 'worldmap'; G.setGameOver(false);

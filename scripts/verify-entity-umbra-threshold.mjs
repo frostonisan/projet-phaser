@@ -4,7 +4,7 @@ await installEntityTestEnvironment();
 const E = await import('../docs/js/entites.js');
 const S = await import('../docs/js/entite/statSystem.js');
 const R = await import('../docs/js/entite/entityRules.js');
-const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
+const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
 const U = await import('../docs/js/UpgradeEntity.js');
 const Storage = await import('../docs/js/GameStorage.js');
 const { stats } = await import('../docs/js/data/statsData.js');

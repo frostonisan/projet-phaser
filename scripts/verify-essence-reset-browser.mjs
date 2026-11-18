@@ -28,7 +28,7 @@ try {
     (await import('/js/entite/entityReset.browser.test.js')).runEntityResetBrowserChecks());
   const curseChecks = await page.evaluate(async () => {
     const stats = await import('/js/entites.js');
-    const ui = await import('/js/GameInit.js');
+    const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const { equip, unequip } = await import('/js/items/equipement.js');
     const { entitesNest } = await import('/js/entite/entitesNest.js');
     const target = structuredClone(entitesNest[0]);
@@ -101,7 +101,7 @@ try {
   const debtChecks = await page.evaluate(async () => {
     const stats = await import('/js/entites.js');
     const { getSafe } = await import("/js/entite/entityRules.js");
-    const ui = await import('/js/GameInit.js');
+    const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const levels = await import('/js/UpgradeEntity.js');
     const { equip, unequip } = await import('/js/items/equipement.js');
     const check = (ok, message) => { if (!ok) throw new Error(message); };
@@ -496,7 +496,7 @@ try {
   });
   assert.deepEqual(rejectedDead, { ok: false, hp: 0, retained: true });
   const popupStyle = await page.evaluate(async () => {
-    const { showGamePopupMessage } = await import('/js/ui.js');
+    const { showGamePopupMessage } = await import("/js/ui/display.js");
     const panel = showGamePopupMessage({ key: 'backdrop-test', message: 'Test', duration: 30, fadeMs: 30 });
     const backdrop = panel.closest('.game-popup-layer').querySelector('.game-popup-backdrop');
     const bounds = backdrop.getBoundingClientRect();
@@ -509,7 +509,7 @@ try {
   await page.reload({ waitUntil: 'load' });
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('selectedArmyA')).find(e => e.id === 900001).level.current), 1);
   const purificationPlacement = await page.evaluate(async () => {
-    const { createCodexEntityScan } = await import('/js/GameInit.js');
+    const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
     const { createLevelUpForm } = await import('/js/UpgradeEntity.js');
     const army = JSON.parse(localStorage.getItem('selectedArmyA'));
     const entity = structuredClone(army.find(e => e.id === 900001));
@@ -582,7 +582,7 @@ try {
   if (process.argv[2]) {
     const army = JSON.parse(await readFile(process.argv[2], 'utf8')).entities;
     const availableId = await page.evaluate(async army => {
-      const { AttackDetailInfos } = await import('/js/GameInit.js');
+      const { AttackDetailInfos } = await import("/js/ui/attacks.js");
       const { calculateEntityLinkedEssenceAvailability, grantEssencesToInventory } = await import('/js/essenceur.js');
       localStorage.setItem('selectedArmyA', JSON.stringify(army));
       window.selectedArmyA = army;

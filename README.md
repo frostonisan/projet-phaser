@@ -34,3 +34,10 @@ et du rendu. Phaser sera integre apres validation de ces frontieres.
 ## Architecture
 
 Le decoupage en cours, les responsabilites et les prochains lots sont decrits dans [ARCHITECTURE.md](ARCHITECTURE.md).
+
+
+Le démarrage se trouve dans `docs/js/app/startup.js` (ancien `GameInit.js`).
+Les écrans sont regroupés dans `docs/js/ui/`, avec deux sous-dossiers :
+`codex/` pour les fiches d'entités et `statistics/` pour leur présentation.
+Ce périmètre comporte 14 fichiers, contre 17 auparavant ; le plan détaillé figure
+ci-dessus dans ARCHITECTURE.md.

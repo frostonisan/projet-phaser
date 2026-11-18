@@ -1,5 +1,5 @@
 // Game startup. UI construction lives in the themed modules below.
-import { gameStorage as localStorage } from './sessionStorage.js';
+import { gameStorage as localStorage } from "../sessionStorage.js";
 import {
   loadFromLocalStorage,
   saveToLocalStorage,
@@ -7,11 +7,11 @@ import {
   loadCurrentGameData,
   saveCurrentGameData,
   setCurrentLevel,
-} from './GameStorage.js';
-import { migrateEntityAcquisitions } from './entites.js';
-import { AdminButtons } from './admin.js';
-import { launchCurrentLevelFromStorage, initializeWorldMapInterface } from './newgame.js';
-import { sanitizeItemId } from './items/itemManager.js';
+} from "../GameStorage.js";
+import { migrateEntityAcquisitions } from "../entites.js";
+import { AdminButtons } from "../admin.js";
+import { launchCurrentLevelFromStorage, initializeWorldMapInterface } from "../newgame.js";
+import { sanitizeItemId } from "../items/itemManager.js";
 import {
   detectPageReload,
   markPageLoaded,
@@ -21,16 +21,15 @@ import {
   initializeArmyConfig,
   triggerAnimation,
   initializePlayerMenus,
-} from './ui/playerMenus.js';
+} from "../ui/application.js";
 
-import { initializeAttackInterface } from './attackInterface.js';
-import { initializeCodex } from './ui/codex.js';
-import { initializeCodexProfile } from './ui/codexProfile.js';
-import { initializeCodexStats } from './ui/codexStats.js';
-import { initializeEquipment } from './ui/equipment.js';
-import { initializeInventory } from './ui/inventory.js';
-import { initializePowerViews } from './ui/powerViews.js';
-import { initializeStatHelpers } from './ui/statHelpers.js';
+import { initializeAttackInterface } from "../ui/attacks.js";
+import { initializeCodex } from "../ui/codex/index.js";
+import { initializeCodexProfile, initializeEquipment } from "../ui/codex/profile.js";
+import { initializeCodexStats } from "../ui/codex/stats.js";
+import { initializeInventory } from "../ui/inventory.js";
+import { initializePowerViews } from "../ui/statistics/components.js";
+import { initializeStatHelpers } from "../ui/statistics/helpers.js";
 
 initializeAttackInterface();
 initializeCodex();
@@ -112,7 +111,7 @@ function initializeGameOnLoad() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (await (await import("./combatPause.js")).restorePausedCombat()) return;
+    if (await (await import("../combatPause.js")).restorePausedCombat()) return;
     const reloaded = detectPageReload(); // ❗ On détecte vraiment le reload cette fois
     console.log(`✅ Page Reload détecté ? ${reloaded}`);
     initializeGameOnLoad();
@@ -122,78 +121,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (document.readyState === 'complete') initializeWorldMapInterface();
     else window.addEventListener('load', initializeWorldMapInterface, { once: true });
 });
-
-// Public entry-point exports remain stable; game modules import their owner directly.
-export {
-  detectPageReload,
-  markPageLoaded,
-  createGameContainer,
-  getOrCreateWorldMapID,
-  GameUi,
-  closeStagePlayerMenus,
-  syncStagePlayerInterface,
-  createResetViewButton,
-  createBattleBook,
-  EntityNewGameStarter,
-  initializeArmyConfig,
-  ResetGameStages,
-  ResetEntitesB,
-  ResetXp,
-  ResetGameDay,
-  getOrCreateGameContainer,
-  playLoadingAnimation,
-} from './ui/playerMenus.js';
-export { MenuContainerDisplayRules, enforceMenuDisplayRules } from './ui/menuNavigation.js';
-export {
-  generateAttackDescription,
-  createAttackDescriptionContent,
-  createAttackLightDescription,
-  AttackDetailInfos,
-  attackNatureRange,
-  createEntityAttackDisplay,
-  MultiAttackDisplay,
-} from './attackInterface.js';
-export {
-  helperEntityByRoot,
-  bindHelperEntity,
-  getBoundHelperEntity,
-  refreshStatHelper,
-  closeOpenHelpers,
-} from './ui/statHelpers.js';
-export {
-  syncStatCurseMarker,
-  createUmbraBlock,
-  calculateMeleeExecutionPercent,
-  createUmbraBlockTagged,
-} from './ui/statElements.js';
-export { createStuffDom } from './ui/equipment.js';
-export {
-  cachedDisplayPower,
-  schedulePowerRefresh,
-  createEntityPowerValue,
-  createArmyPowerReport,
-  createEntityRateSummary,
-  createArmyPowerSummary,
-} from './ui/powerViews.js';
-export {
-  createCodexCombatRecord,
-  createCodexInvocationsRecord,
-  refreshCodexProfileSummary,
-} from './ui/codexProfile.js';
-export { refreshCodexUmbraPanel } from './ui/codexStats.js';
-export {
-  createEntityCodex,
-  createCodexEntityScan,
-  closePlayerArmyCodex,
-  PlayerArmyCodex,
-  EntityCodexDetails,
-} from './ui/codex.js';
-export {
-  createBattleSatchelView,
-  PlayerInventory,
-  createInventory,
-  MapShop,
-  openShopInterface,
-} from './ui/inventory.js';
-export { PlayerEssenceur, openEssenceurInterface } from './ui/essenceInterface.js';
-export { generateEffectDescription } from './data/helpers.js';

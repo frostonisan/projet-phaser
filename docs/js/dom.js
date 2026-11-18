@@ -8,7 +8,7 @@ import { getSafe } from "./entite/entityRules.js";
 import { resolveAttackDefinitionForEntity, resolveEntityAttackDisplayName } from "./attackResolution.js";
 import { getEntityCombatDetails } from "./entityUpdatesStorage.js";
 
-export { DRAG_HELPER_CLEANUP_EVENT, isDragDropActive, clearDragTransientHelpers, beginDragHelperCleanup, endDragHelperCleanup, bindDragHelperCleanupGuards } from './ui/dragHelpers.js';
+export { DRAG_HELPER_CLEANUP_EVENT, isDragDropActive, clearDragTransientHelpers, beginDragHelperCleanup, endDragHelperCleanup, bindDragHelperCleanupGuards } from "./ui/drag.js";
 
 // Combat HUD and entity counters.
 // TIMERS ENTITES

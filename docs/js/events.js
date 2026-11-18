@@ -48,7 +48,7 @@ import {
 import { attackDetails } from './data/attackList.js';
 import { attackEffects } from './data/attackEffects.js';
 import { stats } from './data/statsData.js';
-import { cinematicView, restoreParallaxViewAndControls } from './ui.js';
+import { cinematicView, restoreParallaxViewAndControls } from "./ui/display.js";
 import { getBattleEntityElement } from "./entite/entityRules.js";
 import { consumeEntityArmor, destroyEntityArmor } from "./items/armor.js";
 
@@ -702,17 +702,17 @@ export async function restoreAllInterface() {
 
   let gameUIRestored = Boolean(document.querySelector('.Game-UI'));
   if (!gameUIRestored) {
-    const gameInit = await import('./GameInit.js');
-    if (typeof gameInit.GameUi !== 'function') {
+    const playerMenus = await import("./ui/application.js");
+    if (typeof playerMenus.GameUi !== 'function') {
       throw new TypeError('[Events] restoreAllInterface: GameUi() est introuvable.');
     }
-    gameInit.GameUi();
+    playerMenus.GameUi();
     gameUIRestored = Boolean(document.querySelector('.Game-UI'));
   }
 
   // Toujours repasser par la factory idempotente : elle restaure les boutons
   // retirés avec `.Game-UI` et canonicalise `.board-ui` sans la dupliquer.
-  const ui = await import('./ui.js');
+  const ui = await import("./ui/display.js");
   if (typeof ui.LevelUi !== 'function') {
     throw new TypeError('[Events] restoreAllInterface: LevelUi() est introuvable.');
   }
@@ -861,7 +861,7 @@ export async function ensureBattleInterfaceReady({ source = 'fight' } = {}) {
   restoreParallaxViewAndControls();
   await restoreAllInterface();
 
-  const ui = await import('./ui.js');
+  const ui = await import("./ui/display.js");
   ui.HexButtonVisibility?.(getVisibleHexes());
 
   const resetViewButton = document.querySelector('.reset-view-button');
@@ -905,11 +905,11 @@ export async function ensureBattleInterfaceReady({ source = 'fight' } = {}) {
   if (Object.values(checks).some((valid) => !valid)) {
     repaired = true;
     const gameContainer = document.querySelector('#game-container');
-    const gameInit = await import('./GameInit.js');
+    const playerMenus = await import("./ui/application.js");
 
     // GameUi() récupère d'abord les contrôles utiles placés dans un éventuel
     // doublon avant que les racines surnuméraires soient supprimées.
-    gameInit.GameUi?.();
+    playerMenus.GameUi?.();
     const gameUIs = [...document.querySelectorAll('.Game-UI')];
     const canonicalGameUI = gameUIs.find((element) => element.parentElement === gameContainer)
       || gameUIs[0];

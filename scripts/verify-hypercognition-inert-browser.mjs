@@ -25,10 +25,10 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
     const model = await import('/js/attackResolution.js');
-    const calc = await import('/js/damagesCalcul.js'), calcDisplay = await import('/js/ui/statDetails.js');
+    const calc = await import('/js/damagesCalcul.js'), calcDisplay = await import("/js/ui/statistics/details.js");
     const ledger = await import('/js/essenceInventory.js');
     const essences = await import('/js/essenceur.js');
-    const ui = await import('/js/GameInit.js');
+    const ui = await Promise.all([import("/js/ui/attacks.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const { buildStatHoverCard } = await import('/js/data/helpers.js');
     const { applyDamage, calculateDefensiveHpOutcome } = await import('/js/entityAttributs.js');
     const { calculateResistances } = await import("/js/entite/entityRules.js");
@@ -362,7 +362,7 @@ try {
   await page.locator('#hypercognition-helper-preview').evaluate(element => element.remove());
   reports.push(...await page.evaluate(async () => {
     const { setAdminMode } = await import('/js/GameStorage.js');
-    const { refreshCodexUmbraPanel } = await import('/js/GameInit.js');
+    const { refreshCodexUmbraPanel } = await import("/js/ui/codex/stats.js");
     const { entites } = await import('/js/entites.js');
     const reports = [];
     const check = (ok, text) => { if (!ok) throw Error(text); reports.push(text); };
@@ -446,7 +446,7 @@ try {
   await page.locator('#hyperco-preview').evaluate(element => element.remove());
   await page.locator('.attack-nature-signature.inerte').first().locator('..').screenshot({ path: 'outputs/hypercognition-tests/inert-energy-loss.png' });
   reports.push(...await page.evaluate(async () => {
-    const { createCodexEntityScan } = await import('/js/GameInit.js');
+    const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
     const { entites, enrichEntityStats, recomputeEntityStats } = await import('/js/entites.js');
     const { getAttackNatureRules, getAttackPowerRatios } = await import('/js/attackResolution.js');
     const { syncEntityEssenceRewards } = await import('/js/essenceInventory.js');
@@ -521,7 +521,7 @@ try {
   }));
   await page.screenshot({ path: 'outputs/hypercognition-tests/socket-empty-desktop.png' });
   reports.push(...await page.evaluate(async () => {
-    const { createInventory } = await import('/js/GameInit.js');
+    const { createInventory } = await import("/js/ui/inventory.js");
     const { syncEntityEssenceRewards } = await import('/js/essenceInventory.js');
     const { recomputeEntityStats } = await import('/js/entites.js');
     const entity = window.selectedArmyA[0];

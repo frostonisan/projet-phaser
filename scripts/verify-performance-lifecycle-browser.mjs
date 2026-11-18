@@ -180,10 +180,10 @@ try {
   await collect();
 
   await page.evaluate(async () => {
-    const { createGameContainer } = await import('/js/GameInit.js');
+    const { createGameContainer } = await import("/js/ui/application.js");
     createGameContainer();
     const check = window.__check;
-    const observer = window.__perf.observers.find(state => state.stack.includes('/js/ui/statHelpers.js'));
+    const observer = window.__perf.observers.find(state => state.stack.includes("/js/ui/statistics/helpers.js"));
     check(observer && !observer.active, 'Essence observer starts disconnected');
     const parent = document.createElement('div'), host = document.createElement('button');
     Object.assign(host.dataset, { stat: 'attackEssenceRed', hover: 'true', helperText: '<div>Essence test</div>', helperClass: 'essence-linked-hover red' });

@@ -86,9 +86,9 @@ try {
   await page.evaluate(async () => {
     window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
     window.Clock = await import('/js/combatClock.js'); window.Popups = await import('/js/combatPopups.js');
-    window.E = await import('/js/entites.js'); window.D = await import('/js/dom.js'); window.U = await import('/js/ui.js');
+    window.E = await import('/js/entites.js'); window.D = await import('/js/dom.js'); window.U = await import("/js/ui/display.js");
     window.FX = await import('/js/attackEffectMecanics.js'); window.G = await import('/js/gameState.js');
-    const Init = await import('/js/GameInit.js'), C = await import('/js/createEntity.js');
+    const Init = await import("/js/ui/application.js"), C = await import('/js/createEntity.js');
     Init.createGameContainer(); Init.GameUi();
     (await import('/js/GameStorage.js')).setAdminMode(true); window.levelRunning = 'admin';
     const Store = await import('/js/sessionStorage.js'); Store.beginAdminSession(); window.currentStageId = 'popup-audit';
@@ -338,7 +338,7 @@ try {
   await page.waitForTimeout(1900);
   check(await page.locator('.combat-popup-card').count() === 0, 'Restored popups expire after resume even though their original callbacks no longer exist');
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/dom.js'), U = await import('/js/ui.js');
+    const E = await import('/js/entites.js'), D = await import('/js/dom.js'), U = await import("/js/ui/display.js");
     const target = E.entites[0];
     for (let i = 0; i < 50; i++) { D.PopUpDamages(target, i, [], '', {}, 'critical'); U.EffectMessage(target, 'Reprise !'); }
   });

@@ -29,7 +29,7 @@ try {
     const { buildAttackTimingsWithHaste } = await import('/js/combat/attacks.js');
     const { attackDetails } = await import('/js/data/attackList.js');
     const { entitesNestUp } = await import('/js/entites.js');
-    const { AttackDetailInfos, generateAttackDescription } = await import('/js/GameInit.js');
+    const { AttackDetailInfos, generateAttackDescription } = await import("/js/ui/attacks.js");
     const entity = { id: 1, name: 'Test', stats: { physicalDamage: 15, magicalDamage: 0, piercingDamage: 0,
       speed: 3000, criticalPower: 0, criticalChance: 0, ambidextry: 0, agility: 0, strength: 0, haste: 0 } };
     const melee = { attackId: 'test', displayName: 'Test', combatFunction: 'Attaquant', attackTarget: ['enemy'],
@@ -211,7 +211,7 @@ try {
     const { entites } = await import('/js/entites.js');
     const { getEntityCombatDetails } = await import('/js/entityUpdatesStorage.js');
     const { getAttackPowerRatios } = await import('/js/attackResolution.js');
-    const { AttackDetailInfos } = await import('/js/GameInit.js');
+    const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const reports = [];
     const check = (ok, label) => { if (!ok) throw Error(label); reports.push(label); };
     const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -378,7 +378,7 @@ try {
   });
   console.log(healingReports.join('\n'));
   await page.evaluate(async () => {
-    const { AttackDetailInfos } = await import('/js/GameInit.js');
+    const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const { attackDetails } = await import('/js/data/attackList.js');
     const { entitesNestUp } = await import('/js/entites.js');
     const { readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
@@ -391,7 +391,7 @@ try {
     host.append(AttackDetailInfos(attack,
       owner,
       false, 0, { codexLayout: true, showProgression: false, showUmbraPanel: false, showActivation: false }));
-    const { generateAttackDescription } = await import('/js/GameInit.js');
+    const { generateAttackDescription } = await import("/js/ui/attacks.js");
     const examples = document.createElement('div');
     examples.className = 'attack-description-examples';
     examples.style.cssText = 'padding:16px;line-height:1.6';
@@ -425,7 +425,7 @@ try {
     await page.screenshot({ path: resolve(output, `${width}.png`) });
   }
   const liveHealing = await page.evaluate(async () => {
-    const { createCodexEntityScan } = await import('/js/GameInit.js');
+    const { createCodexEntityScan } = await import("/js/ui/codex/index.js");
     const { entites, entitesNestUp, recomputeEntityStats } = await import('/js/entites.js');
     const { calculateDirectAttackHps } = await import('/js/damagesCalcul.js');
     const { syncDOMWithStats } = await import('/js/UpgradeEntity.js');

@@ -28,7 +28,7 @@ try {
     const S = await import('/js/GameStorage.js');
     const E = await import('/js/entites.js');
     const A = await import('/js/admin.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const N = await import('/js/newgame.js');
     S.setAdminMode(true);
     window.levelRunning = 'worldmap';
@@ -83,7 +83,7 @@ try {
   assert.equal(await page.getByText('Identité', { exact: true }).count(), 0);
   await page.evaluate(async () => {
     (await import('/js/combatClock.js')).freezeCombatClock();
-    const UI = await import('/js/attackInterface.js');
+    const UI = await import("/js/ui/attacks.js");
     const R = await import('/js/attackResolution.js');
     const E = await import('/js/entites.js');
     const D = await import('/js/damagesCalcul.js');

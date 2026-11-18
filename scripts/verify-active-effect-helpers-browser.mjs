@@ -28,7 +28,7 @@ try{
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
     const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await import('/js/GameInit.js'),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
+    const UI=await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
     const Fx=await import('/js/attackEffectMecanics.js'),R=await import('/js/attackResolution.js'),C=await import('/js/combatClock.js');
     const Timeline=await import('/js/combatTimeline.js');
     const Control=await import('/js/entityControl.js'),Move=await import('/js/board.js'),Rules=await import('/js/entite/entityRules.js');
@@ -79,7 +79,7 @@ try{
     const configure=(e,defs)=>{R.setEntityAttackDefinitions(e,defs,catalog);e.stats.speed=1000;return R.readAttackDefinitionsForEntity(e,catalog);};
     const stop=async(e,task)=>{e.battleStopped=true;await advance(100);await task;Fx.clearControlEffects(e);};
     try{
-      (await import('/js/ui/statHelpers.js')).initializeStatHelpers();
+      (await import("/js/ui/statistics/helpers.js")).initializeStatHelpers();
       if(!document.querySelector('.Game-helper')){const layer=document.createElement('div');layer.className='Game-helper';document.body.append(layer);}
       Math.random=()=>.999999;
       const source=actor('A'),target=actor('B',{alterationResistance:50,magicalResistance:0,armor:0});

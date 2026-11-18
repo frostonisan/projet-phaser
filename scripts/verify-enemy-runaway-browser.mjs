@@ -21,7 +21,7 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    window.U = await import('/js/GameInit.js'); window.E = await import('/js/entites.js');
+    window.U = await import("/js/ui/application.js"); window.E = await import('/js/entites.js');
     window.G = await import('/js/gameState.js'); window.O = await import('/js/BattleOrder.js');
     window.C = await import('/js/createEntity.js'); window.At = await import('/js/entityAttributs.js');
     window.S = await import('/js/GameStorage.js'); window.Sim = await import('/js/combatSimulation.js');

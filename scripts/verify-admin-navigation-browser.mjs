@@ -44,6 +44,7 @@ try {
       hex.className = 'hex SideA';
       hex.style.cssText = 'width:120px;height:120px;position:relative;transform:none;background:#20252a;';
       hex.appendChild(Object.assign(document.createElement('div'), { className: 'socle' })); grid.appendChild(hex);
+      (await import('/js/board.js')).invalidateFootprintGeometry(grid);
       const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991900 + i, name: `Navigation ${i}`,
         side: 'A', position: hex.id, level: 1, awakening: 1, attacks: ['shot-p-r'], stats: {}, stuff: {},
         baseStats: { HP: 1000, speed: 10000, strength: i * 10, intelligence: 10, agility: 10,
@@ -53,7 +54,7 @@ try {
     }
     S.saveToLocalStorage('selectedArmyA', E.entites);
     A.initializeAdminLevel(E.entitesNestUp);
-    (await import('/js/GameInit.js')).PlayerArmyCodex(document.querySelector('.menu-player-icons'));
+    (await import("/js/ui/codex/index.js")).PlayerArmyCodex(document.querySelector('.menu-player-icons'));
   });
   const form = page.locator('#admin-entity-form'), list = page.locator('#admin-entity-list');
   const search = page.locator('#admin-list-search-input');
@@ -300,7 +301,7 @@ try {
 
   await page.setViewportSize({ width: 1536, height: 480 });
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await import('/js/GameInit.js'), S = await import('/js/GameStorage.js');
+    const E = await import('/js/entites.js'), UI = await import("/js/ui/codex/index.js"), S = await import('/js/GameStorage.js');
     S.saveToLocalStorage('CodexMenuIndex', 3);
     S.saveToLocalStorage('CodexSubstatMode', 'stat');
     const menu = document.createElement('div'); menu.className = 'menu-map-container';

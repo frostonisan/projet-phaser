@@ -3,7 +3,7 @@ import { isEntityMovementBlocked } from './entityControl.js';
 import { setTimeout, isCombatPaused, isCombatInteractionBlocked, notifyCombatAction } from './combatClock.js';
 import { generateUniqueID, entites, enrichEntityStats } from './entites.js';
 import { updateRoleInDOM } from './load-entity.js';
-import { soclesVisible } from './ui.js';
+import { soclesVisible } from "./ui/display.js";
 import { spawnEntiteIngame } from './entitySpawnEngine.js';
 import { consumeEntityMovement, ensureMovementState, updateMovementDisplay } from './damagesCalcul.js';
 import { EffectMessage } from './attackEffectMecanics.js';

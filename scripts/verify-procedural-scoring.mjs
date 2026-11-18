@@ -26,10 +26,10 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const result = await page.evaluate(async () => {
     const P = await import('/js/procedural/proc-bareme.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js');
-    const U = await import('/js/GameInit.js');
+    const U = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const R = await import('/js/entite/reverseArchetype.js');
     const I = await import('/js/items/items.js');
     const { attackDetails } = await import('/js/data/attackList.js');
@@ -447,7 +447,7 @@ try {
   await tilesPage.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const tileChecks = await tilesPage.evaluate(async () => {
     const S = await import('/js/GameStorage.js');
-    const U = await import('/js/GameInit.js');
+    const U = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const I = await import('/js/items/items.js');
     const D = await import('/js/damagesCalcul.js');
@@ -539,7 +539,7 @@ try {
   await livePage.bringToFront();
   const liveChecks = await livePage.evaluate(async () => {
     const S = await import('/js/GameStorage.js');
-    const U = await import('/js/GameInit.js');
+    const U = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/index.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
     const M = await import('/js/items/itemManager.js');
     const I = await import('/js/items/items.js');
     const D = await import('/js/damagesCalcul.js');

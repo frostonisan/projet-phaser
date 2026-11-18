@@ -25,7 +25,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const B = await import('/js/board.js'), E = await import('/js/entites.js');
-    const U = await import('/js/ui.js'), S = await import('/js/GameStorage.js');
+    const U = await import("/js/ui/display.js"), S = await import('/js/GameStorage.js');
     const L = await import('/js/load-entity.js'), C = await import('/js/createEntity.js');
     window.levelRunning = 'placement-audit';
     E.entites.splice(0);

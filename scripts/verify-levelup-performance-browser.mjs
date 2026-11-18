@@ -39,7 +39,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js'), E = await import('/js/entites.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js');
     const U = await import('/js/UpgradeEntity.js');
     window.levelRunning = 'worldmap'; G.setGameOver(false);
@@ -92,7 +92,7 @@ try {
   const { profile } = await cdp.send('Profiler.stop');
   const checks = await page.evaluate(async () => {
     const { U, UI, S, actor } = window.__levelFixture;
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const checks = [], check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
     const form = document.querySelector('.level-up-section');
     const arrow = (key, direction) => form.querySelector(`.axis-line[data-key="${key}"] .${direction}-arrow`).click();

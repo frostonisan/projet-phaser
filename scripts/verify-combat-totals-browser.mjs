@@ -31,7 +31,7 @@ try {
       endEntityBattleRole, applyHpBattleRegenAtTurnStart, recordEntityProgression, recordEntityDays,
       countCompletedArchetypes } = await import('/js/entityUpdatesStorage.js');
     const { saveToLocalStorage, loadFromLocalStorage, setAdminMode, isAdminMode } = await import('/js/GameStorage.js');
-    const { createCodexCombatRecord } = await import('/js/GameInit.js');
+    const { createCodexCombatRecord } = await import("/js/ui/codex/profile.js");
     const check = (condition, message) => { if (!condition) throw Error(message); return message; };
     const fixture = (id, side) => {
       const entity = { id, name: `Combat total ${id}`, side, type: 'sbire', role: ['mage'], level: 1,

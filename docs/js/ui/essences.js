@@ -25,14 +25,14 @@ import {
 } from '../essenceur.js';
 import { createLinkedEssenceItem } from '../essenceInventory.js';
 import { getStageAccess, requireSafeMenuAccess } from '../gameState.js';
-import { cssEscape } from './statHelpers.js';
+import { cssEscape } from "./statistics/helpers.js";
 import {
   toggleWindowInMenuMap,
   reorderMenuMapChildren,
   MenuContainerDisplayRules,
   enforceMenuDisplayRules,
   getInventoryEntityName,
-} from './menuNavigation.js';
+} from "./navigation.js";
 
 function PlayerEssenceur(menuIcons) {
     if (!getStageAccess().menusAllowed) return;

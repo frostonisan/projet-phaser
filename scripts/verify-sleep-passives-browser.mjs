@@ -7,7 +7,7 @@ async function install(config) {
   const E = await import('/js/entites.js'), C = await import('/js/combatClock.js'), A = await import('/js/entityAttributs.js');
   const Fx = await import('/js/attackEffectMecanics.js'), Control = await import('/js/entityControl.js');
   const R = await import('/js/attackResolution.js'), T = await import('/js/entityUpdatesStorage.js');
-  const Display = await import('/js/ui/entityEffectDisplay.js');
+  const Display = await import("/js/ui/statistics/components.js");
   const [target, source] = E.entites, epoch = C.clockNow();
   Math.random = () => 0;
   const apply = (name, params, key = name) => A.applyEffect(target, name, source, {

@@ -16,7 +16,7 @@ import { createChestLoot, rewardPlayerA } from './loot.js';
 import { fledEntities, isEnemyFleeing, tryEnemyRunaway } from './BattleOrder.js';
 import { battleLogs } from './battleLogs.js';
 import { clearProjectileEffects, playRunawaySuccessAnimation } from './entitesAnimation.js';
-import { showGamePopupMessage } from './ui.js';
+import { showGamePopupMessage } from "./ui/display.js";
 import { recordEntityCombatStat, beginEntityBattleRole } from './entityUpdatesStorage.js';
 
 let stageInterfaceLoading = false;

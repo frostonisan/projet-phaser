@@ -26,13 +26,13 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const panel = await import('/js/attackInterface.js');
+    const panel = await import("/js/ui/attacks.js");
     const selection = await import("/js/attackResolution.js");
-    const ui = await import('/js/ui.js');
+    const ui = await import("/js/ui/display.js");
     const { entites, entitesNestUp } = await import('/js/entites.js');
     const gameState = await import('/js/gameState.js');
     const { readAttackDefinitionsForEntity, updateEntityAttackDefinition } = await import('/js/attackResolution.js');
-    const { AttackDetailInfos } = await import('/js/GameInit.js');
+    const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const { attackDetails } = await import('/js/data/attackList.js');
     const { createLifeBars, CreateATBEntity } = await import('/js/createEntity.js');
     const { updateHealthBar } = await import('/js/UpgradeEntity.js');
@@ -328,7 +328,7 @@ try {
     return reports;
   });
   await page.evaluate(async () => {
-    const { createBattleSatchelView } = await import('/js/GameInit.js');
+    const { createBattleSatchelView } = await import("/js/ui/inventory.js");
     const { entites } = await import('/js/entites.js');
     const { notifyAttackSelection } = await import("/js/attackResolution.js");
     document.querySelectorAll('.starter-selection, .game-starter, .board-ui').forEach(node => node.remove());
@@ -372,7 +372,7 @@ try {
         const { setEntityAttackDefinitions } = await import('/js/attackResolution.js');
         const { attackDetails } = await import('/js/data/attackList.js');
         const { entites } = await import('/js/entites.js');
-        const { showCombatAttackControlPanel } = await import('/js/attackInterface.js');
+        const { showCombatAttackControlPanel } = await import("/js/ui/attacks.js");
         setEntityAttackDefinitions(entites[0], attackDetails.slice(0, count), attackDetails);
         showCombatAttackControlPanel(entites[0].id);
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -404,7 +404,7 @@ try {
   if (!closeReport) throw Error('Outside click did not close the combat attack controls');
   reports.push('Outside click closes heads-up attack controls');
   const stopReport = await page.evaluate(async () => {
-    const panel = await import('/js/attackInterface.js');
+    const panel = await import("/js/ui/attacks.js");
     const gameState = await import('/js/gameState.js');
     const { entites } = await import('/js/entites.js');
     panel.showCombatAttackControlPanel(entites[0]?.id);

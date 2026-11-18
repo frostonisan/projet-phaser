@@ -28,7 +28,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js'), M = await import('/js/items/itemManager.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts)), M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js'), R = await import('/js/items/resourceStocks.js');
     const A = await import('/js/items/armor.js'), U = await import('/js/entityUpdatesStorage.js');
     const State = await import('/js/gameState.js'), { ItemDetails } = await import('/js/data/itemList.js');
@@ -169,7 +169,7 @@ try {
         check(cards.every(card => card.isConnected), 'Pinned cards reattach to current slots instead of being removed');
       },
     };
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     window.__itemSwapDisplay = DDisplay.calculateStatsDisplay;
   });
   const checks = [];

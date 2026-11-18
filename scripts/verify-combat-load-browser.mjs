@@ -192,7 +192,7 @@ async function fixture(count) {
   // Cost isolation only, never a proposed production visual change.
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
   await page.evaluate(async ({ count, scenario }) => {
-    const U = await import('/js/GameInit.js');
+    const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     window.E = await import('/js/entites.js'); window.G = await import('/js/gameState.js');
     window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
     window.Clock = await import('/js/combatClock.js'); window.Timeline = await import('/js/combatTimeline.js');

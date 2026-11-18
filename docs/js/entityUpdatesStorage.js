@@ -3,7 +3,7 @@ import { clockNow } from './combatClock.js';
 import { saveToLocalStorage, loadFromLocalStorage, saveCurrentGameData, loadEquippedItems } from './GameStorage.js';
 import { showHealingFeedback, toggleEffectClass } from './attackEffectMecanics.js';
 import { updateHealthBar } from './UpgradeEntity.js';
-import { toNonNegInt } from './ui.js';
+import { toNonNegInt } from "./ui/display.js";
 import { calculateShiftDailyStartingCharges, calculateHpBattleRegenAmount, updateMovementDisplay } from './damagesCalcul.js';
 import { attemptBattleRegen } from './rendering/damageFeedback.js';
 import { battleLogs } from "./battleLogs.js";

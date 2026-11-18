@@ -27,7 +27,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/codex/index.js");
     const E = await import('/js/entites.js');
     const entity = { id: 987131, name: 'Constitution audit', type: 'sbire', side: 'A', awakening: 1,
       level: { current: 1, max: 250 }, attacks: ['autoAttack'], stuff: {}, stats: {},

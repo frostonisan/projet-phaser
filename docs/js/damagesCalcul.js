@@ -191,7 +191,7 @@ export function createAttackStatView(entity, attack = entity?.currentAttack) {
   });
 }
 
-// Combat stat adapters and runtime decisions; read-only stat helpers live in ui/statDetails.js.
+// Combat stat adapters and runtime decisions; read-only stat helpers live in ui/statistics/details.js.
 export {
   calculateResistanceReductionPercent,
   calculateResistances,

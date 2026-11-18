@@ -28,7 +28,7 @@ try{
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
     const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await import('/js/GameInit.js'),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
+    const UI=await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts)),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
     const Fx=await import('/js/attackEffectMecanics.js'),R=await import('/js/attackResolution.js'),C=await import('/js/combatClock.js');
     const Timeline=await import('/js/combatTimeline.js');
     const Control=await import('/js/entityControl.js'),Move=await import('/js/board.js'),Rules=await import('/js/entite/entityRules.js');
@@ -147,7 +147,7 @@ try{
       await advance(999);eq(Control.getControlState(target,'insolence').changes,0,'No immediate RNG action');
       await advance(1);eq(Control.getControlState(target,'insolence').changes,1,'Exactly one action after minimum delay');
       ok(!R.describeAttackChoices(target,defs,()=>0)[0].disabled,'Insolence can enable a previously manually disabled attack');
-      const AttackUI=await import('/js/attackInterface.js');
+      const AttackUI=await import("/js/ui/attacks.js");
       const manualUI=AttackUI.MultiAttackDisplay(target,{showUmbraPanel:false});document.body.append(manualUI);
       const manualToggle=manualUI.querySelector('.attack-imgs .attack-activation-indicator');
       ok(Boolean(manualToggle),'Real manual attack toggle is present under Insolence');manualToggle.click();

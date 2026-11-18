@@ -30,7 +30,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const counts = await page.evaluate(async () => {
-    const U = await import('/js/GameInit.js');
+    const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import('/js/GameStorage.js');
     const State = await import('/js/gameState.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
@@ -195,7 +195,7 @@ try {
   }
   await page.setViewportSize({ width: 1400, height: 950 });
   await shop.locator('.close-button').click();
-  await page.evaluate(async () => (await import('/js/GameInit.js')).openShopInterface());
+  await page.evaluate(async () => (await import("/js/ui/inventory.js")).openShopInterface());
   check(await page.locator('.shop-filters').count() === 1, 'Reopening does not duplicate controls');
   check(await page.locator('.shop-search').inputValue() === '', 'New shop session starts with clear search');
   check(await page.locator('[name="shop-category"][value="all"]').isChecked(), 'New shop session starts on All');

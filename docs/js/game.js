@@ -24,7 +24,7 @@ import {
   loadStageAnimation,
   helperDisplay,
   toNonNegInt,
-} from "./ui.js";
+} from "./ui/display.js";
 import {
   screenLoadOptions,
   collectLevelResources,
@@ -1316,21 +1316,22 @@ export function QuitCurrentLevel() {
     // ─────────────────────────────────────────────
 Promise.all([
   import("./admin.js"),
-  import("./GameInit.js"),
+  import("./ui/application.js"),
+  import("./ui/codex/index.js"),
   import("./newgame.js")
 ])
-.then(([admin, gameInit, newgame]) => {
+.then(([admin, menus, codex, newgame]) => {
   console.log("🔄 Carte relancée !");
 
   admin.cleanupAdminLevel?.();
 
   // 1) Toujours d’abord : structure DOM (helper + game-windows + container)
-  gameInit.createGameContainer();
+  menus.createGameContainer();
 
   // 2) Ensuite seulement : UI qui dépend du container
-  gameInit.GameUi();
-  gameInit.initializeArmyConfig();
-  gameInit.PlayerArmyCodex();
+  menus.GameUi();
+  menus.initializeArmyConfig();
+  codex.PlayerArmyCodex();
 
   // 3) Admin + boutons + tooltips ensuite
   admin.AdminButtons();

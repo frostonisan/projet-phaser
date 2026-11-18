@@ -43,7 +43,7 @@ try {
     const { entitesNest } = await import('/js/entite/entitesNest.js');
     const { attackDetails } = await import('/js/data/attackList.js');
     const { calculateProfanationSummonLevel, calculateLvlMaxEntiteWithWill } = await import('/js/damagesCalcul.js');
-    const { createAttackDescriptionContent, createAttackLightDescription, refreshCodexUmbraPanel } = await import('/js/GameInit.js');
+    const { createAttackDescriptionContent, createAttackLightDescription, refreshCodexUmbraPanel } = await Promise.all([import("/js/ui/attacks.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const { createCorpseLoot } = await import('/js/loot.js');
     const { entiteTurn, runTargetSearchWindow } = await import('/js/fight.js');
     const { combatNow } = await import('/js/combatTimeline.js');
@@ -907,7 +907,7 @@ try {
   });
   console.log(reports.join('\n'));
   await page.evaluate(async () => {
-    const { AttackDetailInfos } = await import('/js/GameInit.js');
+    const { AttackDetailInfos } = await import("/js/ui/attacks.js");
     const { entitesNestUp } = await import('/js/entites.js');
     const { readAttackDefinitionsForEntity } = await import('/js/attackResolution.js');
     const owner = structuredClone(entitesNestUp.find(entity => entity.class === 'profanateur-engoulmort'));

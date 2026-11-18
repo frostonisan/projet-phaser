@@ -23,9 +23,9 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
     const { entitesNestUp, entites } = await import('/js/entites.js');
-    const { createCodexEntityScan, createCodexCombatRecord } = await import('/js/GameInit.js');
-    const { calculateStatsDisplay } = await import('/js/ui/statDetails.js');
-    const { createAttackNatureSignature } = await import('/js/attackInterface.js');
+    const { createCodexEntityScan, createCodexCombatRecord } = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts));
+    const { calculateStatsDisplay } = await import("/js/ui/statistics/details.js");
+    const { createAttackNatureSignature } = await import("/js/ui/attacks.js");
     const { recordEntityCombatProc } = await import('/js/entityUpdatesStorage.js');
     const check = (condition, label) => { if (!condition) throw Error(label); return label; };
     const entity = structuredClone(entitesNestUp.find(entry => entry.name === 'Grouille-Doigt TEST 2A support'));

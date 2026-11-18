@@ -517,8 +517,8 @@ async function restore() {
     entity.poisonIntervalId = null; entity.brulureIntervalId = null;
     entity.projectiles = [];
   }
-  const [{ GameUi, PlayerArmyCodex }, { configureBattleSystemsOnce }, drag, ui] = await Promise.all([
-    import('./GameInit.js'), import('./game.js'), import('./dragndrop.js'), import('./ui.js'),
+  const [{ GameUi }, { PlayerArmyCodex }, { configureBattleSystemsOnce }, drag, ui] = await Promise.all([
+    import("./ui/application.js"), import("./ui/codex/index.js"), import('./game.js'), import('./dragndrop.js'), import("./ui/display.js"),
   ]);
   document.querySelectorAll('.Game-UI, #admin-entity-form, #admin-combat-simulation, #admin-open-btn').forEach(node => node.remove());
   GameUi(); PlayerArmyCodex(); configureBattleSystemsOnce();

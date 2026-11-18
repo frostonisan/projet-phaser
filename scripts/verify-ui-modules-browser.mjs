@@ -6,11 +6,12 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs');
-const modules = ['js/attackInterface.js', ...(await readdir(resolve(root, 'js/ui'))).filter(f => f.endsWith('.js')).map(f => `js/ui/${f}`)];
+const modules = (await readdir(resolve(root, 'js/ui'), { recursive: true }))
+  .filter(file => file.endsWith('.js')).map(file => `js/ui/${file.replaceAll('\\', '/')}`);
 const graph = new Map();
 for (const file of modules) {
   const source = await readFile(resolve(root, file), 'utf8');
-  assert.doesNotMatch(source, /from\s*['"][^'"]*GameInit\.js/, `${file} must not depend on the bootstrap`);
+  assert.doesNotMatch(source, /from\s*['"][^'"]*(?:GameInit\.js|app\/startup\.js)/, `${file} must not depend on the bootstrap`);
   const imports = [...source.matchAll(/(?:from\s*|import\s*)['"]([^'"]+)['"]/g)]
     .map(([, ref]) => posix.normalize(posix.join(posix.dirname(file), ref)));
   graph.set(file, imports.filter(ref => modules.includes(ref)));
@@ -35,6 +36,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 try {
   // Import each public subsystem first in a fresh module graph. No bootstrap
   // ordering may be required to initialize its shared constants or registries.
+  const independentFailures = [];
   for (const entry of ['entites', 'attackResolution', 'damagesCalcul', 'entite/entityRules',
     'entite/statSystem', 'entite/reverseArchetype', 'dom', 'GameStorage', 'entityAttributs',
     'gameState', 'fight', 'essenceInventory', 'essenceur', 'items/resourceStocks',
@@ -46,9 +48,14 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/module-fixture.html');
     console.log(`Checking independent entry: ${entry}`);
-    await page.evaluate(async name => { await import(`/js/${name}.js`); }, entry);
-    assert.deepEqual(errors, [], `Independent import: ${entry}`);
-    await context.close();
+    try {
+      await page.evaluate(async name => { await import(`/js/${name}.js`); }, entry);
+      assert.deepEqual(errors, [], `Independent import: ${entry}`);
+    } catch (error) {
+      const failure = { entry, message: error.message.split('\n')[0] };
+      independentFailures.push(failure);
+      console.error('Independent import failed:', JSON.stringify(failure));
+    } finally { await context.close(); }
   }
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -66,11 +73,11 @@ try {
   await page.goto(base + '/index.html');
   await page.locator('.Game-UI').waitFor({ state: 'attached' });
   const result = await page.evaluate(async () => {
-    const game = await import('/js/GameInit.js');
+    const game = await Promise.all([import("/js/ui/attacks.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const entries = await Promise.all([
-      import('/js/attackInterface.js'), import('/js/ui/codex.js'), import('/js/ui/codexProfile.js'),
-      import('/js/ui/codexStats.js'), import('/js/ui/equipment.js'), import('/js/ui/inventory.js'),
-      import('/js/ui/playerMenus.js'), import('/js/ui/powerViews.js'), import('/js/ui/statHelpers.js'),
+      import("/js/ui/attacks.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/profile.js"),
+      import("/js/ui/codex/stats.js"), import("/js/ui/codex/profile.js"), import('/js/ui/inventory.js'),
+      import("/js/ui/application.js"), import("/js/ui/statistics/components.js"), import("/js/ui/statistics/helpers.js"),
     ]);
     const before = window.__uiRegistrations;
     for (let i = 0; i < 3; i++) for (const module of entries) {
@@ -94,5 +101,6 @@ try {
   assert.deepEqual(errors, []);
   assert.deepEqual(consoleErrors, [], 'Bootstrap and UI initialization emit no errors');
   await context.close();
-  console.log(`PASS: ${modules.length} acyclic UI modules; independent entity entry; one admin; shared exports and idempotent listeners.`);
+  console.log(`PASS: ${modules.length} acyclic UI modules; one admin; shared exports and idempotent listeners.`);
+  assert.deepEqual(independentFailures, [], 'All public subsystems initialize independently');
 } finally { await browser.close(); await new Promise(done => server.close(done)); }

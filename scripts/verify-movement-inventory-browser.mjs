@@ -28,7 +28,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const report = await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const U = await import('/js/GameInit.js');
+    const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/inventory.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import('/js/GameStorage.js');
     const State = await import('/js/gameState.js');
     const M = await import('/js/items/itemManager.js');

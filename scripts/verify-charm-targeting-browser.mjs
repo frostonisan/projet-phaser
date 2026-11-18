@@ -24,7 +24,7 @@ async function fixture(side, withOthers = true, expiry = false, group = false) {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async ({ side, withOthers, expiry, group }) => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/application.js");
     const E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
     const Storage = await import('/js/GameStorage.js');
     const G = await import('/js/gameState.js'), F = await import('/js/fight.js');

@@ -31,7 +31,7 @@ try {
   await dismissStarterForFixture(page);
   checks.push(...await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const S = await import('/js/entite/statSystem.js');
     const H = await import('/js/data/helpers.js');
     const U = await import('/js/UpgradeEntity.js');
@@ -182,7 +182,7 @@ try {
     return passed;
   }));
   const setup = async view => page.evaluate(async view => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const { entity, U, items } = window.__malusAudit;
     UI.closeOpenHelpers();
     document.getElementById('malus-audit')?.remove();
@@ -303,8 +303,8 @@ try {
   }
   const mixedValues = await page.evaluate(async () => {
     const { entity, S, U } = window.__malusAudit;
-    const DDisplay = await import('/js/ui/statDetails.js');
-    const UI = await import('/js/GameInit.js');
+    const DDisplay = await import("/js/ui/statistics/details.js");
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const statsBefore = JSON.stringify(entity.stats);
     const row = document.querySelector('#malus-audit .section-content.stats [data-stat="physicalDamage"].stat-container');
     for (let i = 0; i < 3; i++) UI.syncStatCurseMarker(row, entity, 'physicalDamage');
@@ -401,7 +401,7 @@ try {
   checks.push('removal clears badge and pinned helper without reopening');
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await import('/js/GameInit.js');
+    const E = await import('/js/entites.js'), UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const G = await import('/js/GameStorage.js'), P = await import('/js/UpgradeEntity.js');
     const Gear = await import('/js/items/equipement.js'), State = await import('/js/gameState.js');
     const { ItemDetails } = await import('/js/data/itemList.js');

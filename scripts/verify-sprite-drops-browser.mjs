@@ -38,12 +38,12 @@ try {
       });
     }, true);
     const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js'), State = await import('/js/gameState.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/application.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts)), State = await import('/js/gameState.js');
     const M = await import('/js/items/itemManager.js'), Gear = await import('/js/items/equipement.js');
     const R = await import('/js/items/resourceStocks.js'), U = await import('/js/entityUpdatesStorage.js');
-    const C = await import('/js/createEntity.js'), AttackUI = await import('/js/attackInterface.js');
+    const C = await import('/js/createEntity.js'), AttackUI = await import("/js/ui/attacks.js");
     const Role = await import('/js/role-rule.js'), Lord = await import('/js/lordFight.js');
-    const Popup = await import('/js/ui.js');
+    const Popup = await import("/js/ui/display.js");
     const { ItemDetails } = await import('/js/data/itemList.js');
     const { entitesNest } = await import('/js/entite/entitesNest.js');
     const template = entitesNest.find(entity => entity.serial === 900013);
@@ -395,10 +395,10 @@ try {
   });
   for (const [index, target] of ['#DragSprite_996101', '#portrait-container_996101', '#ScanEntity_996101 .entite-details-image', '.combat-attack-control-portrait'].entries()) {
     if (index === 1) await page.evaluate(async () => (await import('/js/createEntity.js')).createHeadUpInDom(996101));
-    if (index === 2) await page.evaluate(async () => (await import('/js/ui.js')).toggleScanEntity('ScanEntity_996101', false));
+    if (index === 2) await page.evaluate(async () => (await import("/js/ui/display.js")).toggleScanEntity('ScanEntity_996101', false));
     if (index === 3) await page.evaluate(async () => {
-      (await import('/js/ui.js')).toggleScanEntity('ScanEntity_996101', false);
-      (await import('/js/attackInterface.js')).showCombatAttackControlPanel(996101);
+      (await import("/js/ui/display.js")).toggleScanEntity('ScanEntity_996101', false);
+      (await import("/js/ui/attacks.js")).showCombatAttackControlPanel(996101);
     });
     const selectors = await page.evaluate(index => window.__drops.captureBattleDrop(index), index);
     await page.locator(selectors.source).hover();

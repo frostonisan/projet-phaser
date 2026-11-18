@@ -26,7 +26,7 @@ async function fixture(config = {}) {
   await page.evaluate(async config => {
     window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
     window.Clock = await import('/js/combatClock.js');
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js');
     const S = await import('/js/GameStorage.js');
@@ -74,7 +74,7 @@ async function fixture(config = {}) {
 try{
  const page=await fixture();
  const checks=await page.evaluate(async()=>{
-  const A=await import('/js/attackEffectMecanics.js'),D=await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'),Damage=await import('/js/entityAttributs.js');
+  const A=await import('/js/attackEffectMecanics.js'),D=await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"),Damage=await import('/js/entityAttributs.js');
   const Armor=await import('/js/items/armor.js'),Control=await import('/js/entityControl.js');
   const results=[],ok=(v,msg)=>{if(!v)throw Error(msg);results.push(msg)};
   const subject=E.entites[0],enemy=E.entites[1];

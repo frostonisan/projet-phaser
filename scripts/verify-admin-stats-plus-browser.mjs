@@ -192,7 +192,7 @@ try {
   await page.screenshot({ path: resolve(output, 'stats-plus-list.png') });
   check(await page.evaluate(() => window.__persistent === JSON.stringify(Object.entries(localStorage).sort())), 'Admin edits preserve the player persistent save');
   const codexRows = await page.evaluate(async keys => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/codex/index.js");
     document.getElementById('admin-entity-form').remove();
     const mount = document.createElement('div');
     mount.style.cssText = 'position:fixed;inset:0;overflow:auto;background:#111';
@@ -207,7 +207,7 @@ try {
   }, resilienceStats);
   for (const entry of codexRows) check(entry.visible && entry.total >= 8, `${entry.key}: validated resistance appears in the Codex (${entry.text})`);
   const cachedCodexChecks = await page.evaluate(async keys => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/codex/index.js");
     const E = await import('/js/entites.js');
     const S = await import('/js/GameStorage.js');
     const A = await import('/js/admin.js');

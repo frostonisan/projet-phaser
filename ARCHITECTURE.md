@@ -37,7 +37,7 @@ portent désormais des responsabilités distinctes :
 | Responsabilité | Module propriétaire |
 | --- | --- |
 | Composition des sources, répartition par nature, arrondis, dégâts secondaires et critiques | docs/js/combat/damageRules.js |
-| Détails des statistiques, contributions présentées et aides HTML | docs/js/ui/statDetails.js |
+| Détails des statistiques, contributions présentées et aides HTML | docs/js/ui/statistics/details.js |
 | Messages et effets des esquives, protections, exécutions, sorts brisés, ambidextrie et régénération | docs/js/rendering/damageFeedback.js |
 
 Le module damageRules.js n'a aucun import. Il reçoit les valeurs déjà résolues et,
@@ -48,7 +48,7 @@ Les règles de répartition, les seuils critiques et les arrondis sont conservé
 calculateAttackDamagePreview reste l'adaptateur des statistiques courantes et du
 registre des modificateurs. L'attaque visible, le simulateur et les aperçus utilisent
 ce même chemin. Les aides d'interface importent leurs calculs ; les calculs n'importent
-pas ui/statDetails.js. Les données de provenance des statistiques restent partagées
+pas ui/statistics/details.js. Les données de provenance des statistiques restent partagées
 avec statSystem.js et ne sont pas remplacées par du HTML.
 
 Les fonctions de présentation reçoivent les résultats déjà déterminés. Les tirages,
@@ -175,6 +175,74 @@ CSS (écart de 0,00001). La relance isolée passe sans changement des assertions
 que les tests de placement et de taille relancés avec les vérifications du modèle logique.
 Le rapport du premier échec est conservé pour le suivi de cette sensibilité du test.
 
+## Cinquième lot : démarrage et interface regroupés
+
+Le périmètre de GameInit et de ses écrans passe de **17 à 14 fichiers**.
+Le démarrage est dans `docs/js/app/startup.js` ; tous les écrans sont dans `docs/js/ui/`.
+Les consommateurs importent le propriétaire de la fonction, sans catalogue de réexportations
+ni fichiers relais aux anciens chemins.
+
+```text
+docs/js/
+  app/
+    startup.js                 démarrage, chargement et ordre d'initialisation
+  ui/
+    application.js             menus du joueur, première partie et paramètres
+    navigation.js              placement des fenêtres et mémoire de navigation
+    drag.js                    état du glisser-déposer et nettoyage des aides
+    display.js                 fenêtres, affichage général et conteneur de jeu
+    inventory.js               inventaire, boutique et sacoche de combat
+    attacks.js                 présentation et commandes des attaques
+    essences.js                interface des essences
+    codex/
+      index.js                 ouverture du Codex et navigation dans une entité
+      profile.js               fiche de l'entité, équipements et emplacements
+      stats.js                 panneaux de statistiques du Codex
+    statistics/
+      components.js            éléments visuels, puissance, Umbra et effets
+      helpers.js               interactions des aides et infobulles
+      details.js               détail des calculs présenté au joueur
+```
+
+Les petits modules de navigation et de glisser-déposer restent indépendants des écrans :
+leur fusion avec les menus ou l'inventaire créerait des cycles. Les équipements sont
+regroupés avec la fiche du Codex. Les composants de statistiques, de puissance et d'effets
+partagent un seul module. Le Codex conserve trois fichiers pour éviter un fichier géant.
+Le helper du conteneur de jeu appartient à display.js, utilisé directement par board.js.
+
+Les neuf initialisations gardent leur ordre et leurs protections contre les doubles
+écouteurs. L'équipement et la fiche conservent chacun leur propre protection.
+Le simulateur charge explicitement le démarrage, puis les menus dont il a besoin.
+Les deux pages HTML et les scénarios de test utilisent les nouveaux chemins.
+
+Validation dans `outputs/refactor-interface/` :
+
+- Le contrôle habituel passe : syntaxe, imports, ressources et 51 tests Node.
+- Dix-sept scénarios navigateur passent, dont démarrage sur quatre profils, diagnostic
+  mobile, aides de statistiques, boutique, essences, pause et deux lots de 20 simulations.
+- Comparaison structurelle des **473 fonctions déplacées** : mêmes traitements,
+  après normalisation des chemins d'import et des noms de protections d'initialisation.
+- Les 13 modules d'interface ont un graphe d'imports statiques sans cycle entre eux.
+  Réinitialiser les écrans n'ajoute aucun écouteur ni conteneur supplémentaire.
+- Inventaire : **94 vérifications**, dont équipements, concurrence d'utilisation,
+  objets au sol, rechargement et affichage ordinateur/tablette/mobile.
+- Les montages de plateau des tests d'inventaire et de navigation administrateur
+  enregistrent désormais leurs ajouts et retraits dans l'index d'occupation.
+  Leurs défauts étaient reproduits avant ce lot, y compris avant P3.
+- La sonde d'ouverture du Codex vise maintenant le propriétaire de calculateStatsDisplay ;
+  la sonde du diagnostic mobile vise le nouveau point d'entrée.
+
+L'audit d'import de chaque sous-système isolément continue à détecter dix échecs
+historiques liés à BOOSTABLE_POOL_STAT_KEYS ou gameStarted. Ils sont reproduits avec
+les sources antérieures au regroupement, avec la même liste de sous-systèmes et les
+mêmes erreurs. Le test conserve ses assertions et exécute aussi les vérifications des
+écrans avant de signaler ces échecs. Le démarrage normal du jeu n'utilise pas ces entrées
+isolées. Le graphe global conserve un cycle de 68 modules, contre 73 auparavant :
+ce rangement ne termine pas la suppression des dépendances circulaires du jeu.
+Le scénario administrateur verify-admin-codex-controls-browser.mjs conserve aussi
+un délai dépassé dans runCombatCheck, reproduit avec les sources antérieures.
+Les autres contrôles de navigation, d'ouverture et d'attaques du Codex passent.
+
 ## Temps et présentation
 
 combatClock.js reste l'horloge de combat ; combatTimeline.js ordonne les échéances et les
@@ -263,5 +331,5 @@ attaque hybride.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
 
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
-damagesCalcul.js, entityControl.js et le plateau DOM. Ces quatre premiers lots ne constituent
+damagesCalcul.js, entityControl.js et le plateau DOM. Ces cinq premiers lots ne constituent
 pas une séparation complète du moteur de jeu.

@@ -37,10 +37,10 @@ import {
   getEquipmentSlotKeys,
 } from "../entites.js";
 import { addEntityToArmyA, canRecruitEntity } from '../ArmyAFactory.js';
-import { createEntityCodex } from '../ui/codex.js';
+import { createEntityCodex } from "../ui/codex/index.js";
 import { generateEffectDescription } from '../data/helpers.js';
-import { createEntityPowerValue, cachedDisplayPower, schedulePowerRefresh } from '../ui/powerViews.js';
-import { refreshStatHelper } from '../ui/statHelpers.js';
+import { createEntityPowerValue, cachedDisplayPower, schedulePowerRefresh } from "../ui/statistics/components.js";
+import { refreshStatHelper } from "../ui/statistics/helpers.js";
 import { itemApplyEffect, validateConsumableUse, hasImplementedConsumableEffects } from './itemEffectMecanics.js';
 import { itemEffects } from './itemEffects.js';
 import { EquipedEntityItems, recordEntityConsumable } from '../entityUpdatesStorage.js';
@@ -53,9 +53,9 @@ import {
   DRAG_HELPER_CLEANUP_EVENT,
   endDragHelperCleanup,
   isDragDropActive,
-} from "../ui/dragHelpers.js";
+} from "../ui/drag.js";
 import { getDisplayStatKey, normalizeStatKey, isNonLordCombatant, isLord } from "../entite/entityRules.js";
-import { showGamePopupMessage } from '../ui.js';
+import { showGamePopupMessage } from "../ui/display.js";
 import { getStageAccess, requireSafeMenuAccess, gameStarted } from '../gameState.js';
 import { placeGroundItem, clearGroundItems, releaseGroundItem, spawnConsumableSummon, setAdminGroundSummonsInfinite } from '../summonsMecanics.js';
 import { ensureStuffArmorReserve } from './armor.js';
@@ -1439,7 +1439,7 @@ export function addEntityLootToArmyA(entity, acquisition = { source: 'loot' }) {
 
     console.log(`✅ Création visuelle du codex pour ${entite.name} (ID: ${entite.id})`);
 
-    // GameInit's delegated click listener also handles freshly recruited entities.
+    // The inventory's delegated click listener also handles freshly recruited entities.
     createEntityCodex(entite, armyCodexList);
     console.log(`🆕 Entrée ajoutée dans le DOM pour ${entite.name} (ID: ${entite.id})`);
     return addedEntity;

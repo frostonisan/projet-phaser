@@ -34,12 +34,12 @@ export async function installEntityTestEnvironment(initialEntries = []) {
     'admin.js': unexpected(['selectAdminEntitiesForSideB']),
     'ArmyAFactory.js': unexpected(['generateArmyA']),
     'ArmyBFactory.js': unexpected(['selectRandomEntitiesForSideB', 'selectScriptedEntitiesForSideB']),
-    'GameInit.js': unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
+    "app/startup.js": unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
       'ResetXp', 'ResetGameDay', 'detectPageReload', 'createUmbraBlock', 'syncStatCurseMarker', 'bindHelperEntity', 'closeOpenHelpers']),
-    'ui/playerMenus.js': unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
+    "ui/application.js": unexpected(['getOrCreateWorldMapID', 'initializeArmyConfig', 'ResetGameStages', 'ResetEntitesB',
       'ResetXp', 'ResetGameDay', 'detectPageReload']),
-    'ui/statElements.js': unexpected(['createUmbraBlock', 'syncStatCurseMarker']),
-    'ui/statHelpers.js': unexpected(['bindHelperEntity', 'closeOpenHelpers']),
+    "ui/statistics/components.js": unexpected(['createUmbraBlock', 'syncStatCurseMarker']),
+    "ui/statistics/helpers.js": unexpected(['bindHelperEntity', 'closeOpenHelpers']),
     'entityUpdatesStorage.js': noops(['recordEntityProgression']) + '\n' + unexpected([
       'saveEntityextraLifeToStorage', 'resetStoredArmorCurrentToMax', 'endEntityBattleRole', 'countCompletedArchetypes']),
     'entityAttributs.js': noops(['updateBonusLifeCounters', 'updateCurrentAttackDisplay', 'updateArmorCounter'])
@@ -52,7 +52,7 @@ export async function installEntityTestEnvironment(initialEntries = []) {
     'summonsMecanics.js': unexpected(['inheritSummonEssences']),
     'battleLogs.js': 'export const battleLogs = [];',
     'gameState.js': 'export const requireSafeMenuAccess = () => true;' + unexpected(['StopGame']),
-    'ui.js': String.raw`
+    "ui/display.js": String.raw`
       export const isRegenKey = key => /^\d{3}$/.test(key);
       export const toNonNegInt = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
     ` + unexpected(['showGamePopupMessage', 'toRoman', 'EffectMessage', 'showHealingFeedback', 'showStatGainsFromDiff']),

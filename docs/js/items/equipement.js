@@ -20,8 +20,8 @@ import {
   getEquipmentSlotKeys,
 } from "../entites.js";
 import { syncDOMWithStats } from '../UpgradeEntity.js';
-import { showStatGainsFromDiff } from '../ui.js';
-import { beginDragHelperCleanup, endDragHelperCleanup } from "../ui/dragHelpers.js";
+import { showStatGainsFromDiff } from "../ui/display.js";
+import { beginDragHelperCleanup, endDragHelperCleanup } from "../ui/drag.js";
 import { requireSafeMenuAccess } from '../gameState.js';
 import { ensureStuffArmorReserve } from './armor.js';
 import { ensureStuffResourceStocks, getEquipmentResourceCurrent } from './resourceStocks.js';

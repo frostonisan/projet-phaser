@@ -24,7 +24,7 @@ try {
   const origin=`http://127.0.0.1:${server.address().port}`;
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
-    const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),UI=await import('/js/GameInit.js');
+    const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const F=await import('/js/combat/attacks.js'),G=await import('/js/GameStorage.js'),U=await import('/js/UpgradeEntity.js');
     const R=await import('/js/attackResolution.js'),State=await import('/js/gameState.js');
     const checks=[],check=(value,label)=>{if(!value)throw Error(label);checks.push(label);};

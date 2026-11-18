@@ -48,7 +48,7 @@ export async function createStatusAudit({ output, install, before = false }) {
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
     await page.evaluate(async config => {
-      const U = await import('/js/GameInit.js'), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
+      const U = await import("/js/ui/application.js"), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
       const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js'), F = await import('/js/fight.js');
       const Clock = await import('/js/combatClock.js'), Timeline = await import('/js/combatTimeline.js'), Sim = await import('/js/combatSimulation.js');
       const { balanceData } = await import('/js/data/balanceData.js'); balanceData.brokenSpell.chance.basePercent = 0;

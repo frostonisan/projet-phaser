@@ -27,7 +27,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   const setup = async (view, preview) => page.evaluate(async ({ view, preview }) => {
-    const UI = await import('/js/GameInit.js'), E = await import('/js/entites.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), E = await import('/js/entites.js');
     const U = await import('/js/UpgradeEntity.js');
     const { stats } = await import('/js/data/statsData.js');
     const { STAT_HELPER_DESCRIPTIONS } = await import('/js/data/helpers.js');
@@ -63,7 +63,7 @@ try {
     const check = (ok, text) => { if (!ok) throw Error(`${label}: ${text}`); passed.push(`${label}: ${text}`); };
     const normalize = text => text.replace(/\s+/g, ' ').trim();
     const reference = node.cloneNode(true);
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const model = document.createElement('template');
     model.innerHTML = DDisplay.calculateStatsDisplay(key, window.__introAudit.active).helpContent;
     reference.querySelector('.short-descri').replaceWith(model.content.querySelector('.short-descri').cloneNode(true));node.parentElement.append(reference);

@@ -167,7 +167,7 @@ try {
     (await import('/js/sessionStorage.js')).beginAdminSession();
     S.saveToLocalStorage('GameStages',{stages:[{id:'size-audit',level_type:'admin'}]});S.saveToLocalStorage('selectedArmyA',[]);S.saveToLocalStorage('ArmyB',{armies:{}});S.saveToLocalStorage('equippedItems',[]);
     document.body.innerHTML='<div id="game-windows"><div id="game-container"><div class="Game-UI"></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div></div>';
-    (await import('/js/GameInit.js')).GameUi();
+    (await import("/js/ui/application.js")).GameUi();
     document.getElementById('game-windows').style.cssText='opacity:1;display:block;visibility:visible';
     document.getElementById('game-container').style.cssText='opacity:1;display:block;visibility:visible;width:1536px;height:960px';
     const grid=document.getElementById('hexGrid');grid.style.cssText='position:absolute;left:120px;top:180px;width:1100px;height:560px;transform:none';

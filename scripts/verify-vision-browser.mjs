@@ -144,7 +144,7 @@ try {
   });
   console.log(`Vision combat: ${checks.length} checks passed.`);
   const expected = await page.evaluate(async () => {
-    const UI=await import('/js/GameInit.js'), E=await import('/js/entites.js'), S=await import('/js/entite/statSystem.js');
+    const UI=await import("/js/ui/codex/index.js"), E=await import('/js/entites.js'), S=await import('/js/entite/statSystem.js');
     const e={id:989141,name:'Vision',type:'sbire',side:'A',awakening:1,level:{current:1,max:250},attacks:['autoAttack'],stuff:{},stats:{},
       baseStats:{HP:100,vision:10,agility:10,precision:7,precisionPlus:5}};
     E.recomputeEntityStats(e,{equippedItems:[],persistEquipment:false,skipReverseArchetype:true});

@@ -32,7 +32,7 @@ import {
 } from '../items/itemManager.js';
 import { calculateItemPower } from '../items/items.js';
 import { glitterStuff } from '../biome/meteo.js';
-import { beginDragHelperCleanup, endDragHelperCleanup } from "./dragHelpers.js";
+import { beginDragHelperCleanup, endDragHelperCleanup } from "./drag.js";
 import {
   calculateEntityLinkedEssenceAvailability,
   createEssenceSpriteHTML,
@@ -46,7 +46,7 @@ import {
   loadUniversalEssenceItems,
 } from '../essenceur.js';
 import { getStageAccess, requireSafeMenuAccess } from '../gameState.js';
-import { statsByKey } from './statHelpers.js';
+import { statsByKey } from "./statistics/helpers.js";
 import {
   toggleWindowInMenuMap,
   reorderMenuMapChildren,
@@ -55,9 +55,9 @@ import {
   getInventoryEntityName,
   readInventoryArmy,
   findInventoryEntityById,
-} from './menuNavigation.js';
-import { getInventoryAttackKeyCandidates } from '../attackInterface.js';
-import { openInventoryEntityCodexTarget } from './codex.js';
+} from "./navigation.js";
+import { getInventoryAttackKeyCandidates } from "./attacks.js";
+import { openInventoryEntityCodexTarget } from "./codex/index.js";
 
 function createBattleSatchelView(combat = false) {
     const bag = document.createElement('section');
@@ -1520,10 +1520,10 @@ shopRight.appendChild(buttonsContainer);
 export { createBattleSatchelView, PlayerInventory, createInventory, MapShop, openShopInterface };
 
 // Register shared handlers once, after the complete module graph is initialized.
-let initialized = false;
+let inventoryInitialized = false;
 export function initializeInventory() {
-  if (initialized) return;
-  initialized = true;
+  if (inventoryInitialized) return;
+  inventoryInitialized = true;
   window.addEventListener('inventoryItemsUpdated', refreshBattleSatchelViews);
 
   window.addEventListener('playerInfoUpdated', refreshBattleSatchelViews);

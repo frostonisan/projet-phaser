@@ -30,7 +30,7 @@ try {
     window.Game = await import('/js/game.js');
     window.S = await import('/js/GameStorage.js');
     window.Events = await import('/js/events.js');
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
     Game.configureBattleSystemsOnce(); U.createGameContainer(); U.GameUi();
     S.setAdminMode(false); window.levelRunning = 'scripted';

@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const R = await import('/js/items/resourceStocks.js');
     const S = await import('/js/GameStorage.js');
     const U = await import('/js/entityUpdatesStorage.js');
@@ -445,7 +445,7 @@ try {
     const E = await import('/js/entites.js');
     const D = await import('/js/damagesCalcul.js');
     const P = await import('/js/UpgradeEntity.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import('/js/GameStorage.js');
     const { createMovementCounter } = await import('/js/createEntity.js');
     const checks = [];
@@ -655,7 +655,7 @@ try {
     await page.screenshot({ path: resolve(output, `consumable-${viewport.width}.png`) });
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), UI = await import('/js/GameInit.js');
+    const E = await import('/js/entites.js'), UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import('/js/GameStorage.js'), P = await import('/js/UpgradeEntity.js');
     const M = await import('/js/items/itemManager.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
@@ -738,7 +738,7 @@ try {
     const D = await import('/js/damagesCalcul.js'), R = await import('/js/items/resourceStocks.js');
     const A = await import('/js/items/armor.js'), M = await import('/js/items/itemManager.js');
     const P = await import('/js/UpgradeEntity.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts));
     const { ItemDetails } = await import('/js/data/itemList.js');
     const checks = [];
     const check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };
@@ -905,10 +905,10 @@ try {
     report.checks.push(`Real pointer held still: ${action} refreshes the open sub-helper without reopening`);
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const R = await import('/js/items/resourceStocks.js'), A = await import('/js/items/armor.js');
     const U = await import('/js/entityUpdatesStorage.js'), P = await import('/js/UpgradeEntity.js');
-    const UI = await import('/js/GameInit.js'), S = await import('/js/GameStorage.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), S = await import('/js/GameStorage.js');
     const M = await import('/js/items/itemManager.js'), { ItemDetails } = await import('/js/data/itemList.js');
     let entity, draft, mode, stat;
     const amount = () => stat === 'armor'
@@ -1029,10 +1029,10 @@ try {
     }
   }
   await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const E = await import('/js/entites.js'), D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const R = await import('/js/items/resourceStocks.js'), A = await import('/js/items/armor.js');
     const U = await import('/js/entityUpdatesStorage.js'), P = await import('/js/UpgradeEntity.js');
-    const UI = await import('/js/GameInit.js'), S = await import('/js/GameStorage.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), S = await import('/js/GameStorage.js');
     const Gear = await import('/js/items/equipement.js'), State = await import('/js/gameState.js');
     const M = await import('/js/items/itemManager.js'), { ItemDetails } = await import('/js/data/itemList.js');
     let actors, drafts, stockSnapshot, mode, stat;
@@ -1139,7 +1139,7 @@ try {
     for (const stat of ['shift', 'armor', 'fadedLife', 'extraLife', 'eternalLife']) {
       await page.evaluate(({ context, mode, stat }) => window.__swapSources.setup(context, mode, stat), { context, mode, stat });
       for (const index of [0, 1]) {
-        await page.evaluate(async () => (await import('/js/GameInit.js')).closeOpenHelpers());
+        await page.evaluate(async () => (await import("/js/ui/statistics/helpers.js")).closeOpenHelpers());
         await page.locator(`#swap-source-${971900 + index} .stat-container`).click();
         await page.locator('[data-umbra-pinned="true"] [data-helper-source="equipment"]').hover();
         await page.evaluate(() => window.__swapSources.swap());

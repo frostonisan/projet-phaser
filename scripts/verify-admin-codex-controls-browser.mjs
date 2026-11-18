@@ -29,7 +29,7 @@ try {
     const S = await import('/js/GameStorage.js');
     const E = await import('/js/entites.js');
     const A = await import('/js/admin.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const N = await import('/js/newgame.js');
     S.setAdminMode(true);
     window.levelRunning = 'worldmap';
@@ -81,7 +81,7 @@ try {
   await page.getByRole('button', { name: 'Fermer', exact: true }).click();
   await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import('/js/GameStorage.js');
     window.__mastery = structuredClone(E.entites[0].attackDetails[0].mastery);
     window.__otherAttack = JSON.stringify(E.entites[1].attackDetails);

@@ -49,7 +49,7 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async source => {
-    const U = await import('/js/GameInit.js'), E = await import('/js/entites.js');
+    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js'), S = await import('/js/GameStorage.js');
     const { balanceData } = await import('/js/data/balanceData.js');
     const merge = (target, values) => { for (const [key, value] of Object.entries(values)) {

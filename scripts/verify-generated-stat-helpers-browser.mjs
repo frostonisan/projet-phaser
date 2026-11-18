@@ -26,8 +26,8 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const result = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'), R = await import('/js/entite/entityRules.js');
-    const UI = await import('/js/GameInit.js'), U = await import('/js/UpgradeEntity.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"), R = await import('/js/entite/entityRules.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/components.js")]).then(parts => Object.assign({}, ...parts)), U = await import('/js/UpgradeEntity.js');
     const G = await import('/js/GameStorage.js');
     const configs = Object.values(D.getGeneratedUmbraStatConfigs());
     let count = 0;

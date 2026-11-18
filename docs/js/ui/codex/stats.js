@@ -1,19 +1,19 @@
 // Codex statistics, resources, soul and archetype progression panels.
-import { getLifeSlots } from '../items/resourceStocks.js';
-import { buildLifeSlotHelper, buildMilestoneEssenceHelper } from '../data/helpers.js';
-import { attackDetails } from '../data/attackList.js';
-import { getSafe, getDisplayStatKey, normalizeStatKey } from '../entite/entityRules.js';
-import { resolveAttackDefinitionForEntity } from '../attackResolution.js';
-import { calculateStatGraphValue } from '../damagesCalcul.js';
-import { getClassLabel, getCycleForKey, getCycleLenFor, getArchetypeMilestones } from '../UpgradeEntity.js';
-import { isEntiteAlive } from '../game.js';
-import { stats } from '../data/statsData.js';
-import { toRoman, toNonNegInt, goldTitle } from '../ui.js';
-import { closeAttackEssenceSocketPopups, updateMilestoneEssenceElement } from '../essenceur.js';
-import { getMilestoneEssenceColor } from '../essenceInventory.js';
-import { clamp, bindHelperEntity } from './statHelpers.js';
-import { getCodexSubmenuIndex, setCodexSubmenuIndex } from './menuNavigation.js';
-import { refreshDisplayedPowers } from './powerViews.js';
+import { getLifeSlots } from "../../items/resourceStocks.js";
+import { buildLifeSlotHelper, buildMilestoneEssenceHelper } from "../../data/helpers.js";
+import { attackDetails } from "../../data/attackList.js";
+import { getSafe, getDisplayStatKey, normalizeStatKey } from "../../entite/entityRules.js";
+import { resolveAttackDefinitionForEntity } from "../../attackResolution.js";
+import { calculateStatGraphValue } from "../../damagesCalcul.js";
+import { getClassLabel, getCycleForKey, getCycleLenFor, getArchetypeMilestones } from "../../UpgradeEntity.js";
+import { isEntiteAlive } from "../../game.js";
+import { stats } from "../../data/statsData.js";
+import { toRoman, toNonNegInt, goldTitle } from "../display.js";
+import { closeAttackEssenceSocketPopups, updateMilestoneEssenceElement } from "../../essenceur.js";
+import { getMilestoneEssenceColor } from "../../essenceInventory.js";
+import { clamp, bindHelperEntity } from "../statistics/helpers.js";
+import { getCodexSubmenuIndex, setCodexSubmenuIndex } from "../navigation.js";
+import { refreshDisplayedPowers } from "../statistics/components.js";
 import {
   createUmbraBlock,
   createUmbraBlockTagged,
@@ -21,10 +21,10 @@ import {
   createBlockTitle,
   withBlockSubtitle,
   createBlockMarker,
-} from './statElements.js';
-import { removeDirectEntityView, createProfilSubmenu, initStatRadar } from './codexProfile.js';
-import { getCodexStableEquipmentCharge, createEquipmentSubmenu } from './equipment.js';
-import { createAttackReadOnlyOverview } from '../attackInterface.js';
+} from "../statistics/components.js";
+import { removeDirectEntityView, createProfilSubmenu, initStatRadar } from "./profile.js";
+import { getCodexStableEquipmentCharge, createEquipmentSubmenu } from "./profile.js";
+import { createAttackReadOnlyOverview } from "../attacks.js";
 
 function buildSoulSection(entite) {
   const hasHybridAttack = entite.attacks.some(attackName => {

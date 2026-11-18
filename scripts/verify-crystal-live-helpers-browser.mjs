@@ -27,8 +27,8 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js'), U = await import('/js/UpgradeEntity.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'), S = await import('/js/entite/statSystem.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import('/js/UpgradeEntity.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"), S = await import('/js/entite/statSystem.js');
     const H = await import('/js/data/helpers.js');
     const P = await import('/js/items/permanentItems.js'), M = await import('/js/items/itemManager.js');
     const State = await import('/js/gameState.js');

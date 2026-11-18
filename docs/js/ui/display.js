@@ -1,15 +1,31 @@
-import { removeCombatVisualAfter } from './combatClock.js';
-import { showEffectPopup, formatEffectPopup } from './combatPopups.js';
-import { HelpText, HELPER_PICTOGRAM_NAMES } from './data/helpers.js';
-import { getDisplayStatKey, normalizeStatKey } from './entite/entityRules.js';
-import { calculateStatSources } from './entite/statSystem.js';
-import { stats as STATS_DATA } from './data/statsData.js';
-import { playCachedGif } from './data/loaderList.js';
-import { createEntiteScanInDOM, createHeadUpInDom } from './createEntity.js';
-import { getOrCreateGameContainer } from './ui/playerMenus.js';
-import { renderCurrentBattleLog } from './battleLogs.js';
-import { getVisibleHexes, setVisibleHexes } from './GameStorage.js';
-import { hideCombatAttackControlPanel, isCombatAttackControlPanelOpenFor, showCombatAttackControlPanel } from './attackInterface.js';
+import { removeCombatVisualAfter } from "../combatClock.js";
+import { showEffectPopup, formatEffectPopup } from "../combatPopups.js";
+import { HelpText, HELPER_PICTOGRAM_NAMES } from "../data/helpers.js";
+import { getDisplayStatKey, normalizeStatKey } from "../entite/entityRules.js";
+import { calculateStatSources } from "../entite/statSystem.js";
+import { stats as STATS_DATA } from "../data/statsData.js";
+import { playCachedGif } from "../data/loaderList.js";
+import { createEntiteScanInDOM, createHeadUpInDom } from "../createEntity.js";
+import { renderCurrentBattleLog } from "../battleLogs.js";
+import { getVisibleHexes, setVisibleHexes } from "../GameStorage.js";
+import { hideCombatAttackControlPanel, isCombatAttackControlPanelOpenFor, showCombatAttackControlPanel } from "./attacks.js";
+
+export function getOrCreateGameContainer() {
+    const gameWindows = document.getElementById('game-windows');
+    if (!gameWindows) {
+        console.error("❌ 'game-windows' introuvable, impossible de créer 'game-container'.");
+        return null;
+    }
+
+    let gameContainer = document.getElementById('game-container');
+    if (!gameContainer) {
+        console.warn("⚠️ #game-container manquant, création automatique.");
+        gameContainer = document.createElement('div');
+        gameContainer.id = 'game-container';
+        gameWindows.appendChild(gameContainer); // ✅ Correct : enfant de #game-windows
+    }
+    return gameContainer;
+}
 
 let openWindows = [];
 export function goldTitle(text, tag = "p", opts = {}) {

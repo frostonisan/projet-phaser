@@ -66,7 +66,7 @@ try {
   check(await page.evaluate(() => window.__actor.stats.criticalChance > 0 && window.__actor.stats.criticalDamage > 50), 'Both critical effects activate');
   equal(await page.evaluate(() => window.__actor.Archetype.current.key), 'egare', 'Manual grant does not change the archetype');
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/codex/index.js");
     const host = document.createElement('div'); host.className = 'menu-map-container';
     document.querySelector('.Game-UI').append(host);
     window.__codex = UI.createCodexEntityScan(window.__actor, host, 'codex-entity_991801');

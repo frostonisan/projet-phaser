@@ -39,7 +39,7 @@ import {
   subscribeAttackSelection,
   resetAttackSelectionRuntime,
 } from "./attackResolution.js";
-import { createCooldownWaitView } from './attackInterface.js';
+import { createCooldownWaitView } from "./ui/attacks.js";
 import { updateEntityAttackTargetDisplay } from './load-entity.js';
 import { updateTimerDisplay } from './dom.js';
 

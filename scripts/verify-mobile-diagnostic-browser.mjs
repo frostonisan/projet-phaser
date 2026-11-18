@@ -42,7 +42,7 @@ try {
         const page = await context.newPage();
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        if (scenario === 'module-failure') await page.route('**/js/GameInit.js', route => route.abort());
+        if (scenario === 'module-failure') await page.route('**/js/app/startup.js', route => route.abort());
         await page.goto(`http://127.0.0.1:${server.address().port}/mobile-diagnostic.html`, { waitUntil: 'load' });
         const panel = page.locator('#startup-diagnostic');
         if (scenario === 'normal' || invalidConfig) {
@@ -87,7 +87,7 @@ try {
         } else if (scenario === 'module-failure') {
           await page.waitForFunction(() => Number(document.getElementById('startup-diagnostic').dataset.errorCount) > 0);
           assert.equal(await panel.getAttribute('data-game-status'), 'missing');
-          assert.match(await panel.innerText(), /RESSOURCE NON CHARGEE[\s\S]*GameInit\.js/);
+          assert.match(await panel.innerText(), /RESSOURCE NON CHARGEE[\s\S]*app\/startup\.js/);
         } else if (scenario === 'runtime-failure') {
           await page.evaluate(() => {
             setTimeout(() => { throw new Error('Diagnostic runtime probe'); }, 0);

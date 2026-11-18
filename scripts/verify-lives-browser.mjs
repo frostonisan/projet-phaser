@@ -33,7 +33,7 @@ try {
     const G = await import('/js/game.js');
     const I = await import('/js/items/itemEffectMecanics.js');
     const Armor = await import('/js/items/armor.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const P = await import('/js/UpgradeEntity.js');
     const Q = await import('/js/procedural/proc-bareme.js');
     const checks = [];
@@ -209,7 +209,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const E = await import('/js/entites.js'); const S = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js'); const M = await import('/js/items/itemManager.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)); const M = await import('/js/items/itemManager.js');
     const Gear = await import('/js/items/equipement.js'); const A = await import('/js/entityAttributs.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
     window.levelRunning = 'worldmap'; S.setAdminMode(true);
@@ -328,7 +328,7 @@ try {
   }
   const perLifeChecks = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-    const M = await import('/js/items/itemManager.js'), UI = await import('/js/GameInit.js');
+    const M = await import('/js/items/itemManager.js'), UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const Gear = await import('/js/items/equipement.js'), R = await import('/js/items/resourceStocks.js');
     const Store = await import('/js/entityUpdatesStorage.js');
     const { ItemDetails } = await import('/js/data/itemList.js');

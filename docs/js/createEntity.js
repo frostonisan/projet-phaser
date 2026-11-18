@@ -10,13 +10,13 @@ import {
   applyCombatProfileView,
 } from "./load-entity.js";
 import { IngameListingFocus, AttackerSbireTargetPriority, AllySbireTargetPriority } from './role-rule.js';
-import { createUmbraBlock } from './ui/statElements.js';
-import { createEntityAttackDisplay } from './attackInterface.js';
-import { createStuffDom } from './ui/equipment.js';
+import { createUmbraBlock } from "./ui/statistics/components.js";
+import { createEntityAttackDisplay } from "./ui/attacks.js";
+import { createStuffDom } from "./ui/codex/profile.js";
 import { entites } from './entites.js';
 import { attackDetails } from './data/attackList.js';
 import { resolveAttackDefinitionForEntity } from './attackResolution.js';
-import { adjustFontSize } from './ui.js';
+import { adjustFontSize } from "./ui/display.js";
 import { updateHealthBar } from './UpgradeEntity.js';
 import { renderMovementCounter } from './damagesCalcul.js';
 import { syncEntityAuras, cleanupEntityAuras, getAuraPoolCurrent } from "./entitesAura.js";

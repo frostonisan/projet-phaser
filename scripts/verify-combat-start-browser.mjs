@@ -30,7 +30,7 @@ try {
     const E = await import('/js/entites.js');
     const F = await import('/js/fight.js');
     const G = await import('/js/gameState.js');
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const A = await import('/js/entityAttributs.js');
     const Events = await import('/js/events.js');
     const Selection = await import('/js/attackResolution.js');

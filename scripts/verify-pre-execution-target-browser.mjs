@@ -77,7 +77,7 @@ async function fixture(side, kind) {
   });
   await page.goto(origin + '/index.html');
   await page.evaluate(async ({ side, kind }) => {
-    const UI = await import('/js/GameInit.js'), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
+    const UI = await import("/js/ui/application.js"), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
     const Storage = await import('/js/GameStorage.js'), G = await import('/js/gameState.js'), F = await import('/js/fight.js');
     const Sim = await import('/js/combatSimulation.js'), Timeline = await import('/js/combatTimeline.js'), Clock = await import('/js/combatClock.js');
     const { balanceData } = await import('/js/data/balanceData.js'); balanceData.brokenSpell.chance.basePercent = 0;

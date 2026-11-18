@@ -100,7 +100,7 @@ try {
     const state = await import('/js/gameState.js');
     const items = await import('/js/items/itemManager.js');
     const { ItemDetails } = await import('/js/data/itemList.js');
-    const init = await import('/js/GameInit.js');
+    const init = await import("/js/ui/application.js");
     window.levelRunning = 'worldmap'; state.refreshStageAccess();
     for (const [index, serial] of ['i8', 'i4', 'i4', 'i0'].entries()) {
       items.moveBattleItem(items.acquireItem(ItemDetails.find(item => item.serial === serial), 'visual-test').itemId, index);

@@ -12,27 +12,27 @@ import {
 } from '../GameStorage.js';
 import { assertEntityType, isLord, getSafe } from '../entite/entityRules.js';
 import { generateUniqueID, entitesNestUp, enrichEntityStats } from '../entites.js';
-import { hideCombatAttackControlPanel, createEntityAttackDisplay } from '../attackInterface.js';
+import { hideCombatAttackControlPanel, createEntityAttackDisplay } from "./attacks.js";
 import { createMovementDisplay, ensureMovementState } from '../damagesCalcul.js';
 import { createSoundControls } from '../soundManager.js';
 import { generateArmyA } from '../ArmyAFactory.js';
 import { updateExperienceDisplay } from '../UpgradeEntity.js';
 import { clearItemDescriptions, setLastDraggedItemId } from '../items/itemManager.js';
-import { resetParallaxView, dismissGamePopups } from '../ui.js';
+import { resetParallaxView, dismissGamePopups } from "./display.js";
 import {
   getBattleLogsIndex,
   renderBattleBookList,
   renderBattleBookReport,
   clearAllBattleLogs,
 } from '../battleLogs.js';
-import { endDragHelperCleanup } from "./dragHelpers.js";
+import { endDragHelperCleanup } from "./drag.js";
 import { closeAttackEssenceSocketPopups } from '../essenceur.js';
 import { getStageAccess, refreshStageAccess, requireSafeMenuAccess } from '../gameState.js';
 import { createBattleSatchelView, PlayerInventory, MapShop } from './inventory.js';
-import { createEntityPowerValue } from './powerViews.js';
-import { createUmbraBlock } from './statElements.js';
-import { PlayerEssenceur } from './essenceInterface.js';
-import { PlayerArmyCodex } from './codex.js';
+import { createEntityPowerValue } from "./statistics/components.js";
+import { createUmbraBlock } from "./statistics/components.js";
+import { PlayerEssenceur } from "./essences.js";
+import { PlayerArmyCodex } from "./codex/index.js";
 import { applyCombatProfileView } from '../load-entity.js';
 
 function detectPageReload() {
@@ -883,23 +883,6 @@ function ResetGameDay() {
     console.log('🔄 Compteur de jour réinitialisé à 1.');
 }
 
-function getOrCreateGameContainer() {
-    const gameWindows = document.getElementById('game-windows');
-    if (!gameWindows) {
-        console.error("❌ 'game-windows' introuvable, impossible de créer 'game-container'.");
-        return null;
-    }
-
-    let gameContainer = document.getElementById('game-container');
-    if (!gameContainer) {
-        console.warn("⚠️ #game-container manquant, création automatique.");
-        gameContainer = document.createElement('div');
-        gameContainer.id = 'game-container';
-        gameWindows.appendChild(gameContainer); // ✅ Correct : enfant de #game-windows
-    }
-    return gameContainer;
-}
-
 function playLoadingAnimation(type) {
     localStorage.setItem('loadingAnimation', type);
     createBlackOverlay(type); // On peut passer le type pour adapter le comportement
@@ -1079,7 +1062,6 @@ export {
   ResetEntitesB,
   ResetXp,
   ResetGameDay,
-  getOrCreateGameContainer,
   playLoadingAnimation,
   triggerAnimation,
 };

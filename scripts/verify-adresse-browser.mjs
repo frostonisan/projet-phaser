@@ -133,7 +133,7 @@ try {
   });
   console.log(`Adresse combat and crystal checks: ${report.length} passed.`);
   const expectedParts = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js'), E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
+    const UI = await import("/js/ui/codex/index.js"), E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
     const U = await import('/js/UpgradeEntity.js'); U.setPlayerExperience(1000000);
     const entity = { id: 988141, name: 'Adresse', type: 'sbire', side: 'A', awakening: 1, level: { current: 1, max: 250 }, attacks: ['autoAttack'],
       stuff: {}, stats: {}, baseStats: { HP: 100, agility: 10, adresse: 10, dodge: 2, dodgePlus: 3 } };

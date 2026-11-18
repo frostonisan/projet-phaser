@@ -1,6 +1,6 @@
 // Stat helper ownership, positioning, focus, nested details and live refresh.
-import { gameStorage as localStorage } from '../sessionStorage.js';
-import { getStatSystemResult, STAT_SYSTEM_ORIGINS } from '../entite/statSystem.js';
+import { gameStorage as localStorage } from "../../sessionStorage.js";
+import { getStatSystemResult, STAT_SYSTEM_ORIGINS } from "../../entite/statSystem.js";
 import {
   buildAttackPurityHelper,
   buildHypercognitionBonusHelper,
@@ -17,22 +17,22 @@ import {
   HELPER_PICTOGRAM_NAMES,
   umbraDescription,
   buildStatSourcesHelper,
-} from '../data/helpers.js';
-import { getSafe, normalizeStatKey, getDisplayStatKey } from '../entite/entityRules.js';
-import { entites } from '../entites.js';
-import { createAttackStatView, getStatContributions } from '../damagesCalcul.js';
-import { getStatisticSourceTotals, calculateStatsDisplay, isDisplayableStatContribution } from './statDetails.js';
-import { ComputeStatPreview } from '../UpgradeEntity.js';
-import { stats } from '../data/statsData.js';
-import { EFFECT_VISUALS } from '../data/effectVisuals.js';
-import { cachedResourceUrl } from '../data/loaderList.js';
+} from "../../data/helpers.js";
+import { getSafe, normalizeStatKey, getDisplayStatKey } from "../../entite/entityRules.js";
+import { entites } from "../../entites.js";
+import { createAttackStatView, getStatContributions } from "../../damagesCalcul.js";
+import { getStatisticSourceTotals, calculateStatsDisplay, isDisplayableStatContribution } from "./details.js";
+import { ComputeStatPreview } from "../../UpgradeEntity.js";
+import { stats } from "../../data/statsData.js";
+import { EFFECT_VISUALS } from "../../data/effectVisuals.js";
+import { cachedResourceUrl } from "../../data/loaderList.js";
 import {
   bindDragHelperCleanupGuards,
   clearDragTransientHelpers,
   DRAG_HELPER_CLEANUP_EVENT,
   isDragDropActive,
-} from "./dragHelpers.js";
-import { getStageAccess } from '../gameState.js';
+} from "../drag.js";
+import { getStageAccess } from "../../gameState.js";
 
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 

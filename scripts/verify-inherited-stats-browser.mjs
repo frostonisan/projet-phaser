@@ -25,7 +25,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async () => {
     const E = await import('/js/entites.js'), G = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js'), P = await import('/js/UpgradeEntity.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)), P = await import('/js/UpgradeEntity.js');
     const State = await import('/js/gameState.js');
     window.levelRunning = 'worldmap'; G.setAdminMode(true); State.refreshStageAccess();
     const entity = structuredClone(E.entitesNestUp[0]);

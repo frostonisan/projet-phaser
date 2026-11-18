@@ -1,27 +1,27 @@
 // Read-only stat details and HTML helpers. Formula results come from the calculation owners.
-import { buildStatHelperContent } from '../data/helpers.js';
+import { buildStatHelperContent } from "../../data/helpers.js";
 import {
   calculateStatSources, getStatSystemResult, buildStatSystemModel, getStatSystemSourceTotals,
   getDirectingStatResult, describeStatPointLimit, withStatDisplayReads
-} from '../entite/statSystem.js';
-import { stats } from '../data/statsData.js';
-import { balanceData, roundBalance } from '../data/balanceData.js';
-import { isUmbraRestricted } from '../procedural/proc-bareme.js';
+} from "../../entite/statSystem.js";
+import { stats } from "../../data/statsData.js";
+import { balanceData, roundBalance } from "../../data/balanceData.js";
+import { isUmbraRestricted } from "../../procedural/proc-bareme.js";
 import {
   getSafe, normalizeStatKey, getDisplayStatKey, calculatePenetrationPercent,
   calculateResistanceReductionPercent
-} from '../entite/entityRules.js';
-import { getAttackNatureRules, getAttackResolutionFlags } from '../attackResolution.js';
+} from "../../entite/entityRules.js";
+import { getAttackNatureRules, getAttackResolutionFlags } from "../../attackResolution.js";
 import {
   calculateVitalityBonus, calculateVelocityReduction, calculateDodgePercent, calculatePrecisionPercent,
   calculateAmbidextryPercent, calculateAstralityPercent, calculateRobustnessArmorDetails, getBloodThirstyPercent,
   calculateHastePercent, calculateLvlMaxBonus, calculateTranscendenceExtraLife, BaseDayHpRegen,
   calculateWeaponMasteryCharge, getMovementWeightMalus, getStatBeforeGeneration, getStatSystemInputs,
   getWeaponOrfevrePreviewActivePercent
-} from '../entites.js';
-import { calculateHypercognitionEssenceCount } from '../essenceInventory.js';
-import { astralCooldownRemaining } from '../attackEffectMecanics.js';
-import { getEquipmentResourceCurrent, getEquipmentResourceMax } from '../items/resourceStocks.js';
+} from "../../entites.js";
+import { calculateHypercognitionEssenceCount } from "../../essenceInventory.js";
+import { astralCooldownRemaining } from "../../attackEffectMecanics.js";
+import { getEquipmentResourceCurrent, getEquipmentResourceMax } from "../../items/resourceStocks.js";
 import {
   getStatContributions, getStatInputProvenance, getAttackPurity, ATTACK_TIME_REDUC_CAP, calculateTotalDodgeBonus,
   calculateIndestructibilityPercentFromEntity, caluclateIndestructibilityStrengthReduction, caluclateIndestructibilityReduction, caluclateIndestructibilityReductionTotal,
@@ -67,7 +67,7 @@ import {
   calculateMovementMarathonChance, calculateMovementTrailerChance, calculateWeaponOrfevreWeaponMastery, calculateWeaponOrfevreStrength,
   calculateWeaponOrfevreBonus, calculateWeaponMasteryTotalTrophyChance, calculateWeaponMasteryTrophyChance, calculateWeaponMasteryTrophyStrengthBonus,
   calculateChargeEquipmentSlots, weaponMasteryChargeStrenghtRatioBonus, calculateWeaponMasteryTotalChargeBonus
-} from '../damagesCalcul.js';
+} from "../../damagesCalcul.js";
 
 function buildDisplayedStatModel(system, entity) {
   const model = buildStatSystemModel(system, entity);

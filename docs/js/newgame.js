@@ -1,8 +1,8 @@
 import { gameStorage as localStorage, beginAdminSession } from './sessionStorage.js';
 import { buildLevelHelper } from './data/helpers.js';
 import { isAdminMode, saveStageConfig, loadFromLocalStorage, saveToLocalStorage, getOrCreateGameData,getOrCreateGameID, setCurrentLevel, getStageChests, getOrCreateStageChest, stageHasRewardChest } from './GameStorage.js';
-import { PlayerArmyCodex } from './ui/codex.js';
-import { createArmyPowerSummary } from './ui/powerViews.js';
+import { PlayerArmyCodex } from "./ui/codex/index.js";
+import { createArmyPowerSummary } from "./ui/statistics/components.js";
 import { generateUniqueID, entitesNestUp } from './entites.js';
 import { launchLevel, createQuitButton } from './game.js';
 import { cleanupAdminLevel, initializeAdminLevel } from "./admin.js";

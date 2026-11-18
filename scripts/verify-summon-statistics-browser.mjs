@@ -31,7 +31,7 @@ try {
     const { resetLevelBattleStats, getLevelCombatDetails } = await import('/js/dom.js');
     const { rebuildBoardOccupancy } = await import('/js/board.js');
     const { saveToLocalStorage, loadFromLocalStorage } = await import('/js/GameStorage.js');
-    const { createCodexEntityScan, createCodexCombatRecord, createCodexInvocationsRecord } = await import('/js/GameInit.js');
+    const { createCodexEntityScan, createCodexCombatRecord, createCodexInvocationsRecord } = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts));
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

@@ -31,12 +31,12 @@ try {
   });
   await page.goto(origin + '/index.html');
   const checks = await page.evaluate(async () => {
-    const E = await import('/js/entites.js'), U = await import('/js/GameInit.js'), Create = await import('/js/createEntity.js');
+    const E = await import('/js/entites.js'), U = await import("/js/ui/application.js"), Create = await import('/js/createEntity.js');
     const A = await import('/js/entityAttributs.js'), Fx = await import('/js/attackEffectMecanics.js');
     const Clock = await import('/js/combatClock.js'), Timeline = await import('/js/combatTimeline.js');
-    const Display = await import('/js/ui/entityEffectDisplay.js'), Loader = await import('/js/data/loaderList.js');
+    const Display = await import("/js/ui/statistics/components.js"), Loader = await import('/js/data/loaderList.js');
     const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.sprite?.includes('mouche-asticoteuse'));
-    const helpers = await import('/js/ui/statHelpers.js');
+    const helpers = await import("/js/ui/statistics/helpers.js");
     U.createGameContainer(); U.GameUi(); helpers.initializeStatHelpers(); window.levelRunning = 'worldmap';
     const visuals = Object.values((await import('/js/data/effectVisuals.js')).EFFECT_VISUALS);
     await Loader.preloadResources(visuals.map(visual => visual.src));

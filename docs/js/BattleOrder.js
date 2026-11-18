@@ -14,7 +14,7 @@ import {
 import { battleLogs } from './battleLogs.js';
 import { getSafe } from "./entite/entityRules.js";
 import { recordEntityCombatAmount, endEntityBattleRole } from './entityUpdatesStorage.js';
-import { showGamePopupMessage } from './ui.js';
+import { showGamePopupMessage } from "./ui/display.js";
 
 // Durée commune de la réaction visuelle aux ordres et au réveil d'une
 // attaque surprise. Modifier cette valeur met à jour les deux systèmes.

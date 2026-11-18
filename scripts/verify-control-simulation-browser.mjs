@@ -23,7 +23,7 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js');
     const S = await import('/js/GameStorage.js');

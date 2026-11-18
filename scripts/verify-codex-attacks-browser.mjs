@@ -24,7 +24,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   const reports = await page.evaluate(async () => {
-    const ui = await import('/js/GameInit.js');
+    const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/attacks.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const { attackDetails } = await import('/js/data/attackList.js');
     const { entitesNestUp, entites } = await import('/js/entites.js');
     const { getAttackNatureRules, readAttackDefinitionsForEntity, isAttackSublime } = await import('/js/attackResolution.js');
@@ -570,7 +570,7 @@ try {
   await mkdir('outputs/codex-attacks-tests', { recursive: true });
   await page.screenshot({ path: 'outputs/codex-attacks-tests/essence-popup.png' });
   await page.evaluate(async () => {
-    const { showGamePopupMessage } = await import('/js/ui.js');
+    const { showGamePopupMessage } = await import("/js/ui/display.js");
     window.__essenceOverlayConfirmation = showGamePopupMessage({
       mode: 'manual', title: 'Confirmer', message: 'Essence universelle',
       actions: [{ label: 'Annuler', value: false }, { label: 'Continuer', value: true, primary: true }],
@@ -605,7 +605,7 @@ try {
   JSON.stringify(multiMobile));
   await page.setViewportSize({ width: 1280, height: 900 });
   const visual = await page.evaluate(async () => {
-    const ui = await import('/js/GameInit.js');
+    const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/attacks.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const { entitesNestUp, entites } = await import('/js/entites.js');
     const sample = structuredClone(entitesNestUp.find(entity => entity.name === 'Mouche asticoteuse'));
     sample.id = 777001;
@@ -628,7 +628,7 @@ try {
   assert.ok(visual.umbras > 0 && visual.leftSkills && visual.availableInk !== visual.unavailableInk,
     `Representative attack has skills and colored Umbras: ${JSON.stringify(visual)}`);
   const emptyUmbraPanel = await page.evaluate(async () => {
-    const ui = await import('/js/GameInit.js');
+    const ui = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/attacks.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const { enrichEntityStats } = await import('/js/entites.js');
     const sample = enrichEntityStats({id:777002,name:'Sans Umbra',type:'sbire',side:'A',level:1,awakening:1,attacks:['autoAttack'],baseStats:{HP:100},stuff:{}});
     sample.id = 777002;

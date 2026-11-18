@@ -19,7 +19,7 @@ import { getStageAccess, refreshStageAccess } from '../gameState.js';
 import { calculateResistances, recomputeEntityStats } from '../entites.js';
 import { getPermanentStatGrant } from './permanentItems.js';
 import { loadFromLocalStorage } from '../GameStorage.js';
-import { showGamePopupMessage, showStatGainFeedback } from '../ui.js';
+import { showGamePopupMessage, showStatGainFeedback } from "../ui/display.js";
 
 export function calculateItemDamages(target, effect, item) {
     if (!target || !target.stats.HP) {

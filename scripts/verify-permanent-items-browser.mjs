@@ -36,7 +36,7 @@ try {
     const U = await import('/js/UpgradeEntity.js');
     const R = await import('/js/items/resourceStocks.js');
     const G = await import('/js/game.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/application.js");
     const System = await import('/js/entite/statSystem.js');
     const Ground = await import('/js/summonsMecanics.js');
     const Loot = await import('/js/loot.js');

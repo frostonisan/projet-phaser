@@ -26,7 +26,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const report = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');
-    const UI = await import('/js/ui.js'), U = await import('/js/UpgradeEntity.js');
+    const UI = await import("/js/ui/display.js"), U = await import('/js/UpgradeEntity.js');
     const P = await import('/js/items/permanentItems.js'), I = await import('/js/items/itemEffectMecanics.js');
     const Rules = await import('/js/entite/entityRules.js'), State = await import('/js/gameState.js');
     const N = await import('/js/newgame.js'), H = await import('/js/data/helpers.js');
@@ -134,7 +134,7 @@ try {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(async () => {
-      const UI = await import('/js/ui.js');
+      const UI = await import("/js/ui/display.js");
       UI.showStatGainFeedback({ id: 981730 }, [{ stat: 'strength', amount: 2 }, { stat: 'magicalPenPlus', amount: 3 }, { stat: 'shift', amount: 5, unit: ' ch. sup.' }]);
     });
     assert.ok(await page.locator('.stat-gain-feedback--global').evaluate(node => {
@@ -148,7 +148,7 @@ try {
     assert.equal(await page.locator('.stat-gain-feedback').count(), 0);
 
     const dynamics = await page.evaluate(async () => {
-      const UI = await import('/js/ui.js'), FX = await import('/js/attackEffectMecanics.js');
+      const UI = await import("/js/ui/display.js"), FX = await import('/js/attackEffectMecanics.js');
       const entity = { id: 981740 };
       const anchor = document.createElement('div'); anchor.id = `PopDow_${entity.id}`;
       anchor.style.cssText = 'position:fixed;left:calc(50% - 50px);top:400px;width:100px;height:100px';
@@ -176,7 +176,7 @@ try {
     report.checks.push(`Consumption shares heal animation and existing movement host at ${width}px, with stat color`);
     await page.clock.runFor(500);
     await page.evaluate(async () => {
-      const UI = await import('/js/ui.js');
+      const UI = await import("/js/ui/display.js");
       window.feedbackDynamics.nextGain = UI.showStatGainFeedback(window.feedbackDynamics.entity, [{ stat: 'shift', amount: 2, unit: ' ch. sup.' }]);
     });
     await page.clock.runFor(500);
@@ -190,7 +190,7 @@ try {
     report.checks.push('Heal, movement and consumption share the same lifetime; later gains keep their own timer');
   }
   const codex = await page.evaluate(async () => {
-    const UI = await import('/js/ui.js');
+    const UI = await import("/js/ui/display.js");
     const hidden = document.createElement('div'); hidden.id = 'PopDow_981750'; hidden.style.display = 'none';
     const sprite = document.createElement('div'); sprite.id = 'codex-entity-sprite-container_981750';
     sprite.style.cssText = 'position:fixed;left:150px;top:300px;width:50px;height:100px';

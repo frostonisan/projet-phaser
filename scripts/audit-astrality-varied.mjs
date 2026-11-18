@@ -96,7 +96,7 @@ async function fixture(){
  page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
  await page.evaluate(async expectedCooldown=>{
-  const UI=await import('/js/GameInit.js'),E=await import('/js/entites.js'),C=await import('/js/createEntity.js');
+  const UI=await import("/js/ui/application.js"),E=await import('/js/entites.js'),C=await import('/js/createEntity.js');
   const G=await import('/js/GameStorage.js'),State=await import('/js/gameState.js'),Sim=await import('/js/combatSimulation.js');
   if(expectedCooldown!=null&&globalThis.umbraProgression.astrality.astralCooldown.baseSeconds!==expectedCooldown)throw Error('Unexpected autonomous cooldown');
   UI.createGameContainer();UI.GameUi();G.setAdminMode(true);window.levelRunning='admin';document.querySelector('.worldmap')?.remove();

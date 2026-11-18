@@ -24,7 +24,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async () => {
-    const U = await import('/js/GameInit.js'), E = await import('/js/entites.js');
+    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js'), S = await import('/js/GameStorage.js');
     const template = (await import('/js/entite/entitesNest.js')).entitesNest.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
@@ -46,7 +46,7 @@ try {
     }
     window.Sim = await import('/js/combatSimulation.js');
     // Regression: real players already have an acquired army in storage.
-    // This exercises GameInit's import-time acquisition registration, unlike
+    // This exercises Application startup's import-time acquisition registration, unlike
     // a board fixture whose saved army is empty.
     const savedAlly = JSON.parse(JSON.stringify(E.entites[0], (_key, value) =>
       typeof value === 'function' || value instanceof Node ? undefined : value));

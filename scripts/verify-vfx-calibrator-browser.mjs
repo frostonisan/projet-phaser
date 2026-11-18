@@ -81,7 +81,7 @@ try {
   combat.on('pageerror',error=>errors.push(error.message));
   await combat.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await combat.evaluate(async()=>{
-    const Init=await import('/js/GameInit.js');Init.createGameContainer();Init.GameUi();
+    const Init=await import("/js/ui/application.js");Init.createGameContainer();Init.GameUi();
     const E=await import('/js/entites.js'),C=await import('/js/createEntity.js');
     window.vfxBoard=await import('/js/board.js');
     const template=(await import('/js/entite/entitesNest.js')).entitesNest.find(e=>e.class==='mouche-asticoteuse');

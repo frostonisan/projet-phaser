@@ -59,9 +59,9 @@ import {
 } from "./entite/entityRules.js";
 import { validateAndSetNickname } from "./secure.js";
 import { stats as STATS_DATA } from "./data/statsData.js";
-import { toRoman, showStatGainsFromDiff } from "./ui.js";
-import { createUmbraBlock, syncStatCurseMarker } from './ui/statElements.js';
-import { bindHelperEntity, closeOpenHelpers } from './ui/statHelpers.js';
+import { toRoman, showStatGainsFromDiff } from "./ui/display.js";
+import { createUmbraBlock, syncStatCurseMarker } from "./ui/statistics/components.js";
+import { bindHelperEntity, closeOpenHelpers } from "./ui/statistics/helpers.js";
 import {
   toNumber, renderMovementCounter, updateMovementDisplay, calculateVitalityRegenPercent,
   calculateVitalityRegenAmount, calculateTotalRegenAmount, calculateHpBattleRegenStrengthRatio, calculateHpBattleRegenIndestructibilityRatio,
@@ -85,7 +85,7 @@ import {
   calculateMovementStartingCharges, getFinalWeaponOrfevreBonus, getFinalWeaponCollectorBonus, calculateChargeEquipmentSlots,
   calculateWeaponMasteryTotalChargeBonus
 } from './damagesCalcul.js';
-import { calculateStatsDisplay } from './ui/statDetails.js';
+import { calculateStatsDisplay } from "./ui/statistics/details.js";
 import { startArchup } from "./biome/meteo.js";
 import { updateBonusLifeCounters, updateArmorCounter } from "./entityAttributs.js";
 import { recordEntityProgression, countCompletedArchetypes } from "./entityUpdatesStorage.js";
@@ -242,7 +242,7 @@ function persistAndSyncReset(entity) {
   return inArmyA;
 }
 
-function refreshResetDom(entity, oldStats, entityApi, gameApi) {
+function refreshResetDom(entity, oldStats, entityApi, codexApi) {
   if (typeof document === 'undefined') return;
   // Existing consumables only change HP/status immediately and leave cosmetic effects.
   document.getElementById(`spriteContainer_${entity.id}`)?.classList.remove('itemheal', 'itemdamage', 'itemrez');
@@ -261,7 +261,7 @@ function refreshResetDom(entity, oldStats, entityApi, gameApi) {
     const dual = codex.classList.contains('dual-view');
     const id = codex.id;
     codex.remove();
-    gameApi.createCodexEntityScan(entity, parent, id, position);
+    codexApi.createCodexEntityScan(entity, parent, id, position);
     if (dual) document.getElementById(id)?.classList.add('dual-view');
   }
 }
@@ -271,7 +271,7 @@ export async function resetEntityProgression(entity, { refundExperience = true }
   if (rejected) return rejected;
   // Resolve the combat and Codex UI at call time.
   const entityApi = await import("./entityAttributs.js");
-  const gameApi = await import("./GameInit.js");
+  const codexApi = await import("./ui/codex/index.js");
   const preview = previewEntityReset(entity);
   if (!preview.ok) return preview;
   const { projection, ...result } = preview;
@@ -291,7 +291,7 @@ export async function resetEntityProgression(entity, { refundExperience = true }
     creditPlayerExperience(result.refundXP - adminRefund);
   }
   try {
-    refreshResetDom(entity, oldStats, entityApi, gameApi);
+    refreshResetDom(entity, oldStats, entityApi, codexApi);
   } catch (error) {
     // A cosmetic failure must not report a committed reset as a failed item use.
     console.warn('Entity reset: affichage a rafraichir.', error);

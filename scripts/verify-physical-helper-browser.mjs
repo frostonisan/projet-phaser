@@ -26,8 +26,8 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
     const E = await import('/js/entites.js'), S = await import('/js/entite/statSystem.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js'), H = await import('/js/data/helpers.js');
-    const UI = await import('/js/GameInit.js'), U = await import('/js/UpgradeEntity.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js"), H = await import('/js/data/helpers.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts)), U = await import('/js/UpgradeEntity.js');
     const G = await import('/js/GameStorage.js');
     const checks = [];
     const check = (ok, label) => { if (!ok) throw Error(label); checks.push(label); };

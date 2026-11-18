@@ -27,7 +27,7 @@ import {
   sanitizeEssenceOwnerId,
   validateUniversalEssenceItems,
 } from "./essenceInventory.js";
-import { showGamePopupMessage } from "./ui.js";
+import { showGamePopupMessage } from "./ui/display.js";
 
 const MAX_ESSENCEUR_SLOTS = ATTACK_ESSENCE_MAX_SLOTS;
 

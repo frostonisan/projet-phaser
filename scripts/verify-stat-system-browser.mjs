@@ -27,10 +27,10 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index-13.html`);
   const report = await page.evaluate(async () => {
     // Enter the game's module graph in its normal startup order.
-    await import('/js/GameInit.js');
+    await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     const S = await import('/js/entite/statSystem.js');
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const H = await import('/js/data/helpers.js');
     const R = await import('/js/entite/entityRules.js');
     const U = await import('/js/UpgradeEntity.js');
@@ -799,7 +799,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   await page.evaluate(async entity => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import('/js/entites.js');
     Object.assign(entity.baseStats, { physicalDamage: 5, inflexion: 1, bloodFuryExecutionChancePlus: 4, bloodFury: 15, transcendenceTotal: 12 });
     E.recomputeEntityStats(entity, { equippedItems: [], persistEquipment: false, skipReverseArchetype: true });
@@ -882,7 +882,7 @@ try {
     .every(node => Number(getComputedStyle(node).opacity) >= .99));
   await page.screenshot({ path: resolve(output, 'stats-x-helper.png') });
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) {
-    await page.evaluate(async () => (await import('/js/GameInit.js')).closeOpenHelpers());
+    await page.evaluate(async () => (await import("/js/ui/statistics/helpers.js")).closeOpenHelpers());
     await page.setViewportSize(viewport);
     await row.scrollIntoViewIfNeeded();
     await row.click();
@@ -960,7 +960,7 @@ try {
     return node && Number(getComputedStyle(node).opacity) >= .99;
   });
   assert.ok(await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const pinned = document.querySelector('[data-umbra-pinned]');
     const detail = document.querySelector('[data-umbra-detail]');
     for (let index = 0; index < 3; index++) UI.refreshStatHelper(pinned, pinned._helperHost, window.__helperEquipmentAudit.entity);
@@ -985,8 +985,8 @@ try {
   await page.keyboard.press('Escape');
   await page.evaluate(async () => {
     const U = await import('/js/UpgradeEntity.js');
-    const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const entity = structuredClone(window.__helperEquipmentAudit.entity);
     U.setPlayerExperience(1000000);
     const form = U.createLevelUpForm(entity);
@@ -1004,7 +1004,7 @@ try {
     } finally { form.remove(); }
   });
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import('/js/entites.js');
     const entity = { id: 987132, name: 'Helper text audit', type: 'sbire', side: 'A', awakening: 1,
       level: { current: 1, max: 250 }, attacks: ['autoAttack'], stuff: {},
@@ -1070,7 +1070,7 @@ try {
   for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await regenRow.scrollIntoViewIfNeeded();
-    await page.evaluate(async () => (await import('/js/GameInit.js')).closeOpenHelpers());
+    await page.evaluate(async () => (await import("/js/ui/statistics/helpers.js")).closeOpenHelpers());
     await regenRow.click();
     await helper.waitFor({ state: 'visible' });
     assert.deepEqual(await helper.locator('[data-helper-source]').allTextContents(), ['Umbra', 'Base']);
@@ -1103,7 +1103,7 @@ try {
     await page.keyboard.press('Escape');
   }
   const movementText = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
     const display = DDisplay.calculateStatsDisplay('shift', entity);
     return { initial: display.shiftStartingCharges, current: display.shiftCurrent, capacity: display.shiftMax, percent: display.shiftStartingPercent };
@@ -1112,7 +1112,7 @@ try {
   for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await movementRow.scrollIntoViewIfNeeded();
-    await page.evaluate(async () => (await import('/js/GameInit.js')).closeOpenHelpers());
+    await page.evaluate(async () => (await import("/js/ui/statistics/helpers.js")).closeOpenHelpers());
     await movementRow.click();
     await helper.waitFor({ state: 'visible' });
     const movementBody = await textOf(helper.locator('.stat-hover-body'));
@@ -1138,8 +1138,8 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
     const U = await import('/js/UpgradeEntity.js');
-    const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const entity = JSON.parse(localStorage.getItem('selectedArmyA'))[0];
     const before = JSON.stringify(entity.stats);
     const form = U.createLevelUpForm(entity);
@@ -1158,7 +1158,7 @@ try {
   await page.evaluate(async () => {
     document.getElementById('system-test').remove();
     const Store = await import('/js/GameStorage.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/inventory.js")]).then(parts => Object.assign({}, ...parts));
     window.levelRunning = 'worldmap';
     Store.setAdminMode(true);
     const gameUI = document.querySelector('.Game-UI') || document.body.appendChild(document.createElement('div'));

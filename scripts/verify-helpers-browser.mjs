@@ -136,10 +136,10 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'load' });
   await dismissStarterForFixture(page);
   const snapshot = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
-    const UI = await import('/js/GameInit.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import('/js/entites.js');
-    const A = await import('/js/attackInterface.js');
+    const A = await import("/js/ui/attacks.js");
     const R = await import('/js/attackResolution.js');
     const Ess = await import('/js/essenceur.js');
     const Items = await import('/js/items/itemManager.js');
@@ -1112,9 +1112,9 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#armor-bars-regression').screenshot({ path: resolve(output, 'armor-bars-mobile.png') });
   const layeredChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const Rules = await import('/js/entite/entityRules.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');
     const { stats } = await import('/js/data/statsData.js');
     const { balanceData } = await import('/js/data/balanceData.js');
@@ -2136,7 +2136,7 @@ try {
     assert.equal(await detail.count(), 1);
     assert.equal(await detail.locator('.umbra-description').innerText(), 'Statistique : Vie supplémentaire +');
     const expectedLifeHelper = await page.evaluate(async () => {
-      const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+      const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
       return DDisplay.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
     });
     assert.equal(await detail.locator('.stat-hover-body').innerHTML(), `\n      ${expectedLifeHelper}\n    `);
@@ -2156,7 +2156,7 @@ try {
   await page.evaluate(() => new Promise(requestAnimationFrame));
   assert.equal(await page.locator('[data-umbra-detail]').count(), 1, 'A third-party helper stays open when its parent text is unchanged');
   assert.equal(await page.locator('[data-umbra-detail] .stat-hover-body').evaluate(async node => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     return node.innerHTML.trim() === DDisplay.calculateStatsDisplay('extraLife', window.__umbraLayerTest.entity).helpContent;
   }), true, 'Already-open third-party helpers refresh from current entity stats without another hover');
   const transcendenceRatio = transcendenceCard.locator('[data-umbra-calculation="transcendenceExBonus"]').first();
@@ -2184,7 +2184,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const Upgrade = await import('/js/UpgradeEntity.js');
     const entity = { id: 987191, name: 'Level helper preview', side: 'A', type: 'sbire', class: 'TestHelpers', level: 1,
       baseStats: { strength: 6, agility: 6, intelligence: 6, integrite: 3, HP: 100, will: 150 },
@@ -2233,8 +2233,8 @@ try {
   };
   const assertDraftHelper = async key => {
     const previewCheck = await page.evaluate(async key => {
-      const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
-      const UI = await import('/js/GameInit.js');
+      const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+      const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
       const { host, draft, originalStats, baseStats } = window.__levelHelperTest;
       const beforeRead = JSON.stringify(draft);
       const block = host.querySelector(`.umbra-submenu .stat-container[data-stat="${key}"]`);
@@ -2271,8 +2271,8 @@ try {
   const assertRelatedPowerHelper = async () => {
     await page.locator('[data-umbra-pinned] [data-helper-picto-stat="physicalDamage"]').first().dispatchEvent('mouseover');
     const matches = await page.evaluate(async () => {
-      const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
-      const UI = await import('/js/GameInit.js');
+      const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
+      const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
       const parent = document.querySelector('[data-umbra-pinned]');
       const view = UI.getBoundHelperEntity(parent._helperHost);
       const expected = DDisplay.calculateStatsDisplay('physicalDamage', view).statSystem.value;
@@ -2357,7 +2357,7 @@ try {
   await page.locator('[data-umbra-pinned] [data-autonomous-calculation][data-umbra-calculation="physicalDamageTotal"]').focus();
   const openPowerCalculation = await page.locator('[data-umbra-detail]').elementHandle();
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const block = window.__levelHelperTest.host.querySelector('.codex-substat-panel--umbra .stat-container[data-stat="vigueur"]');
     const updated = structuredClone(UI.getBoundHelperEntity(block));
     for (const [key, value] of Object.entries({ strength: 11, vigueur: 4 })) updated.baseStats[key] = (updated.baseStats[key] || 0) + value - (updated.stats[key] || 0);
@@ -2385,7 +2385,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await levelHost.locator('.codex-inner-menu:has(.codex-soul)').dispatchEvent('click');
   const reopened = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const sidebar = window.__levelHelperTest.host.querySelector('.umbra-submenu.entity-stats-section');
     const draft = UI.helperEntityByRoot.get(sidebar);
     window.__levelHelperTest.draft = draft;
@@ -2401,9 +2401,9 @@ try {
   assert.equal(await page.locator('.stat-hover').count(), 0, 'Removing the level-up screen clears its helpers');
   console.log('PASS: real Soul preview helpers, new/unchanged Umbras, sub-helpers, undo, clear, confirmation, reopen and desktop/mobile bounds');
   const autonomousChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     let checks = 0;
     const check = (condition, message) => { checks++; if (!condition) throw Error(message); };
     for (const points of [0, 1, 15, 100, 300]) for (const autonomous of [0, 5, 17]) {
@@ -2557,7 +2557,7 @@ try {
   await page.evaluate(() => window.__autonomousHelperTest.host.remove());
   console.log(`PASS: ${autonomousChecks} autonomous/combined/restricted stat checks, colored + names, source ratios and desktop/mobile helpers`);
   const sourceTotalChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const H = await import('/js/data/helpers.js');
     let count = 0;
     const check = (ok, message) => { if (!ok) throw Error(message); count++; };
@@ -2636,9 +2636,9 @@ try {
   console.log(`PASS: ${sourceTotalChecks} source totals, final units, equipment, percentages, caps, previews and inactive Umbras`);
   await page.setViewportSize({ width: 1280, height: 900 });
   const effectKeys = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');
     const entity = structuredClone(window.__autonomousHelperTest.entity);
     entity.id = 987197;
@@ -2700,7 +2700,7 @@ try {
     }
   }
   const essentialChecks = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
     const H = await import('/js/data/helpers.js');
     const { balanceData } = await import('/js/data/balanceData.js');
@@ -2820,7 +2820,7 @@ try {
     return count;
   });
   const weightVisualChecks = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import('/js/entites.js');
     const row = window.__dedicatedHelperTest.host.querySelector('.codex-attack-stat-block .stat-container[data-stat="weight"]');
     const original = UI.getBoundHelperEntity(row);
@@ -2890,7 +2890,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   for (const stat of ['weight', 'shift']) {
     await page.evaluate(async stat => {
-      const UI = await import('/js/GameInit.js');
+      const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
       const row = window.__dedicatedHelperTest.host.querySelector(`.codex-attack-stat-block .stat-container[data-stat="${stat}"]`);
       const original = UI.getBoundHelperEntity(row);
       const scope = row.closest('.codex-substat-panel--umbra') || row.closest('.codex-entity-scan');
@@ -2941,7 +2941,7 @@ try {
     assert.match(await body.locator('[data-helper-stat="super-heavy-weight"]').innerText(), /80/);
     if (stat === 'shift') assert.match(await body.innerText(), /Déplacements disponibles : 1.*Déplacements max : 10/s);
     await page.evaluate(async stat => {
-      const UI = await import('/js/GameInit.js');
+      const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
       const { scope, original, originalId } = window.__weightHelperPreview;
       const row = window.__dedicatedHelperTest.host.querySelector(`.codex-attack-stat-block .stat-container[data-stat="${stat}"]`);
       row.dataset.entityId = originalId;
@@ -2989,8 +2989,8 @@ try {
   assert.doesNotMatch(secondHitSources, /Ambidextrie|Agilité|Valeur fixe/);
   await dedicatedHost.locator('[data-stat-effect="indestructibilityReductionTotal"]').dispatchEvent('click');
   const previewCheck = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const row = window.__dedicatedHelperTest.host.querySelector('[data-stat-effect="indestructibilityReductionTotal"]');
     const bound = UI.getBoundHelperEntity(row);
     const committed = JSON.stringify(bound.stats);
@@ -3017,7 +3017,7 @@ try {
   await page.locator('body').dispatchEvent('click');
   assert.equal(await page.locator('[data-umbra-pinned], [data-umbra-detail]').count(), 0);
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const row = window.__dedicatedHelperTest.host.querySelector('[data-stat-effect="indestructibilityReductionTotal"]');
     if (JSON.stringify(UI.getBoundHelperEntity(row).stats) !== window.__dedicatedHelperTest.previewOriginal) throw Error('Preview helper changed committed stats');
     window.__dedicatedHelperTest.host.remove();
@@ -3025,9 +3025,9 @@ try {
   console.log(`PASS: ${effectKeys.length} dedicated statistic helpers, isolated effects, pin replacement, sources, previews and mobile bounds`);
   await page.setViewportSize({ width: 1280, height: 900 });
   const conversions = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const H = await import('/js/data/helpers.js');
     const entity = structuredClone(window.__autonomousHelperTest.entity);
     entity.id = 987199;
@@ -3126,9 +3126,9 @@ try {
   }
   await page.locator('body').dispatchEvent('click');
   const autonomousRows = await page.evaluate(async () => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const H = await import('/js/data/helpers.js');
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const rows = [...window.__conversionHelperTest.root.querySelectorAll('[data-autonomous-helper="true"]')];
     const prose = html => {
       const root = document.createElement('div');
@@ -3170,7 +3170,7 @@ try {
   });
   let autonomousDetails = 0;
   const sourceMatrix = await page.evaluate(async rows => {
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
     const H = await import('/js/data/helpers.js');
     const { getDisplayStatKey } = await import('/js/entite/entityRules.js');
@@ -3304,7 +3304,7 @@ try {
   assert.match(criticalSources, /Dégâts des coups critiques \+ : \+ [\d.]+ %/);
   assert.doesNotMatch(criticalSources, /Coup critique|Précision/);
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const row = window.__conversionHelperTest.root.querySelector('.stat-container[data-stat="criticalDamage"]');
     const entity = UI.getBoundHelperEntity(row);
     window.__conversionHelperTest.sourceEntity = entity;
@@ -3346,7 +3346,7 @@ try {
   const constantPower = await page.locator('[data-umbra-pinned] [data-autonomous-calculation]').innerText();
   await page.locator('[data-umbra-pinned] [data-autonomous-calculation]').focus();
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     const probe = window.__conversionHelperTest;
     const row = probe.root.querySelector('.codex-attack-stat-block .stat-container[data-stat="physicalDamage"]');
     const entity = UI.getBoundHelperEntity(row);
@@ -3411,7 +3411,7 @@ try {
   });
   console.log('PASS: 6 compact conversions, source category labels with live hover details, lighter HSL stat+ names, keyboard access and mobile bounds');
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     UI.closeOpenHelpers();
     const previousGame = document.getElementById('game-windows');
     if (previousGame) previousGame.id = 'helper-layout-previous-game';
@@ -3438,7 +3438,7 @@ try {
       for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
         for (const mode of ['hover', 'pinned', 'detail']) {
           const report = await page.evaluate(async ({ corner, mode, insetGame }) => {
-            const UI = await import('/js/GameInit.js');
+            const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
             UI.closeOpenHelpers();
             const { host, root } = window.__helperLayoutProbe;
             document.body.append(root);
@@ -3509,7 +3509,7 @@ try {
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     UI.closeOpenHelpers();
     document.body.append(window.__helperLayoutProbe.root);
     document.getElementById('game-windows')?.remove();
@@ -3547,7 +3547,7 @@ try {
     await route.continue();
   });
   const delayedFont = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     UI.closeOpenHelpers();
     const font = new FontFace('HelperLateLayoutTest', 'url("/media/typo/EBGaramond-Regular.ttf?helper-layout-test")');
     document.fonts.add(font);
@@ -3581,7 +3581,7 @@ try {
     assert.deepEqual(box, delayedFont.frames[0], 'Late font never causes a visible placement jump');
   }
   await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/attacks.js"), import("/js/data/helpers.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js"), import("/js/ui/codex/stats.js")]).then(parts => Object.assign({}, ...parts));
     UI.closeOpenHelpers();
     const { root, previousGame } = window.__helperLayoutProbe;
     root.remove();

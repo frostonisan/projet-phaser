@@ -58,7 +58,7 @@ try {
     checks.push(label);
   };
   const setup = async (state, preview, view) => page.evaluate(async ({ keys, state, preview, view }) => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/index.js")]).then(parts => Object.assign({}, ...parts));
     const E = await import('/js/entites.js');
     const U = await import('/js/UpgradeEntity.js');
     const S = await import('/js/entite/statSystem.js');
@@ -100,7 +100,7 @@ try {
   const detail = page.locator('[data-umbra-detail]');
   checks.push(...await page.evaluate(async () => {
     const E = await import('/js/entites.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const S = await import('/js/entite/statSystem.js');
     const H = await import('/js/data/helpers.js');
     const U = await import('/js/UpgradeEntity.js');
@@ -157,7 +157,7 @@ try {
       assert.ok((await row.locator('.stat-name').innerText()).trim().endsWith(`${suffix} :`), `${label}: composition suffix`);
       await verifyPaint(row.locator('.stat-name [data-stat-state]').first(), state, `${label}: name`);
       await verifyPaint(row.locator('.entite-stat:not(.preview)').first(), state, `${label}: value`);
-      await page.evaluate(async () => (await import('/js/GameInit.js')).closeOpenHelpers());
+      await page.evaluate(async () => (await import("/js/ui/statistics/helpers.js")).closeOpenHelpers());
       await row.click();
       await helper.waitFor({ state: 'visible' });
       if (suffix) assert.ok((await helper.locator('.stat-hover-header').innerText()).endsWith(suffix), `${label}: helper suffix`);

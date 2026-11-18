@@ -45,7 +45,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
     await dismissStarterForFixture(page);
     results[before ? 'before' : 'after'] = await page.evaluate(async () => {
-      await import('/js/GameInit.js');
+      await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
       const D = await import('/js/dom.js'), A = await import('/js/attackResolution.js');
       const V = await import('/js/entitesAnimation.js'), T = await import('/js/entityUpdatesStorage.js');
       const E = await import('/js/entites.js'), S = await import('/js/GameStorage.js');

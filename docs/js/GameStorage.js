@@ -1,6 +1,6 @@
 import { gameStorage as localStorage } from './sessionStorage.js';
 import { generateUniqueID } from './entites.js';
-import { getOrCreateWorldMapID, initializeArmyConfig, ResetGameStages, ResetEntitesB, ResetXp, ResetGameDay, detectPageReload } from './ui/playerMenus.js';
+import { getOrCreateWorldMapID, initializeArmyConfig, ResetGameStages, ResetEntitesB, ResetXp, ResetGameDay, detectPageReload } from "./ui/application.js";
 import { updateExperienceDisplay } from './UpgradeEntity.js';
 import { resetStoredArmorCurrentToMax } from './entityUpdatesStorage.js';
 import { StopGame } from './gameState.js';

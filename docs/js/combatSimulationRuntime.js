@@ -132,9 +132,10 @@ export async function runSimulationTrial(input) {
     capture();
   });
   // Use the game's normal entry point. Starting with entites.js enters its
-  // cyclic graph backwards: GameInit then reads the acquisition constant while
+  // cyclic graph backwards: Application startup then reads the acquisition constant while
   // entites.js is still initializing whenever selectedArmyA is nonempty.
-  const U = await import('./GameInit.js');
+  await import('./app/startup.js');
+  const U = await import("./ui/application.js");
   const E = await import('./entites.js');
   const G = await import('./gameState.js');
   const F = await import('./fight.js');

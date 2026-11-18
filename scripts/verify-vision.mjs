@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { installEntityTestEnvironment } from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
 const E = await import('../docs/js/entites.js');
-const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
+const D = await import('../docs/js/damagesCalcul.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
 const S = await import('../docs/js/entite/statSystem.js');
 const A = await import('../docs/js/attackResolution.js');
 const H = await import('../docs/js/data/helpers.js');

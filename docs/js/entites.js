@@ -48,7 +48,7 @@ import {
   getStatContributions,
 } from "./damagesCalcul.js";
 import { saveEntityextraLifeToStorage, endEntityBattleRole } from './entityUpdatesStorage.js';
-import { isRegenKey, toNonNegInt } from './ui.js';
+import { isRegenKey, toNonNegInt } from "./ui/display.js";
 import {
   getSafe,
   ensureEntityLevelObject as ensureCoreEntityLevelObject,

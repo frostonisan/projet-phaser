@@ -19,8 +19,8 @@ import {
 import { attackEffects } from './data/attackEffects.js';
 import { applyDamage } from './entityAttributs.js';
 import { getAlterationTiming, calculateResilienceEffectIntensity } from './damagesCalcul.js';
-import { escape } from './ui/statHelpers.js';
-import { setEntityEffectView, removeEntityEffectView, refreshEntityEffectViews } from './ui/entityEffectDisplay.js';
+import { escape } from "./ui/statistics/helpers.js";
+import { setEntityEffectView, removeEntityEffectView, refreshEntityEffectViews } from "./ui/statistics/components.js";
 import { addEntityControl, endEntityControl, getControlState, getControlStates, getCombatSide, updateCharmedSide, advanceInsolence, applyControlRecoil, getMovementElapsed, getSleepElapsed, isEntityAsleep, notifyPreparationInterrupted, canEntityProc } from './entityControl.js';
 import { effectProvenance, effectRuntimeKey, burnRules, feedBurn, decayBurn, burnPower, burnExpiresAt } from './effectRules.js';
 import { attackDetails } from './data/attackList.js';
@@ -41,8 +41,8 @@ import { entiteTurn } from './fight.js';
 import { gameStarted, isBattleFinished } from './gameState.js';
 import { getSafe, entityBattleBooste } from "./entite/entityRules.js";
 import { getAttackNatureRules, notifyAttackSelection, readAttackDefinitionsForEntity, attackSelectionKey, normalizeAttackSelection } from './attackResolution.js';
-import { EffectMessage, showHealingFeedback } from './ui.js';
-export { EffectMessage, showHealingFeedback } from './ui.js';
+import { EffectMessage, showHealingFeedback } from "./ui/display.js";
+export { EffectMessage, showHealingFeedback } from "./ui/display.js";
 
 const natureEffects = new Map(), activeAlterations = new Map();
 const controlEffects = new Map();

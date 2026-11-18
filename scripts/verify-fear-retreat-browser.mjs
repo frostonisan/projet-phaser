@@ -62,7 +62,7 @@ async function fixture(config) {
   page.on('console', message => { if (message.type() === 'error' && !message.text().includes('Failed to load resource')) errors.push(message.text()); });
   await page.goto(origin + '/index.html');
   await page.evaluate(async config => {
-    const U = await import('/js/GameInit.js'), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
+    const U = await import("/js/ui/application.js"), E = await import('/js/entites.js'), Create = await import('/js/createEntity.js');
     const S = await import('/js/GameStorage.js'), G = await import('/js/gameState.js'), F = await import('/js/fight.js');
     const Sim = await import('/js/combatSimulation.js');
     S.setAdminMode(!config.worldmap); window.levelRunning = config.worldmap ? 'stage' : 'admin'; window.currentStageId = null;

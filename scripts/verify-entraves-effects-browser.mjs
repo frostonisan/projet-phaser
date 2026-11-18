@@ -28,7 +28,7 @@ try{
   await page.goto(origin+'/index.html');
   const checks=await page.evaluate(async()=>{
     const E=await import('/js/entites.js'),D=await import('/js/damagesCalcul.js'),A=await import('/js/entityAttributs.js');
-    const UI=await import('/js/GameInit.js'),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
+    const UI=await import("/js/ui/attacks.js"),F=await import('/js/combat/attacks.js'),State=await import('/js/gameState.js');
     const Fx=await import('/js/attackEffectMecanics.js'),R=await import('/js/attackResolution.js'),C=await import('/js/combatClock.js');
     const Control=await import('/js/entityControl.js'),Move=await import('/js/board.js'),Rules=await import('/js/entite/entityRules.js');
     const Data=await import('/js/data/attackEffects.js'),catalog=(await import('/js/data/attackList.js')).attackDetails;

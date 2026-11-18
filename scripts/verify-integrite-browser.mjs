@@ -27,7 +27,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await dismissStarterForFixture(page);
   const expectedParts = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
+    const UI = await import("/js/ui/codex/index.js");
     const E = await import('/js/entites.js');
     const S = await import('/js/entite/statSystem.js');
     const entity = { id: 987141, name: 'Intégrité et arrondis', type: 'sbire', side: 'A', awakening: 1,

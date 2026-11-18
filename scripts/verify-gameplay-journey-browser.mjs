@@ -27,7 +27,7 @@ const installProbe = async () => page.evaluate(async () => {
   const F = await import('/js/fight.js'), M = await import('/js/items/itemManager.js');
   const Gear = await import('/js/items/equipement.js'), R = await import('/js/items/resourceStocks.js');
   const A = await import('/js/entityAttributs.js'), U = await import('/js/entityUpdatesStorage.js');
-  const UI = await import('/js/GameInit.js'), D = await import('/js/damagesCalcul.js');
+  const UI = await Promise.all([import("/js/ui/application.js"), import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/codex/profile.js")]).then(parts => Object.assign({}, ...parts)), D = await import('/js/damagesCalcul.js');
   const checks = [];
   const check = (ok, text) => { if (!ok) throw Error(text); checks.push(text); };
   const actor = id => E.entites.find(entity => entity.id === id)

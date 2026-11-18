@@ -32,7 +32,7 @@ async function fixture(config = {}) {
     const marker = new TextDecoder('latin1').decode(bytes).indexOf('NETSCAPE2.0');
     if (marker < 0 || bytes[marker + 13] || bytes[marker + 14]) throw Error('GIF should loop while combat time is paused');
 
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js');
     const S = await import('/js/GameStorage.js');
@@ -101,7 +101,7 @@ async function startPlayerBattle(page, extraAlly = false) {
   await page.evaluate(async extra => {
     window.O = await import('/js/BattleOrder.js');
     const game = await import('/js/game.js'); game.configureBattleSystemsOnce();
-    (await import('/js/ui.js')).LevelUi();
+    (await import("/js/ui/display.js")).LevelUi();
     const S = await import('/js/GameStorage.js');
     S.saveToLocalStorage('selectedArmyA', [E.entites[0]]);
     S.saveToLocalStorage('PlayerSave', { Playerinventory: [], equippedItems: [] });
@@ -140,7 +140,7 @@ try {
   await page.evaluate(() => P.pauseCombat()); await ready(page);
   assert.equal(await page.locator('[data-order="runaway"]').count(), 1);
   assert.equal(await page.locator('[data-order="cancelrunaway"]').count(), 0);
-  await page.evaluate(async () => (await import('/js/attackInterface.js')).showCombatAttackControlPanel(E.entites[0].id));
+  await page.evaluate(async () => (await import("/js/ui/attacks.js")).showCombatAttackControlPanel(E.entites[0].id));
   const layers = await page.evaluate(() => {
     const veil = document.getElementById('combat-pause-fx');
     veil.style.pointerEvents = 'auto'; // Inspect paint order, even though the veil normally passes clicks.

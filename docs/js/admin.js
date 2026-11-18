@@ -75,7 +75,7 @@ import {
   updateEntityAttackDefinition,
 } from "./attackResolution.js";
 import { syncEntityLinkedEssenceInventory } from './essenceur.js';
-import { closePlayerArmyCodex } from './ui/codex.js';
+import { closePlayerArmyCodex } from "./ui/codex/index.js";
 import { mountCombatSimulation, unmountCombatSimulation } from './combatSimulation.js';
 
 const ADMIN_EVENT_LIST = Object.freeze(
@@ -2727,7 +2727,7 @@ async function resetAdminEntityLevel(entityId) {
     const { resetEntityProgression } = await import("./UpgradeEntity.js");
     const result = await resetEntityProgression(entite);
     if (!result.ok) {
-        const { showGamePopupMessage } = await import('./ui.js');
+        const { showGamePopupMessage } = await import("./ui/display.js");
         showGamePopupMessage({ title: 'Remise a zero impossible', message: result.message, tone: 'warning' });
         return result;
     }
@@ -2845,7 +2845,8 @@ async function openAdminSoulForEntity(entityId, options = {}) {
         gameUiContainer.appendChild(menuMapContainer);
     }
 
-    const gameInit = await import('./GameInit.js');
+    const codexApi = await import("./ui/codex/index.js");
+    const menus = await import("./ui/navigation.js");
     const codexId = `codex-entity_${entite.id}`;
     let codex = document.getElementById(codexId);
 
@@ -2857,7 +2858,7 @@ async function openAdminSoulForEntity(entityId, options = {}) {
             document.querySelector('.army-codex-list')?.classList.remove('dual');
         }
 
-        gameInit.createCodexEntityScan(
+        codexApi.createCodexEntityScan(
             entite,
             menuMapContainer,
             codexId,
@@ -2868,8 +2869,8 @@ async function openAdminSoulForEntity(entityId, options = {}) {
 
     requestAnimationFrame(() => {
         injectAdminSoulResetButton(codex, entite.id);
-        gameInit.MenuContainerDisplayRules?.();
-        gameInit.enforceMenuDisplayRules?.();
+        menus.MenuContainerDisplayRules?.();
+        menus.enforceMenuDisplayRules?.();
     });
 }
 
@@ -3132,7 +3133,7 @@ export function JsonInfosDL() {
             button.dataset.exporting = 'true';
             button.disabled = true;
             try {
-                const { createArmyPowerReport } = await import('./GameInit.js');
+                const { createArmyPowerReport } = await import("./ui/statistics/components.js");
                 if (!isAdminMode()) return;
                 let army = entites.filter(entity => entity.side === side);
                 if (!army.length && side === 'A') army = loadFromLocalStorage('selectedArmyA', []);

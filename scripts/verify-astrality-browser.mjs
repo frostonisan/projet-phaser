@@ -26,7 +26,7 @@ async function fixture(config = {}) {
   await page.evaluate(async config => {
     window.P = await import('/js/combatPause.js'); await P.restorePausedCombat();
     window.Clock = await import('/js/combatClock.js');
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js');
     const S = await import('/js/GameStorage.js');
@@ -150,7 +150,7 @@ try {
  await ui.goto(`http://127.0.0.1:${server.address().port}/index.html`);
  await (await import('./browser-test-fixture.mjs')).dismissStarterForFixture(ui);
  await ui.evaluate(async()=>{
-  const E=await import('/js/entites.js'),G=await import('/js/GameStorage.js'),UI=await import('/js/GameInit.js'),U=await import('/js/UpgradeEntity.js');
+  const E=await import('/js/entites.js'),G=await import('/js/GameStorage.js'),UI=await Promise.all([import("/js/ui/codex/index.js"), import("/js/ui/statistics/helpers.js")]).then(parts => Object.assign({}, ...parts)),U=await import('/js/UpgradeEntity.js');
   window.levelRunning='worldmap';G.setAdminMode(true);(await import('/js/gameState.js')).refreshStageAccess();
   const e={id:986743,name:'Astralité',type:'sbire',side:'A',awakening:3,level:{current:30,max:250},baseStats:{HP:1000,astrality:50,strength:50,intelligence:50,agility:0,speed:10000},attacks:['autoAttack'],stuff:{}};
   E.recomputeEntityStats(e,{equippedItems:[],persistEquipment:false,skipReverseArchetype:true});E.entites.splice(0,E.entites.length,e);G.saveToLocalStorage('selectedArmyA',[e]);U.setPlayerExperience(1000000);

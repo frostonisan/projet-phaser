@@ -32,7 +32,7 @@ async function fixture(config = {}) {
     const marker = new TextDecoder('latin1').decode(bytes).indexOf('NETSCAPE2.0');
     if (marker < 0 || bytes[marker + 13] || bytes[marker + 14]) throw Error('GIF should loop while combat time is paused');
 
-    const U = await import('/js/GameInit.js');
+    const U = await import("/js/ui/application.js");
     const E = await import('/js/entites.js');
     const C = await import('/js/createEntity.js');
     const S = await import('/js/GameStorage.js');
@@ -171,7 +171,7 @@ try {
   await page.waitForFunction(()=>!Clock.isCombatInteractionBlocked());
   assert.deepEqual(await page.evaluate(()=>P.getCombatPauseReasons()),{tactical:true,absolute:false});
   await page.evaluate(async()=>{
-    const panel=await import('/js/attackInterface.js');panel.showCombatAttackControlPanel(E.entites[0].id);
+    const panel=await import("/js/ui/attacks.js");panel.showCombatAttackControlPanel(E.entites[0].id);
   });
   assert.ok(await page.locator('.combat-attack-control-card').count()>0,'real attack cards open during pause');
   const toggle=page.locator('.combat-attack-control-toggle').first();

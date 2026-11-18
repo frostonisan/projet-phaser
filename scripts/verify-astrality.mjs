@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {installEntityTestEnvironment} from './entity-test-environment.mjs';
 await installEntityTestEnvironment();
-const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js'), DDisplay = await import('../docs/js/ui/statDetails.js');
+const E=await import('../docs/js/entites.js'),D=await import('../docs/js/damagesCalcul.js'), DDisplay = await import("../docs/js/ui/statistics/details.js");
 const S=await import('../docs/js/entite/statSystem.js');
 const P=globalThis.umbraProgression;
 let checks=0;

@@ -3,7 +3,7 @@ import { enrichEntityStats, entites, generateUniqueID } from './entites.js';
 import { refreshStageAccess, gameStarted, isBattleFinished } from './gameState.js';
 import { collectEntityResources, prepareLevelResources } from './data/loaderList.js';
 import { createEntiteInDOM } from './createEntity.js';
-import { toggleScanEntityListener } from './ui.js';
+import { toggleScanEntityListener } from "./ui/display.js";
 import { findNearestAvailableHex, isHexOccupied } from './createBattleElements.js';
 import { planEntityPlacements, commitEntityPlacements, entityFootprint, releaseEntityFootprint } from './board.js';
 import { getHexEntity } from './board/targets.js';

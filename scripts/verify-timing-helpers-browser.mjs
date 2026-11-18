@@ -27,8 +27,8 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   const checks = await page.evaluate(async () => {
-    const UI = await import('/js/GameInit.js');
-    const D = await import('/js/damagesCalcul.js'), DDisplay = await import('/js/ui/statDetails.js');
+    const UI = await Promise.all([import("/js/ui/statistics/helpers.js"), import("/js/ui/attacks.js")]).then(parts => Object.assign({}, ...parts));
+    const D = await import('/js/damagesCalcul.js'), DDisplay = await import("/js/ui/statistics/details.js");
     const E = await import('/js/entites.js');
     const U = await import('/js/UpgradeEntity.js');
     const R = await import('/js/entite/entityRules.js');
