@@ -9,14 +9,17 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.86.0-dev** en bas à gauche.
+Le jeu affiche **The Dark Pit v0.87.0-dev** en bas à gauche.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
-(novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` est le repère choisi
+(novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
 pour cette branche après ces archives, pas une mesure du pourcentage terminé.
 
+La version `0.87.0-dev` crée et restaure les cases et leur occupation depuis les
+données du combat, avec le même mécanisme pour le jeu et le simulateur.
+
 Le libellé est défini une seule fois dans `docs/index.html` (`#game-version`).
-Incrémenter le dernier nombre pour une correction publiée (`0.86.1-dev`), et le
-nombre central pour une nouvelle étape importante (`0.87.0-dev`). Le suffixe
+Incrémenter le dernier nombre pour une correction publiée (`0.87.1-dev`), et le
+nombre central pour une nouvelle étape importante (`0.88.0-dev`). Le suffixe
 `dev` indique que cette branche reste en développement.
 
 ## Publication

@@ -3,9 +3,7 @@ import { createBoardGeometry, footprintCells, footprintCenter } from '../board/m
 const geometryCache = new WeakMap();
 export const gridForHex = hex => hex?.closest('.hex-grid, #hexGrid') || hex?.parentElement;
 export const readHexCoordinates = hex => ({ row: Number(hex?.dataset.row), col: Number(hex?.dataset.col) });
-export const projectBoardCell = (row, col, width = 1, rowHeight = .75) => ({
-  x: col * width + (Math.round(row) % 2 ? width / 2 : 0), y: row * rowHeight,
-});
+export { projectBoardCell } from '../board/model.js';
 export function invalidateBoardGeometry(grid) { if (grid) geometryCache.delete(grid); }
 export function getBoardGeometry(grid) {
   if (!grid) return null;
@@ -13,7 +11,9 @@ export function getBoardGeometry(grid) {
   if (data?.first?.isConnected && data.first.parentElement === grid) return data;
   const cells = [...grid.querySelectorAll('.hex[data-position]')];
   const model = createBoardGeometry(cells.map(hex => ({ id: hex.dataset.position,
-    ...readHexCoordinates(hex), x: parseFloat(hex.style.left) || 0, y: parseFloat(hex.style.top) || 0 })));
+    ...readHexCoordinates(hex), x: parseFloat(hex.style.left) || 0, y: parseFloat(hex.style.top) || 0,
+    coordinate: hex.dataset.coordinate, role: hex.dataset.role,
+    side: ['SideA', 'Neutral', 'SideB'].find(side => hex.classList.contains(side)) })));
   data = { cells, model, first: cells[0], byPosition: new Map(cells.map(hex => [hex.dataset.position, hex])),
     points: new Map(cells.map(hex => [hex, model.byId.get(hex.dataset.position)])) };
   geometryCache.set(grid, data);
@@ -42,4 +42,39 @@ export function getPlacementViews(registry, plan, entities) {
     members: move.members.map(cell => registry.geometry.byPosition.get(cell)),
     ...('cost' in move ? { cost: move.cost } : {}),
   }]));
+}
+
+// Keep existing nodes (canvases, animation keys and listeners), but overwrite their
+// spatial metadata from combat data. Missing cells are constructed from that data.
+export function renderBoardGeometry(grid, model) {
+  const existing = new Map([...grid.querySelectorAll('.hex[data-position]')].map(hex => [hex.dataset.position, hex]));
+  const cells = model.cells.map((cell, index) => {
+    let hex = existing.get(cell.id);
+    if (!hex) {
+      hex = document.createElement('div');
+      hex.innerHTML = '<div class="socle"><div class="image-role-hex-info"></div><div class="hex-details"><span class="hex-role-detail"></span><span class="hex-number"></span> - <span class="hex-coordinate"></span></div></div>';
+    }
+    hex.classList.add('hex');
+    hex.dataset.position = cell.id;
+    for (const key of ['row', 'col', 'coordinate', 'role']) {
+      if (cell[key] == null) delete hex.dataset[key]; else hex.dataset[key] = cell[key];
+    }
+    hex.classList.remove('SideA', 'Neutral', 'SideB', 'tank-role', 'fantassin-role', 'mage-role', 'occupied', 'consommable-summoned');
+    delete hex.dataset.occupiedBy; delete hex.dataset.footprintOwner;
+    if (cell.side) hex.classList.add(cell.side);
+    if (cell.role && cell.role !== 'neutre') hex.classList.add(`${cell.role}-role`);
+    const base = hex.querySelector('.socle');
+    if (base) { base.classList.remove('tank', 'fantassin', 'mage', 'neutre', 'gueux'); if (cell.role) base.classList.add(cell.role); }
+    const label = (selector, value) => { const node = hex.querySelector(selector); if (node) node.textContent = value; };
+    label('.hex-role-detail', cell.role && cell.role !== 'neutre' ? cell.role.toUpperCase() : '');
+    label('.hex-number', index + 1); label('.hex-coordinate', cell.coordinate || '');
+    hex.style.position = 'absolute'; hex.style.left = `${cell.x}px`; hex.style.top = `${cell.y}px`;
+    grid.append(hex);
+    return hex;
+  });
+  for (const [id, hex] of existing) if (!model.byId.has(id)) hex.remove();
+  const data = { cells, model, first: cells[0], byPosition: new Map(cells.map(hex => [hex.dataset.position, hex])),
+    points: new Map(cells.map(hex => [hex, model.byId.get(hex.dataset.position)])) };
+  geometryCache.set(grid, data);
+  return data;
 }

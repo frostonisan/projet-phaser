@@ -97,6 +97,21 @@ try {
     check(entries[0].entity.position === 'hex_1', 'Existing valid position is reserved before fallback allocation');
     check(entries[1].box.closest('.hex').dataset.role === 'tank', 'Duplicate position finds a free role case with string role');
     check(entries[2].box.closest('.hex').dataset.role === 'fantassin', 'Opposite-camp position finds a free role case');
+    const B = window.__boardAudit.B;
+    const released = entries.at(-1); B.releaseEntityFootprint(released.entity);
+    const logical = B.getBoardSnapshot(), captured = B.captureCombatBoard();
+    const expected = entries.map(({ entity }) => entity.position), host = document.getElementById('hexGrid');
+    entries.forEach(({ box }) => { host.append(box); box.dataset.position = 'wrong'; delete box.dataset.footprintReleased; });
+    host.querySelectorAll('.hex').forEach(hex => hex.remove());
+    B.restoreCombatBoard(JSON.parse(JSON.stringify(captured)));
+    check(JSON.stringify(B.getBoardSnapshot()) === JSON.stringify(logical), 'Missing HTML cells are rebuilt exactly from combat data');
+    check(entries.every(({ entity, box }, index) => entity.position === expected[index] && box.closest('.hex').dataset.position === expected[index]), 'Combat positions override visual parents');
+    check(released.box.dataset.footprintReleased === 'true' && !B.getFootprintOccupant(released.box.closest('.hex')), 'A restored released body reserves no cells');
+    delete released.box.dataset.footprintReleased; B.syncEntityFootprints(); verify(entries);
+    const bad = structuredClone(captured); bad.occupants[0].anchor = 'absent';
+    const beforeBad = JSON.stringify(B.getBoardSnapshot()); let refused = false;
+    try { B.restoreCombatBoard(bad); } catch { refused = true; }
+    check(refused && beforeBad === JSON.stringify(B.getBoardSnapshot()), 'Invalid snapshot leaves the live board intact');
     const same = entries.map(entry => entry.entity.position);
     L.positionnerEntites(); verify(entries);
     check(entries.every((entry, index) => entry.entity.position === same[index]), 'Repeated placement keeps valid positions');

@@ -1,4 +1,4 @@
-import { ENTITY_SIZE_OPTIONS, footprintCells, footprintCenter, boardOccupantsAt } from './model.js';
+import { ENTITY_SIZE_OPTIONS, entitySizeInCells, footprintCells, footprintCenter, boardOccupantsAt } from './model.js';
 
 // No writes to the board, entities, random state or presentation while searching.
 export function planBoardPlacements(state, requests, {
@@ -53,4 +53,44 @@ export function planBoardPlacements(state, requests, {
   search(0, fixed, new Map(moves), 0);
   return best ? { valid: true, moves: best, pushed: [...collisions], allowGroundConsumables }
     : fail('Aucun placement complet disponible pour repousser les voisins.');
+}
+
+// Initial deployment and terrain resizing share the same data-only allocation.
+export function planBoardDeployment(state, entities, { previousCoordinates = new Map(), keepNeutral = false } = {}) {
+  if (!state) return { valid: false, reason: 'Terrain introuvable.' };
+  const { cells, byId } = state.geometry, moving = new Set(entities.map(entity => String(entity.id)));
+  const occupied = new Set(), assignments = new Map();
+  for (const record of state.occupants.values()) if (!moving.has(record.id)) record.members.forEach(id => occupied.add(id));
+  const side = entity => entity.side === 'A' ? 'SideA' : entity.side === 'B' ? 'SideB' : 'Neutral';
+  const allowed = (entity, cell) => cell.side === side(entity) || cell.side === 'Neutral';
+  const members = (entity, cell) => footprintCells(state.geometry, cell.id, entitySizeInCells(entity));
+  const fits = (entity, cell) => {
+    const footprint = members(entity, cell);
+    return footprint.length && footprint.every(id => !occupied.has(id) && allowed(entity, byId.get(id)));
+  };
+  const reserve = (entity, cell) => { assignments.set(entity, cell); members(entity, cell).forEach(id => occupied.add(id)); };
+  for (const entity of entities) {
+    const cell = byId.get(entity.position);
+    const canKeep = cell && (cell.side === side(entity) || (cell.side === 'Neutral' &&
+      (keepNeutral || previousCoordinates.get(entity.position)?.side === 'Neutral' || state.occupants.get(String(entity.id))?.anchor === cell.id)));
+    if (canKeep && fits(entity, cell)) reserve(entity, cell);
+  }
+  for (const entity of entities) {
+    if (assignments.has(entity)) continue;
+    const current = byId.get(entity.position), own = cells.filter(cell => cell.side === side(entity));
+    const origin = previousCoordinates.get(entity.position) || current || {
+      row: own.reduce((sum, cell) => sum + cell.row, 0) / (own.length || 1),
+      col: own.reduce((sum, cell) => sum + cell.col, 0) / (own.length || 1),
+    };
+    const distance = cell => (cell.col + (cell.row % 2) / 2 - origin.col - (origin.row % 2) / 2) ** 2 + .75 * (cell.row - origin.row) ** 2;
+    const available = own.filter(cell => fits(entity, cell)).sort((a, b) => distance(a) - distance(b));
+    const roles = (Array.isArray(entity.role) ? entity.role : [entity.role]).map(role => role === 'gueux' ? 'neutre' : role);
+    const target = roles.map(role => available.find(cell => cell.role === role)).find(Boolean) || available[0]
+      || cells.filter(cell => cell.side === 'Neutral' && fits(entity, cell)).sort((a, b) => distance(a) - distance(b))[0];
+    if (!target) return { valid: false, reason: 'Aucun placement complet pour ' + (entity.name || entity.id) };
+    reserve(entity, target);
+  }
+  const byEntity = new Map(entities.map(entity => [String(entity.id), entity]));
+  return planBoardPlacements(state, [...assignments].map(([entity, cell]) => ({ id: String(entity.id), anchor: cell.id, size: entitySizeInCells(entity) })),
+    { allowedCell: (id, cell) => allowed(byEntity.get(id), byId.get(cell)) });
 }

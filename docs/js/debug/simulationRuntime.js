@@ -172,9 +172,7 @@ export async function runSimulationTrial(input) {
   localStorage.setItem('DarkPitAdminInvincibleMode', 'false');
   E.entites.splice(0, E.entites.length, ...input.entities);
   const footprints = await import("../board/controller.js");
-  const placement = footprints.planEntityPlacements(E.entites.map(entity => ({ entity,
-    hex: document.getElementById(`Box_Entite_${entity.id}`)?.closest('.hex') })));
-  if (!footprints.commitEntityPlacements(placement)) throw new Error(`Groupements invalides dans la simulation : ${placement.reason || 'placement impossible'}`);
+  footprints.restoreCombatBoard(input.board, E.entites);
   gameEntities = E.entites;
   for (const entity of gameEntities) {
     entity.totalDamage = 0; entity.totalHeal = 0; entity.kills = 0; entity.deaths = 0;

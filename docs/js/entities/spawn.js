@@ -7,7 +7,7 @@ import { toggleScanEntityListener } from "../ui/display.js";
 import {
   getRoleFromHex, findNearestAvailableHex, isHexOccupied,
 } from "../rendering/boardElements.js";
-import { planEntityPlacements, commitEntityPlacements, entityFootprint, releaseEntityFootprint } from "../board/controller.js";
+import { planEntityPlacements, commitEntityPlacements, entityFootprint, releaseEntityFootprint, setBoardCellSide } from "../board/controller.js";
 import { getHexEntity } from "../board/targets.js";
 import { notifyProjectileTargetMoved } from "../rendering/animations.js";
 import { saveEntityPositionState, recordEntityCombatStat, recordEntityCombatMovement, beginEntityBattleRole } from "../storage/entityStorage.js";
@@ -38,8 +38,7 @@ const sideToHexClass = (side) => {
 
 export function prepareHexForSide(hex, side) {
     if (!hex) return;
-    hex.classList.remove('SideA', 'SideB', 'Neutral');
-    hex.classList.add(sideToHexClass(side));
+    setBoardCellSide(hex, sideToHexClass(side));
     hex.dataset.side = side;
 }
 

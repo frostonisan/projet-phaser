@@ -60,6 +60,19 @@ try {
     window.before = JSON.stringify(E.entites, (k, v) => typeof v === 'function' || v instanceof Node ? undefined : v);
     window.beforeStorage = JSON.stringify(Object.entries(localStorage));
   });
+  const restoredFromData = await page.evaluate(async () => {
+    const dirty = structuredClone(snapshot), doc = new DOMParser().parseFromString(dirty.boardHtml, 'text/html');
+    const cells = [...doc.querySelectorAll('#hexGrid .hex')];
+    const boxes = [...doc.querySelectorAll('#hexGrid .entite-box')];
+    boxes.forEach(box => { cells[0].append(box); box.dataset.position = 'wrong'; });
+    cells.forEach(cell => { cell.dataset.row = '999'; cell.dataset.role = 'mage'; cell.className = 'hex SideB'; cell.style.left = '12345px'; });
+    dirty.boardHtml = doc.body.innerHTML;
+    const options = { seed: 92, durationMs: 5000, trace: true };
+    const clean = await Sim.simulateTrial(snapshot, options), restored = await Sim.simulateTrial(dirty, options);
+    const metric = trial => ({ end: trial.end, winner: trial.winner, durationMs: trial.durationMs, entities: trial.entities, journal: trial.journal });
+    return { clean: metric(clean), restored: metric(restored) };
+  });
+  assert.deepEqual(restoredFromData.restored, restoredFromData.clean, 'Simulation uses combat positions and cells even when visual markup disagrees');
   const report = await page.evaluate(async () => {
     window.progressHistory = [];
     window.report = await Sim.runCombatSimulation(snapshot, { count: 8, durationSeconds: 5, seed: 17 }, {
@@ -266,6 +279,12 @@ try {
     const make = ({ range = 'melee', hp = 1000, armor = 0, effect = [], extraLife = 0, cooldown = 1500 } = {}) => {
       const s = structuredClone(snapshot);
       s.entities = s.entities.slice(0, 2);
+      const ids = new Set(s.entities.map(entity => String(entity.id)));
+      s.board.placements = s.board.placements.filter(placement => ids.has(placement.id));
+      s.board.occupants = s.board.occupants.filter(record => !record.movable || ids.has(record.id));
+      const visual = new DOMParser().parseFromString(s.boardHtml, 'text/html');
+      visual.querySelectorAll('.entite-box').forEach(box => { if (!ids.has(box.id.replace('Box_Entite_', ''))) box.remove(); });
+      s.boardHtml = visual.body.innerHTML;
       for (const entity of s.entities) {
         entity.baseStats = { HP: hp, armor, extraLife, physicalDamage: 11, strength: 0, speed: 100 };
         entity.stats.HP = { current: hp, max: hp };

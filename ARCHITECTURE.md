@@ -560,7 +560,8 @@ attaque hybride.
    d'attaque ; préciser le contrat entre l'exécution et la présentation.
 3. **P3 livrée** : état logique du plateau, occupation et placements indépendants du DOM,
    avec un adaptateur de coordonnées et de rendu pour le jeu actuel.
-4. Raccorder le jeu visible et le simulateur au même état et aux mêmes règles.
+4. **Création et restauration communes livrées** : terminer la lecture des positions
+   et des occupants dans cet état par les déplacements et le ciblage.
 5. Réduire les cycles restants, puis poursuivre le découpage de events/runtime.js,
    entities/progression.js et debug/admin.js par fonction métier.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
@@ -568,3 +569,58 @@ attaque hybride.
 L'exécution et le ciblage utilisent encore des modules historiques, notamment
 combat/statistics.js, combat/control.js et le plateau DOM. Ces neuf premiers lots ne constituent
 pas une séparation complète du moteur de jeu.
+
+
+## Création et restauration du plateau depuis les données — v0.87.0-dev
+
+Aucun module ajouté : les responsabilités restent dans les fichiers existants.
+
+| Responsabilité | Module |
+| --- | --- |
+| Génération des cases, camps et rôles ; validation et restauration des index | `board/model.js` |
+| Attribution des positions initiales et redéploiement lors d'un changement de taille | `board/placementRules.js` |
+| Construction ou mise à jour des cases HTML depuis la géométrie | `rendering/boardAdapter.js` |
+| Capture du plateau et rattachement des entités/objets à leurs positions sauvegardées | `board/controller.js` |
+| Application du déploiement aux vues présentes | `board/deployment.js` |
+| Publication des changements de camp avant leur affichage | `entities/spawn.js`, `board/controller.js` |
+| Utilisation du même instantané | `combat/pause.js`, `debug/simulation.js`, `debug/simulationRuntime.js` |
+
+Le terrain est calculé avant son affichage. Le choix des cases de départ ne lit
+plus les classes, parents ou coordonnées HTML. Il conserve l'ordre déterministe,
+les camps, les rôles, les positions déjà valides et le refus des placements incomplets.
+
+L'instantané du combat contient les cases (coordonnées, camps, rôles et projection),
+les occupants et leurs empreintes, ainsi que les positions des entités présentes.
+Les corps dont les cases ont été libérées gardent une position sans réserver de cases.
+Les obstacles et les consommables conservent leurs réservations distinctes.
+`restoreBoardState` contrôle les identifiants, empreintes et chevauchements avant de
+reconstruire les index ; `restoreCombatBoard` contrôle les liens aux combattants
+avant de remplacer le plateau courant. Aucun tirage, redéploiement automatique,
+déplacement facturé ou notification de déplacement n'est produit par cette reprise.
+
+La pause utilise le format courant 2 avec un champ `board` ; aucune migration n'est
+ajoutée. Le simulateur transmet le même champ. Les parents HTML, attributs de position
+et classes d'occupation sauvegardés ne déterminent plus la position restaurée.
+Les cases manquantes sont recréées ; les sprites, canvases et effets existants sont conservés.
+Les styles d'animation restaurés ne peuvent plus écraser les positions du plateau.
+
+Cette étape garde les instantanés visuels pour les sprites, effets, objets et animations :
+le simulateur utilise encore un document HTML isolé. Les créations historiques d'objets,
+invocations et résurrections ont encore des points explicites de synchronisation DOM.
+Les fixtures qui construisent elles-mêmes du HTML doivent publier leur géométrie avec
+`invalidateFootprintGeometry`/`syncEntityFootprints` après une modification structurelle.
+La suppression de ces derniers accès et la lecture systématique de l'état dans le ciblage
+et les déplacements constituent la suite du travail avant Phaser.
+
+Validation : rapports dans `outputs/refactor-board-state/`. Les tests existants sont
+étendus pour supprimer les cases HTML ou fausser les parents des sprites, puis vérifier
+la restitution exacte des positions, empreintes et réservations. Le test F5 altère
+réellement l'instantané visuel enregistré ; la simulation compare les résultats et le
+journal d'un plateau intact et d'un plateau visuel faussé avec la même graine.
+
+Résultats : 54 tests Node, syntaxe/imports/assets et 11 scripts navigateur passent
+(placement, tailles, pause/rechargement, pause tactique, simulation complète avec
+lots de 20 + 20 essais, effets, contrôles, effets paramétriques, astralité, imports UI
+et démarrage mobile). Les 35 points d'entrée restent importables isolément et le
+nombre de modules reste à 117. Les changements de camp sont vérifiés dans le jeu
+et le simulateur, y compris après altération de la classe HTML sauvegardée.

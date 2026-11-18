@@ -115,6 +115,9 @@ try {
       hex.style.cssText=`position:absolute;left:${position==='3'?180:360}px;top:280px;width:160px;height:180px`;
       hex.innerHTML='<div class="socle gueux"></div>';document.querySelector('#hexGrid').append(hex);
     }
+    // This fixture adds cells directly: explicitly publish its new geometry.
+    const board=await import('/js/board/controller.js');
+    board.invalidateFootprintGeometry(document.getElementById('hexGrid')); board.syncEntityFootprints();
     const drag=await import("/js/board/interaction.js");drag.restoreEntityDragAndDrop();
     document.querySelector('.entitylootContainer')?.remove();
     S.setAdminMode(false);window.levelRunning='scripted';

@@ -94,6 +94,8 @@ try {
     const { entites } = await import("/js/entities/runtime.js");
     const clock = await import("/js/combat/clock.js");
     return { paused: clock.isCombatPaused(), now: clock.clockNow(),
+      board: (await import('/js/board/controller.js')).getBoardSnapshot(),
+      positions: entites.map(entity => document.getElementById(`Box_Entite_${entity.id}`)?.closest('.hex')?.dataset.position),
       e: entites.map(e => ({ id:e.id,hp:e.stats.HP.current,turn:e.turnCount,prep:e.preparationTime,speed:e.speedTimer,action:e._combatAction,cooldowns:e.attackSelection?.readyAt })),
       projectiles:[...document.querySelectorAll('.projectile-parent')].map(el=>({id:el.id,transform:el.style.transform})),
       effects: [...document.querySelectorAll('.effect-vfx')].map(el=>el.id),
@@ -104,6 +106,28 @@ try {
   assert.equal(before.paused,true); if (mode === 'range') assert.equal(before.projectiles.length,2);
   await page.waitForTimeout(2600);
   assert.deepEqual(await read(),before,'live pause freezes deadlines, positions, damage and phases');
+  await page.evaluate(async () => {
+    const name = (await indexedDB.databases()).find(db => db.name?.toLowerCase().includes('pause'))?.name;
+    if (!name) throw Error('Missing pause database');
+    const db = await new Promise((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('pause', 'readwrite'), store = tx.objectStore('pause'), request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result; if (!cursor) return;
+        const snapshot = cursor.value;
+        if (!snapshot.board?.placements.length) throw Error('Checkpoint lacks combat board data');
+        snapshot.visuals.html = snapshot.visuals.html.map(html => {
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const first = doc.querySelector('#hexGrid .hex');
+          if (first) doc.querySelectorAll('#hexGrid .entite-box').forEach(box => { first.append(box); box.dataset.position = 'wrong'; });
+          return doc.body.innerHTML;
+        });
+        cursor.update(snapshot); cursor.continue();
+      };
+      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
   const restored = await read();
@@ -202,6 +226,8 @@ try {
     await page.evaluate(async()=>{
       const hex=document.createElement('div');hex.className='hex Neutral';hex.dataset.position='3';hex.id='pause-ground-hex';
       document.getElementById('hexGrid').append(hex);
+      const board=await import('/js/board/controller.js');
+      board.invalidateFootprintGeometry(document.getElementById('hexGrid')); board.syncEntityFootprints();
       const {summons}=await import('/js/data/summons.js');
       const template=summons.find(s=>s.summonType==='consommable');
       const {spawnConsumableSummon}=await import("/js/combat/summons.js");
@@ -253,6 +279,8 @@ try {
       const hex=document.createElement('div');hex.className='hex SideB occupied';hex.dataset.position='3';hex.id='survivor-hex';
       document.getElementById('hexGrid').append(hex);E.entites.push(third);
       const created=C.createEntiteInDOM(third);hex.append(created.element);await created.spriteReady;
+      const board=await import('/js/board/controller.js');
+      board.invalidateFootprintGeometry(document.getElementById('hexGrid')); board.syncEntityFootprints();
       G.startGame();
       (await import("/js/combat/effects.js")).poison(E.entites[0],{effectDot:40,effectDuration:4,type:['alteration']},E.entites[1]);
       const caster=E.entites[1];caster.hasFled=true;(await import("/js/combat/orders.js")).fledEntities.push(caster);E.RemoveEntite(caster,'runaway');

@@ -4,11 +4,11 @@ import {
 import { consumeEntityMovement, positionnerEntites } from "./deployment.js";
 import { ENTITY_SIZE_OPTIONS, entitySizeInCells, createBoardState, footprintCells, chooseFootprintRole,
   putBoardOccupant, removeBoardOccupant, boardOccupantsAt, applyBoardPlacements,
-  snapshotBoardState, offsetToAxial, axialDistance } from "./model.js";
-import { planBoardPlacements } from "./placementRules.js";
+  snapshotBoardState, restoreBoardState, createBoardLayout, offsetToAxial, axialDistance } from "./model.js";
+import { planBoardPlacements, planBoardDeployment } from "./placementRules.js";
 import { getBoardGeometry as geometry, gridForHex as gridFor, invalidateBoardGeometry,
   getFootprintElements, getFootprintCenter, getOccupantView, getPlacementViews,
-  readHexCoordinates, projectBoardCell } from "../rendering/boardAdapter.js";
+  readHexCoordinates, projectBoardCell, renderBoardGeometry } from "../rendering/boardAdapter.js";
 import { registerCombatState, notifyCombatAction } from "../combat/clock.js";
 import { scenarios } from "../data/boardList.js";
 import { cachedResourceUrl } from "../data/loaderList.js";
@@ -24,7 +24,7 @@ import { entites } from "../entities/runtime.js";
 import { saveEntityPositionState, recordEntityCombatMovement, recordEntityCombatProc } from "../storage/entityStorage.js";
 import { notifyProjectileTargetMoved } from "../rendering/animations.js";
 import {
-  hexRoles, findNearestAvailableHex,
+  findNearestAvailableHex,
 } from "../rendering/boardElements.js";
 import { attemptAlterationResistance } from "../combat/statistics.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
@@ -215,14 +215,8 @@ export function createHexGrid(forcedGridConfig = null) {
     }
     hexGrid.style.overflow = 'visible';
 
-    const { rows, cols, hexWidth, hexHeight, staggeredRowHeight, totalHexagons, scale } = forcedGridConfig || calculateRowsAndCols();
-
-    const effectiveHexWidth = hexWidth;
-    const effectiveHexHeight = hexHeight;
-
-    const previousCoordinates = new Map([...hexGrid.querySelectorAll('.hex[data-position]')]
-        .map(hex => [hex.dataset.position, { row: Number(hex.dataset.row), col: Number(hex.dataset.col),
-            side: hex.classList.contains('Neutral') ? 'Neutral' : hex.classList.contains('SideA') ? 'SideA' : 'SideB' }]));
+    const layout = createBoardLayout(forcedGridConfig || calculateRowsAndCols());
+    const previousCoordinates = new Map((geometry(hexGrid)?.model.cells || []).map(cell => [cell.id, cell]));
     const previousBoxes = [...hexGrid.querySelectorAll('[id^="Box_Entite_"]')].map(box => ({box,parent:box.parentElement}));
     const previousNodes = [...hexGrid.childNodes];
     clearFootprintAnimations();
@@ -230,56 +224,9 @@ export function createHexGrid(forcedGridConfig = null) {
     hexGrid.querySelectorAll('[id^="Box_Entite_"]').forEach(box => hexGrid.parentElement.appendChild(box));
     hexGrid.innerHTML = '';
 
-    let hexIdCounter = 1; // Commencer la numérotation à 1
-
-    // Réinitialiser les tableaux
-    hexesSideA = [];
-    hexesNeutral = [];
-    hexesSideB = [];
-
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            if (hexIdCounter > totalHexagons) break;
-
-            const hexCoordinate = `${String.fromCharCode(65 + col)}${row + 1}`;
-            const hex = document.createElement('div');
-            hex.classList.add('hex');
-            hex.setAttribute('data-position', `hex_${hexIdCounter}`);
-            // Coordonnées logiques conservées sur le DOM pour les sélections spatiales.
-            hex.dataset.coordinate = hexCoordinate;
-            hex.dataset.row = String(row);
-            hex.dataset.col = String(col);
-
-            const { role, span: roleSpan } = hexRoles(row, col, rows, cols, hexIdCounter, hex);
-            hex.innerHTML = `<div class="socle ${role}"><div class="image-role-hex-info" ></div><div class="hex-details">${roleSpan}<span class="hex-number">${hexIdCounter}</span> - <span class="hex-coordinate">${hexCoordinate}</span></div></div>`;
-            hex.setAttribute('data-role', `${role}`);
-            hexIdCounter++;
-
-            const {x:hexLeft,y:hexTop}=projectBoardCell(row,col,effectiveHexWidth,staggeredRowHeight);
-
-            hex.style.position = 'absolute';
-            hex.style.left = `${hexLeft}px`;
-            hex.style.top = `${hexTop}px`;
-
-            const sideAWidth = Math.floor(cols * 0.4);
-            const neutralWidth = Math.floor(cols * 0.2);
-
-            if (col < sideAWidth) {
-                hex.classList.add('SideA');
-                hexesSideA.push(hex);
-            } else if (col < sideAWidth + neutralWidth) {
-                hex.classList.add('Neutral');
-                hexesNeutral.push(hex);
-            } else {
-                hex.classList.add('SideB');
-                hexesSideB.push(hex);
-            }
-
-            hexGrid.appendChild(hex);
-        }
-    }
-
-    invalidateFootprintGeometry(hexGrid);
+    const data = renderBoardGeometry(hexGrid, layout);
+    occupancyRegistries.set(hexGrid, { geometry: data, model: createBoardState(layout), views: new Map() });
+    refreshBoardSides(data);
     const placed = positionnerEntites(null, { previousCoordinates });
     if (previousBoxes.length && placed.length < previousBoxes.length) {
         // A smaller terrain must not strand a large entity outside its cells.
@@ -682,11 +629,14 @@ export function hexCoordonne(
         .filter(Boolean);
 }
 
+function refreshBoardSides(data) {
+  const side = name => data.model.cells.filter(cell => cell.side === name).map(cell => data.byPosition.get(cell.id));
+  hexesSideA = side('SideA'); hexesNeutral = side('Neutral'); hexesSideB = side('SideB');
+}
 registerCombatState('board', () => ({ matchingBiome }), saved => {
     matchingBiome = saved.matchingBiome;
-    hexesSideA = [...document.querySelectorAll('#hexGrid .hex.SideA')];
-    hexesSideB = [...document.querySelectorAll('#hexGrid .hex.SideB')];
-    hexesNeutral = [...document.querySelectorAll('#hexGrid .hex.Neutral')];
+    const data = geometry(document.getElementById('hexGrid'));
+    if (data) refreshBoardSides(data);
 });
 
 // Tailles, groupements, occupation et placement des entités.
@@ -703,7 +653,8 @@ export function invalidateFootprintGeometry(grid) {
 export function entityFootprint(entity, anchor=boxFor(entity)?.closest('.hex'), size=entitySizeInCells(entity)) {
   return getFootprintElements(anchor, size);
 }
-// Runtime-only occupancy, rebuilt once from the restored board. All spatial
+// Occupancy is restored from combat data. Existing DOM-only callers are adopted
+// at their explicit creation boundary until their own lifecycle is separated. All spatial
 // mutations update this index synchronously, before their gameplay notifications.
 // No timer or DOM observer scans the board during combat.
 function removeOccupant(registry, record) {
@@ -726,6 +677,7 @@ function registerHexObjects(registry,hex) {
   removeOccupant(registry,registry.model.occupants.get(id));
   const nodes=[...hex.children].filter(node=>node.dataset.occupiesHex!=='false'
     && node.matches('.battle-element, [data-occupies-hex="true"]')&&!node.matches('.entite-box'));
+  nodes.forEach(node => { node.dataset.boardOccupant = id; });
   if(nodes.length || hex.classList.contains('consommable-summoned')) {
     putBoardOccupant(registry.model,{id,anchor:hex.dataset.position,size:1,
       members:[hex.dataset.position],movable:false,groundConsumable:nodes.length===0});
@@ -755,6 +707,15 @@ function boardOccupancy(grid) {
 // direct objects are read; sprite animation and popup mutations are irrelevant.
 export function refreshHexOccupancy(hex) {
   if(hex?.isConnected) registerHexObjects(boardOccupancy(gridFor(hex)),hex);
+}
+// Camp changes (admin/spawn) update terrain data before its presentation.
+export function setBoardCellSide(hex, side) {
+  const data = geometry(gridFor(hex)), cell = data?.model.byId.get(hex?.dataset.position);
+  if (!cell || !['SideA', 'Neutral', 'SideB'].includes(side)) return false;
+  cell.side = side;
+  hex.classList.remove('SideA', 'Neutral', 'SideB'); hex.classList.add(side);
+  refreshBoardSides(data);
+  return true;
 }
 export function getBoardHex(position,root=document) {
   const grid=root===document?document.getElementById('hexGrid'):root;
@@ -800,9 +761,71 @@ export function planEntityPlacements(requests,{push=false,allowedCell=()=>true,a
     allowGroundConsumables,logical};
 }
 
+export function planEntityDeployment(entities, options = {}) {
+  const grid = document.getElementById('hexGrid'), registry = boardOccupancy(grid);
+  const logical = planBoardDeployment(registry?.model, entities, options);
+  if (!logical.valid) return logical;
+  return { valid: true, grid, logical, pushed: logical.pushed,
+    moves: getPlacementViews(registry, logical, new Map(entities.map(entity => [String(entity.id), entity]))) };
+}
+
 export function getBoardSnapshot(grid=document.getElementById('hexGrid')) {
   const registry=boardOccupancy(grid);
   return registry?snapshotBoardState(registry.model):null;
+}
+// Active positions come from occupancy; released bodies keep their combat position
+// without reserving any cell. Bench entities are not part of the battlefield.
+export function captureCombatBoard(grid = document.getElementById('hexGrid')) {
+  const registry = boardOccupancy(grid);
+  if (!registry) throw new Error('Plateau du combat introuvable.');
+  const placements = entites.filter(entity => registry.model.occupants.has(String(entity.id)) || grid.contains(boxFor(entity)))
+    .map(entity => {
+      const occupant = registry.model.occupants.get(String(entity.id));
+      return { id: String(entity.id), anchor: occupant?.anchor || entity.position,
+        size: occupant?.size || entitySizeInCells(entity), released: !occupant };
+    });
+  return { ...snapshotBoardState(registry.model), placements };
+}
+
+export function restoreCombatBoard(snapshot, actors = entites, grid = document.getElementById('hexGrid')) {
+  const model = restoreBoardState(snapshot), byId = new Map(actors.map(entity => [String(entity.id), entity]));
+  if (!grid || !Array.isArray(snapshot.placements)) throw new Error('Plateau du combat incomplet.');
+  const ids = new Set(), placements = snapshot.placements.map(placement => {
+    const { id, anchor, size, released } = placement, entity = byId.get(id), box = boxFor(entity);
+    const occupant = model.occupants.get(id);
+    if (!entity || !box || ids.has(id) || !model.geometry.byId.has(anchor) || !ENTITY_SIZE_OPTIONS.includes(size)
+      || typeof released !== 'boolean' || (released ? !!occupant : !occupant?.movable || occupant.anchor !== anchor || occupant.size !== size)) {
+      throw new Error('Placement de combat invalide : ' + id);
+    }
+    ids.add(id);
+    return { ...placement, entity, box };
+  });
+  if ([...model.occupants.values()].some(record => record.movable && !ids.has(record.id))) throw new Error('Occupant sans combattant.');
+  // Object views are keyed when objects enter the board; their HTML parent is irrelevant.
+  const objectViews = new Map([...model.occupants.values()].filter(record => !record.movable)
+    .map(record => [record.id, [...grid.querySelectorAll('[data-board-occupant]')].filter(node => node.dataset.boardOccupant === record.id)]));
+  const data = renderBoardGeometry(grid, model.geometry), registry = { geometry: data, model, views: new Map() };
+  clearFootprintAnimations();
+  occupancyRegistries.set(grid, registry);
+  for (const { id, anchor, size, released, entity, box } of placements) {
+    entity.position = entity.battlePosition = box.dataset.position = anchor;
+    entity.sizeInCells = size; box.dataset.sizeInCells = size;
+    if (released) { box.dataset.footprintReleased = 'true'; delete box.dataset.occupiedPositions; }
+    else { delete box.dataset.footprintReleased; registry.views.set(id, { entity, box }); }
+    data.byPosition.get(anchor).append(box);
+  }
+  for (const record of model.occupants.values()) if (!record.movable) {
+    const hex = data.byPosition.get(record.anchor), nodes = objectViews.get(record.id);
+    nodes.forEach(node => hex.append(node));
+    hex.classList.add('occupied');
+    if (record.groundConsumable) hex.classList.add('consommable-summoned');
+    registry.views.set(record.id, { nodes });
+  }
+  refreshBoardSides(data);
+  footprintOverlay(grid).replaceChildren();
+  syncOccupiedCells(registry, data.cells);
+  renderEntityFootprints(grid, [...model.occupants.keys()].map(id => getOccupantView(registry, id)));
+  return snapshotBoardState(model);
 }
 function ensureStyles() {
   if(document.getElementById('entity-footprint-styles')) return;

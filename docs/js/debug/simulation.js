@@ -1,3 +1,4 @@
+import { captureCombatBoard } from "../board/controller.js";
 import { entites } from "../entities/runtime.js";
 import { gameStorage } from "../storage/sessionStorage.js";
 import { gameStarted } from "../app/state.js";
@@ -41,7 +42,8 @@ export function simulationStats() {
 
 export function captureSimulationBoard() {
   if (gameStarted) throw new Error('Stoppez le combat avant de capturer les entités du board.');
-  const actors = entites.filter(entity => document.getElementById(`Box_Entite_${entity.id}`)?.closest('#hexGrid .hex'));
+  const boardState = captureCombatBoard(), ids = new Set(boardState.placements.map(placement => placement.id));
+  const actors = entites.filter(entity => ids.has(String(entity.id)));
   const alive = entity => !entity.isDEAD && Number(entity.stats?.HP?.current) > 0;
   if (!actors.some(e => e.side === 'A' && alive(e)) || !actors.some(e => e.side === 'B' && alive(e))) throw new Error('Placez au moins une entité vivante dans chaque camp A et B.');
   const board = document.getElementById('game-container')?.cloneNode(true);
@@ -56,7 +58,7 @@ export function captureSimulationBoard() {
   const storage = Array.from({ length: gameStorage.length }, (_, i) => gameStorage.key(i))
     .filter(key => key && !key.startsWith('BattleLog')).map(key => [key, gameStorage.getItem(key)]);
   const stats = simulationStats();
-  return { entities, stats, storage, epoch: Date.now(), stageId: window.currentStageId,
+  return { board: boardState, entities, stats, storage, epoch: Date.now(), stageId: window.currentStageId,
     balance: structuredClone(balanceData), boardHtml: `<div id="game-windows">${board.outerHTML}</div>`,
     styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href),
     // Warm the frame's module graph in parallel rather than discovering each

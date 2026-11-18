@@ -6,6 +6,7 @@ import { gameStarted, isBattleFinished, getOrderSide, restoreRunningBattle, mana
 import { entites, removedEntities } from "../entities/runtime.js";
 import { captureAdminSession, restoreAdminSession } from "../storage/sessionStorage.js";
 
+import { captureCombatBoard, restoreCombatBoard } from "../board/controller.js";
 import { persistentMediaMarkup, loadResource } from "../data/loaderList.js";
 
 // Combat visuals freeze and restore with the pause lifecycle.
@@ -151,8 +152,10 @@ function restoreCombatMedia(snapshot) {
 function restoreAnimationPositions(snapshot) {
   for (const entry of snapshot.styles || []) {
     const node = byKey(entry.key); if (!node) continue;
+    const position = node.matches('#hexGrid .hex, #hexGrid .entite-box') ? { left: node.style.left, top: node.style.top } : null;
     const background = node.style.backgroundImage;
     if (entry.style === null) node.removeAttribute('style'); else node.setAttribute('style', entry.style);
+    if (position) Object.assign(node.style, position);
     if (background.includes('blob:') && /\.gif(?:[?#]|[\"')])/i.test(node.style.backgroundImage)) node.style.backgroundImage = background;
   }
   const claimed = new Set();
@@ -402,11 +405,12 @@ function saveCheckpoint() {
         const capturedRevision = revision;
         pauseCombatVisuals();
         const snapshot = {
-          version: 1, now: clockNow(), sequence: combatClockSequence(), orderSide: getOrderSide(),
+          version: 2, now: clockNow(), sequence: combatClockSequence(), orderSide: getOrderSide(),
           pause: getCombatPauseReasons(),
           levelRunning: window.levelRunning, stageId: window.currentStageId,
           bodyClass: document.body.className, bodyStyle: document.body.style.cssText,
           admin: captureAdminSession(), entities: combatData(entites.map(snapshotEntity)), removed: combatData(removedEntities.map(snapshotEntity)),
+          board: combatData(captureCombatBoard()),
           state: combatData(captureCombatState()), visuals: captureCombatVisuals(),
         };
         await stored('put', snapshot);
@@ -499,7 +503,7 @@ async function restore() {
   if (sessionStorage.getItem(AVAILABLE) !== '1') return false;
   const snapshot = await stored('get');
   if (!snapshot) { sessionStorage.removeItem(AVAILABLE); restoreAdminSession(null); return false; }
-  if (snapshot.version !== 1 || !Array.isArray(snapshot.entities) || !Number.isFinite(snapshot.now)) throw new Error('Sauvegarde de pause invalide.');
+  if (snapshot.version !== 2 || !Array.isArray(snapshot.entities) || !Number.isFinite(snapshot.now)) throw new Error('Sauvegarde de pause invalide.');
   busy = true;
   tacticalPause = Boolean(snapshot.pause?.tactical);
   automaticPause = Boolean(snapshot.pause?.absolute);
@@ -512,6 +516,7 @@ async function restore() {
   removedEntities.splice(0, removedEntities.length, ...(snapshot.removed || []));
   restoreRunningBattle(snapshot.orderSide);
   await restoreCombatVisuals(snapshot.visuals);
+  restoreCombatBoard(snapshot.board);
   // Runtime handles from the old document must never cancel newly bound timers.
   for (const entity of entites) {
     entity.poisonIntervalId = null; entity.brulureIntervalId = null;

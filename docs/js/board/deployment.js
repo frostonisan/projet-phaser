@@ -9,7 +9,7 @@ import { canEntityProc, isEntityMovementBlocked } from "../combat/control.js";
 import {
   getMovementWeightMalus, entites,
 } from "../entities/runtime.js";
-import { entityFootprint, planEntityPlacements, commitEntityPlacements } from "./controller.js";
+import { planEntityDeployment, commitEntityPlacements } from "./controller.js";
 import { refreshStageAccess } from "../app/state.js";
 import { attackDetails } from "../data/attackList.js";
 import { readEntityCombatProfile } from "../combat/attackResolution.js";
@@ -26,49 +26,13 @@ export function logPositionsAndAnalyze() {
     return positionnerEntites();
 }
 
-// POSITION DANS LE DOM
+// Apply the common deployment plan to the current entity views.
 export function positionnerEntites(newEntite = null, { previousCoordinates = new Map() } = {}) {
-    const hexes = [...document.querySelectorAll('#hexGrid .hex[data-position]')];
-    if (!hexes.length) return [];
-    const byPosition = new Map(hexes.map(hex => [hex.dataset.position, hex]));
-    const entries = (newEntite ? [newEntite] : entites)
-        .map(entity => ({ entity, element: document.getElementById(`Box_Entite_${entity.id}`) })).filter(e => e.element);
-    const movingIds = new Set(entries.map(({entity}) => String(entity.id))), occupied = new Set(), assignments = new Map();
-    const sideClass = entity => entity.side === 'A' ? 'SideA' : entity.side === 'B' ? 'SideB' : 'Neutral';
-    const allowed = (entity, hex) => hex.classList.contains(sideClass(entity)) || hex.classList.contains('Neutral');
-    for (const other of entites) {
-        if (movingIds.has(String(other.id))) continue;
-        entityFootprint(other).forEach(hex => occupied.add(hex));
-    }
-    for (const hex of hexes) if (hex.classList.contains('consommable-summoned') || hex.querySelector(':scope > .battle-element, :scope > [data-occupies-hex="true"]')) occupied.add(hex);
-    const fits = (entity, hex) => {
-        const cells = entityFootprint(entity, hex);
-        return cells.length && cells.every(cell => !occupied.has(cell) && allowed(entity, cell));
-    };
-    const reserve = (entity, hex) => { assignments.set(entity, hex); entityFootprint(entity, hex).forEach(cell => occupied.add(cell)); };
-    for (const {entity} of entries) {
-        const hex = byPosition.get(entity.position);
-        const canKeep = hex && (hex.classList.contains(sideClass(entity)) || (hex.classList.contains('Neutral') &&
-            (newEntite || previousCoordinates.get(entity.position)?.side === 'Neutral' || document.getElementById(`Box_Entite_${entity.id}`)?.parentElement === hex)));
-        if (canKeep && fits(entity, hex)) reserve(entity, hex);
-    }
-    for (const {entity} of entries) {
-        if (assignments.has(entity)) continue;
-        const current = byPosition.get(entity.position), own = hexes.filter(hex => hex.classList.contains(sideClass(entity)));
-        const origin = previousCoordinates.get(entity.position) || (current && {row:Number(current.dataset.row), col:Number(current.dataset.col)}) || {
-            row:own.reduce((n,h)=>n+Number(h.dataset.row),0)/(own.length||1), col:own.reduce((n,h)=>n+Number(h.dataset.col),0)/(own.length||1)
-        };
-        const distance = hex => (Number(hex.dataset.col)+(Number(hex.dataset.row)%2)/2-origin.col-(origin.row%2)/2)**2 + .75*(Number(hex.dataset.row)-origin.row)**2;
-        const available = own.filter(hex => fits(entity,hex)).sort((a,b)=>distance(a)-distance(b));
-        const roles = (Array.isArray(entity.role)?entity.role:[entity.role]).map(role=>role==='gueux'?'neutre':role);
-        let target = roles.map(role=>available.find(hex=>hex.dataset.role===role)).find(Boolean) || available[0];
-        target ||= hexes.filter(hex=>hex.classList.contains('Neutral')&&fits(entity,hex)).sort((a,b)=>distance(a)-distance(b))[0];
-        if (!target) { console.warn('Aucun placement complet pour', entity.name || entity.id); return []; }
-        reserve(entity,target);
-    }
-    if (!assignments.size) return [];
-    const plan = planEntityPlacements([...assignments].map(([entity,hex])=>({entity,hex})));
-    return commitEntityPlacements(plan) ? [...assignments.keys()] : [];
+    const entities = (newEntite ? [newEntite] : entites).filter(entity => document.getElementById(`Box_Entite_${entity.id}`));
+    if (!entities.length) return [];
+    const plan = planEntityDeployment(entities, { previousCoordinates, keepNeutral: Boolean(newEntite) });
+    if (!plan.valid) { console.warn(plan.reason); return []; }
+    return commitEntityPlacements(plan) ? entities : [];
 }
 
 // POSITIONNEMENT ET CALCUL
