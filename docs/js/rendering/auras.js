@@ -1,3 +1,4 @@
+import { writeCombatVisualStyle } from "./animations.js";
 import { registerCombatState } from "../combat/clock.js";
 import { removeCombatVisualAfter } from "../combat/clock.js";
 import { setTimeout, clearTimeout, requestAnimationFrame, cancelAnimationFrame, clockNow } from "../combat/clock.js";
@@ -381,13 +382,12 @@ function spawnRandomAuraFx(entite, container, layer, config) {
     fx.style.maxHeight = `${battleSize}px`;
     fx.style.objectFit = "contain";
   }
-  fx.style.transform =
-    `rotate(${rotation}deg) scale(${visualScale})`;
+  writeCombatVisualStyle(fx, { transform: `rotate(${rotation}deg) scale(${visualScale})` });
 
   const displayedWidth = (codexContext ? fxSize : battleSize) * visualScale;
   const displayedHeight = (codexContext ? fxSize / aspectRatio : battleSize) * visualScale;
-  fx.style.left = `${bounds.x + Math.random() * Math.max(0, bounds.w - displayedWidth)}px`;
-  fx.style.top = `${bounds.y + Math.random() * Math.max(0, bounds.h - displayedHeight)}px`;
+  writeCombatVisualStyle(fx, { left: `${bounds.x + Math.random() * Math.max(0, bounds.w - displayedWidth)}px` });
+  writeCombatVisualStyle(fx, { top: `${bounds.y + Math.random() * Math.max(0, bounds.h - displayedHeight)}px` });
 
   layer.appendChild(fx);
 
@@ -771,7 +771,7 @@ if (!isAlive) {
 
     const wrap = document.createElement("div");
     wrap.className = `life-aura-wrap life-aura-wrap--${key}`;
-    if (!frame) wrap.style.transform = `translate(-50%, -45%) translateY(${offsetPx}px)`;
+    if (!frame) writeCombatVisualStyle(wrap, { transform: `translate(-50%, -45%) translateY(${offsetPx}px)` });
     wrap.style.zIndex = String(cfg.z ?? 5);
 
     const img = document.createElement("img");
@@ -1610,8 +1610,8 @@ if (!effect.dataset.animationConfigured) {
 
   effect.dataset.animationConfigured = "true";
 }
-  effect.style.left = "0px";
-  effect.style.top = "0px";
+  writeCombatVisualStyle(effect, { left: "0px" });
+  writeCombatVisualStyle(effect, { top: "0px" });
   effect.style.width = "100%";
   effect.style.height = "100%";
 

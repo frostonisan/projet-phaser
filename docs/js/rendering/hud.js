@@ -1,3 +1,4 @@
+import { writeCombatVisualStyle } from "./animations.js";
 import { getStatSystemResult } from "../entities/statSystem.js";
 import { getEquipmentResourceCurrent } from "../items/resourceStocks.js";
 import { showDamagePopup } from "./popups.js";
@@ -35,7 +36,7 @@ function timerNode(entity, id) {
   return current;
 }
 function setTimerStyle(node, key, value) {
-  if (node && node.style[key] !== value) node.style[key] = value;
+  if (node && node.style[key] !== value) writeCombatVisualStyle(node, { [key]: value });
 }
 function toggleTimerClass(node, key, enabled) {
   if (node && node.classList.contains(key) !== enabled) node.classList.toggle(key, enabled);

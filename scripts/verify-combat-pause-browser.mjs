@@ -18,6 +18,12 @@ const server = createServer(async (req, res) => {
       assert.match(source, marker);
       data = source.replace(marker, 'attack: {\n  launchContextId: attackDetail?.launchContextId,\n  functionName: attackDetail');
     }
+    if (file === resolve(root, 'js/rendering/entities.js')) {
+      data=data.toString().replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,
+        inspect:()=>[...layers.values()].filter(l=>l.kind==='body'||l.kind==='bar'||l.kind==='text').map(l=>({
+          kind:l.kind,bar:l.bar,text:l.text,x:l.image?.x,y:l.image?.y,alpha:l.image?.alpha,
+          width:l.image?.displayWidth,height:l.image?.displayHeight,visible:l.image?.visible}))}`);
+    }
     res.end(data); }
   catch { res.writeHead(404).end(); }
 });
@@ -164,7 +170,16 @@ try {
     await page.screenshot({path:resolve(output,'phaser-melee-paused.png')});
   }
   assert.equal(before.paused,true); if (mode === 'range') assert.equal(before.phaser.length,2);
+  let monsterPose;
+  const readMonsters=()=>page.evaluate(()=>[...document.querySelectorAll('[data-monster-webgl="ready"]')].map(box=>box._monsterView.inspect()));
+  if(process.env.MONSTER_WEBGL==='1'){
+    await page.waitForFunction(()=>document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
+    await page.waitForTimeout(100);
+    monsterPose=await readMonsters();
+    assert.ok(monsterPose.every(layers=>layers.some(layer=>layer.kind==='body')));
+  }
   await page.waitForTimeout(2600);
+  if(monsterPose)assert.deepEqual(await readMonsters(),monsterPose,'WebGL body, bars and text remain frozen during tactical pause');
   assert.deepEqual(await read(),before,'live pause freezes deadlines, positions, damage and phases');
   await page.evaluate(async () => {
     const name = (await indexedDB.databases()).find(db => db.name?.toLowerCase().includes('pause'))?.name;

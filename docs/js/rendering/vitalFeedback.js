@@ -1,3 +1,4 @@
+import { writeCombatVisualStyle, animateCombatVisual } from "./animations.js";
 import { createArmorCounter, createExtraLifeCounter, createFadedLifeCounter } from "./entities.js";
 // Presentation of resolved vital outcomes; never changes HP, armor, scores or persistence.
 import { PopUpDamages, updateTotalHealCounter } from "./hud.js";
@@ -324,15 +325,15 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
     if (armorFill) armorFill.style.transition = "width 0.5s ease";
 
     if (validArmor <= 0) {
-      armorBar.style.display = "none";
+      writeCombatVisualStyle(armorBar, { display: "none" });
     } else {
-      armorBar.style.display = "";
+      writeCombatVisualStyle(armorBar, { display: "" });
       armorBar.style.setProperty("width", `${armorPercent}%`, "important");
       armorBar.style.flex = `0 0 ${armorPercent}%`;
       if (armorFill) armorFill.style.width = "100%";
 
       const prevArmor = Number(armorBar.dataset.prevArmor ?? validArmor);
-      if (validArmor < prevArmor) (armorFill || armorBar).animate(
+      if (validArmor < prevArmor) animateCombatVisual(armorFill || armorBar,
         [
           { backgroundColor: "rgba(255,255,255,0.7)", filter: "brightness(1.5)" },
           { filter: "brightness(1)" }
@@ -368,9 +369,9 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
   document.querySelectorAll(
     `.armor-counter[data-entity-id="${entityId}"]`
   ).forEach(el => {
-    if (validArmor <= 0) el.style.display = "none";
+    if (validArmor <= 0) writeCombatVisualStyle(el, { display: "none" });
     else {
-      el.style.display = "";
+      writeCombatVisualStyle(el, { display: "" });
       el.textContent = `🛡️ ${validArmor}`;
     }
   });
@@ -382,13 +383,13 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
     const profileRow = el.closest(".codex-profile-battle-stat");
 
     if (validArmor <= 0) {
-      if (profileRow) profileRow.style.display = "none";
-      else el.style.display = "none";
+      if (profileRow) writeCombatVisualStyle(profileRow, { display: "none" });
+      else writeCombatVisualStyle(el, { display: "none" });
       return;
     }
 
-    if (profileRow) profileRow.style.display = "";
-    el.style.display = "";
+    if (profileRow) writeCombatVisualStyle(profileRow, { display: "" });
+    writeCombatVisualStyle(el, { display: "" });
     el.textContent = String(validArmor);
   });
 
@@ -430,10 +431,10 @@ if (percentage <= 30) {
   const normalized = Math.max(0, Math.min(percentage / 30, 1));
   // exponent plus faible pour accélérer davantage à la fin
   const duration = minDuration + Math.pow(normalized, 1.5) * (maxDuration - minDuration);
-  healthBar.style.animation = `blink ${duration}s ease-in-out infinite`;
+  writeCombatVisualStyle(healthBar, { animation: `blink ${duration}s ease-in-out infinite` });
 } else {
-  healthBar.style.animation = '';
-  healthBar.style.opacity = '1';
+  writeCombatVisualStyle(healthBar, { animation: '' });
+  writeCombatVisualStyle(healthBar, { opacity: '1' });
 }
 
 }
@@ -457,7 +458,7 @@ export function updateBonusLifeCounters(entite) {
   const fadedValues     = document.querySelectorAll(`.fadedLife-value[data-entity-id="${id}"]`);
 
   fadedContainers.forEach(node => {
-    node.style.display = faded > 0 ? "" : "none";
+    writeCombatVisualStyle(node, { display: faded > 0 ? "" : "none" });
   });
   fadedValues.forEach(node => {
     node.textContent = faded > 0 ? `: ${faded}` : "";
@@ -474,7 +475,7 @@ const eternalContainers = document.querySelectorAll(`.eternalLife-counter[data-e
 const eternalValues     = document.querySelectorAll(`.eternalLife-value[data-entity-id="${id}"]`);
 
 eternalContainers.forEach(node => {
-  node.style.display = showEternal ? "" : "none";
+  writeCombatVisualStyle(node, { display: showEternal ? "" : "none" });
 });
 
 eternalValues.forEach(node => {
@@ -496,7 +497,7 @@ eternalValues.forEach(node => {
   const extraValues     = document.querySelectorAll(`.extraLife-value[data-entity-id="${id}"]`);
 
   extraContainers.forEach(node => {
-    node.style.display = showExtra ? "" : "none";
+    writeCombatVisualStyle(node, { display: showExtra ? "" : "none" });
   });
 
   extraValues.forEach(node => {
@@ -600,7 +601,7 @@ export function updateArmorCounter(entite) {
   const show         = currentArmor > 0;
 
   document.querySelectorAll(`.armor-counter[data-entity-id="${id}"]`).forEach(node => {
-    node.style.display = show ? "" : "none";
+    writeCombatVisualStyle(node, { display: show ? "" : "none" });
     if (show) node.textContent = `🛡️ ${currentArmor}`;
   });
 }

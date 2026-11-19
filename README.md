@@ -414,3 +414,66 @@ avant/après, y compris les valeurs intermédiaires. Le premier calcul à 80 a d
 aperçu avant le calcul isolé ; les comparaisons à 80 ont été reprises avec les mêmes
 sources et les huit mesures de combats visibles conservées. Contrôles statiques,
 imports, ressources et tests Node réussis.
+
+
+## Grouille-doigt piloté par le combat — v0.96.1-dev
+
+Le [mode expérimental](https://frostonisan.github.io/projet-phaser/?monsters=webgl)
+reste réservé au Grouille-doigt. Sa boucle Phaser lit maintenant la position,
+les PV, l’armure, les déplacements et les temps d’attaque dans les données du
+combat. Les commandes d’animation et de jauge existantes transmettent aussi
+leurs valeurs au rendu, avec l’horloge de combat qui gère la pause.
+
+Les dimensions et les styles sont compilés à la création, lors des changements
+de structure ou de visibilité, et au redimensionnement. La boucle d’image ne
+consulte plus les rectangles, les styles calculés ni les textes HTML. Les
+créations de textures demandées pendant un même intervalle sont regroupées.
+Les sprites, icônes et styles existants restent les sources graphiques ; aucun
+fichier de jeu, média ou dépendance supplémentaire n’est ajouté.
+
+Le HTML reste utilisé pour les hitboxes et pour préparer certains panneaux et
+effets. Les menus et les transitions de perspective du plateau retrouvent le
+rendu HTML pendant leur animation, puis Phaser reprend avec la géométrie mise
+à jour. Cette étape conserve les limites visuelles du prototype, notamment la
+projection des transformations 3D et certains halos capturés dans les textures.
+Elle ne supprime pas encore les conversions de panneaux pendant les combats.
+
+Les tests existants vérifient désormais que modifier les PV, l’armure et la
+position dans les données change le rendu sans modifier le HTML ; ils comptent
+aussi les lectures HTML dans la boucle Phaser et vérifient le gel des corps,
+jauges et textes pendant la pause. Souris, tactile, swaps, grabs, déplacements
+forcés, redimensionnement, F5 et nettoyage des textures passent leurs contrôles.
+Le rendu habituel passe également les tests de projectiles et de ressources FX.
+
+Quatre comparaisons déterministes (40/80 monstres, graines 1701/1702, cinq secondes
+simulées) conservent les résultats, les phases et les journaux complets. Les
+retouches finales de préparation des textures et de perspective concernent
+uniquement le rendu WebGL, désactivé dans le simulateur. Le format des sauvegardes
+et les règles de combat restent inchangés.
+
+Comparaison finale avec le prototype 0.96.0-dev : Chrome, WebGL matériel AMD,
+1920 × 1080, ressources préparées, deux combats de 12 secondes par taille et
+version, ordre alterné, aucun autre navigateur de test concurrent. Les sources
+sont figées pendant les mesures et correspondent aux fichiers livrés.
+
+| Monstres | Image moyenne avant / après (ms) | P95 avant / après (ms) | Impacts avant / après | Lectures HTML dans les images avant / après |
+| --- | --- | --- | --- | --- |
+| 40 | 89 / 84 | 300 / 292 | 42.0 / 42.5 | 156249 / 0 |
+| 80 | 157 / 186 | 508 / 858 | 60.0 / 59.5 | 183264 / 0 |
+
+Les lectures comptées sont celles de la boucle des monstres pendant les douze
+secondes mesurées : rectangles, dimensions, styles, recherches de nœuds et textes.
+Zéro lecture dans cette boucle ne signifie pas que tout le jeu est indépendant
+du HTML : les autres interfaces et la préparation des éléments en utilisent encore.
+
+**Le gain global de fluidité n’est pas validé.** À 80 monstres, le P95 régresse
+nettement malgré un nombre d’impacts comparable. Deux répétitions ne suffisent
+pas à estimer une tendance fine, mais elles montrent que cette séparation ne
+résout pas les gros à-coups. Le prototype reste désactivé par défaut. Il faut
+encore réduire la préparation des panneaux/effets et le travail HTML conservé
+avant de généraliser le rendu WebGL aux autres espèces.
+
+Traces : `outputs/webgl-state/paired-final-v2/` pour les huit mesures finales et
+leurs sources ; `outputs/webgl-state/final/` pour les quatre comparaisons de
+simulation. Contrôles d’interaction et de pause : `functional-final/` ; contrôles
+du rendu habituel : `native-final/`, dans le même répertoire de sorties.

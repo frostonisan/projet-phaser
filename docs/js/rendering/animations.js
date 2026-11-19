@@ -10,6 +10,16 @@ import { getAttackResolutionFlags } from "../combat/attackResolution.js";
 import { buildStatGraphHelper } from "../data/helpers.js";
 
 const playCachedGif = (image, source) => playGif(image, source, { shared: true });
+// Publish presentation commands to HTML and WebGL using the same values.
+export function writeCombatVisualStyle(node, values) {
+  Object.assign(node.style, values);
+  node._monsterStyleChanged?.(values, clockNow());
+}
+export function animateCombatVisual(node, ...args) {
+  const animation = node.animate(...args);
+  node._monsterAnimationStarted?.(animation);
+  return animation;
+}
 const originalImages = new WeakMap();
 const meleeTextures = new WeakMap();
 let meleeTextureSequence = 0;
@@ -190,8 +200,8 @@ function acquireImpactPose(node, saved = {}) {
 
 function releaseImpactPose(node, pose) {
     if (!pose || impactPoses.get(node) !== pose || --pose.users > 0) return;
-    node.style.transform = pose.previousTransform;
-    node.style.top = pose.previousTop;
+    writeCombatVisualStyle(node, { transform: pose.previousTransform });
+    writeCombatVisualStyle(node, { top: pose.previousTop });
     node.style.transition = pose.previousTransition;
     node.style.willChange = pose.previousWillChange;
     impactPoses.delete(node);
@@ -272,7 +282,7 @@ function configureSpeedTrail(trail, options = {}) {
 
   trail.className = className;
   trail.setAttribute("aria-hidden", "true");
-  Object.assign(trail.style, {
+  writeCombatVisualStyle(trail, {
     position: "absolute",
     zIndex: "9998",
     pointerEvents: "none",
@@ -288,7 +298,7 @@ function configureSpeedTrail(trail, options = {}) {
   if (!trail._filaments) {
     trail._filaments = filamentSpecs.map(spec => {
       const filament = document.createElement("i");
-      Object.assign(filament.style, {
+      writeCombatVisualStyle(filament, {
         position: "absolute",
         display: "block",
         top: spec.top,
@@ -538,7 +548,7 @@ function startMeleeOriginalRecovery(
         element.hidden = false;
         element.style.setProperty("opacity", "1", "important");
         element.style.visibility = "visible";
-        if (element.style.display === "none") element.style.display = "";
+        if (element.style.display === "none") writeCombatVisualStyle(element, { display: "" });
       }
     });
     recovery.deathObserver.observe(attackerBox, {
@@ -597,7 +607,7 @@ function releaseMeleeOriginalVisibility(
     || null;
 
   if (!state) {
-    if (forceVisible && currentSprite?.isConnected) currentSprite.style.opacity = "1";
+    if (forceVisible && currentSprite?.isConnected) writeCombatVisualStyle(currentSprite, { opacity: "1" });
     return false;
   }
 
@@ -906,7 +916,7 @@ export function damageImpact(targetId, options = {}, saved = null) {
       const computedTransform = getComputedStyle(vibrationTarget).transform;
       const baseTransform = computedTransform === "none" ? "" : computedTransform;
       const transformAt = (offset) => `${baseTransform} translate3d(${offset}px, 0, 0)`.trim();
-      const vibration = vibrationTarget.animate([
+      const vibration = animateCombatVisual(vibrationTarget, [
         { transform: transformAt(0) },
         { transform: transformAt(-3) },
         { transform: transformAt(3) },
@@ -1070,9 +1080,9 @@ if (spriteContainer) {
       ? rotateA * rotationDirection
       : rotateB;
 
-  spriteContainer.style.transform = isSideB
+  writeCombatVisualStyle(spriteContainer, { transform: isSideB
     ? `rotate(${rotateValue}turn) scaleX(-1)`
-    : `rotate(${rotateValue}turn)`;
+    : `rotate(${rotateValue}turn)` });
 }
     if (progress >= 1) {
       restoreAndStop();
@@ -1147,8 +1157,8 @@ export function mysticismBoostedAttackAnimation(attackerId, saved = null) {
 
     releaseEntityTint(canvas, "mysticismBoostedAttack");
 
-    canvas.style.transform = previousCanvasTransform;
-    canvas.style.filter = previousCanvasFilter;
+    writeCombatVisualStyle(canvas, { transform: previousCanvasTransform });
+    writeCombatVisualStyle(canvas, { filter: previousCanvasFilter });
     canvas.style.transition = previousCanvasTransition;
     canvas.style.willChange = previousCanvasWillChange;
   }
@@ -1173,17 +1183,17 @@ export function mysticismBoostedAttackAnimation(attackerId, saved = null) {
 
     applyEntityTint(canvas, "mysticismBoostedAttack", opacity);
 
-    canvas.style.transform = `
+    writeCombatVisualStyle(canvas, { transform: `
       ${previousCanvasTransform}
       scale(${scale.toFixed(3)})
       rotate(${rotation.toFixed(2)}deg)
-    `;
+    ` });
 
-    canvas.style.filter = `
+    writeCombatVisualStyle(canvas, { filter: `
       ${previousCanvasFilter}
       drop-shadow(0 0 ${6 + pulse * 10}px rgba(210, 245, 255, ${0.35 + opacity}))
       brightness(${1 + pulse * 0.35})
-    `;
+    ` });
 
     if (progress >= 1) {
       restoreAndStop();
@@ -1238,17 +1248,17 @@ export function damageArmorImpact(targetId, saved = null) {
 
     let pulseUp = saved?.state?.pulseUp ?? (true);
     const pulseInterval = setIntervalFrom(() => {
-        canvas.style.transform = pulseUp
+        writeCombatVisualStyle(canvas, { transform: pulseUp
             ? "scale(1.05) rotate(0.5deg)"
-            : "scale(1) rotate(-0.5deg)";
+            : "scale(1) rotate(-0.5deg)" });
         pulseUp = !pulseUp;
     }, 100, saved?.pulseRemaining);
 
     function stopArmorImpact() {
     finishCanvasRun(visualRun);
         clearInterval(pulseInterval);
-        canvas.style.transform = "scale(1)";
-        canvas.style.filter = "none";
+        writeCombatVisualStyle(canvas, { transform: "scale(1)" });
+        writeCombatVisualStyle(canvas, { filter: "none" });
         releaseEntityTint(canvas, "armorImpact");
         console.log(`✅ Fin de l'animation Armor Impact pour ${targetId}`);
     }
@@ -1266,8 +1276,8 @@ export function damageArmorImpact(targetId, saved = null) {
 
         // ✨ Lueur argentée dynamique
         const glowIntensity = 0.5 + Math.sin(elapsed / 80) * 0.5;
-        canvas.style.filter = `drop-shadow(0 0 ${6 * glowIntensity}px rgba(180, 200, 255, ${glowIntensity}))
-                               brightness(${1 + glowIntensity * 0.3})`;
+        writeCombatVisualStyle(canvas, { filter: `drop-shadow(0 0 ${6 * glowIntensity}px rgba(180, 200, 255, ${glowIntensity}))
+                               brightness(${1 + glowIntensity * 0.3})` });
 
         if (fadeIn) {
             opacity += fadeSpeed;
@@ -1315,7 +1325,7 @@ export function animateAmbidextry(targetId, saved = null) {
     function stopAmbidextry() {
     finishCanvasRun(visualRun);
         releaseEntityTint(canvas, "ambidextry");
-        canvas.style.filter = "none";
+        writeCombatVisualStyle(canvas, { filter: "none" });
     }
 
     function animate() {
@@ -1329,7 +1339,7 @@ export function animateAmbidextry(targetId, saved = null) {
 
         // ✨ Lueur légère
         const glow = 0.3 + opacity * 0.7;
-        canvas.style.filter = `drop-shadow(0 0 ${8 * glow}px rgba(237,255,0,${glow})) brightness(${1 + glow * 0.5})`;
+        writeCombatVisualStyle(canvas, { filter: `drop-shadow(0 0 ${8 * glow}px rgba(237,255,0,${glow})) brightness(${1 + glow * 0.5})` });
 
         // 🔁 Gestion du fade
         if (fadeIn) {
@@ -1409,11 +1419,11 @@ export function shakeImpact(targetId, saved = null) {
         const angle = direction * intensity;
         const jumpOffset = jumpDirection * jumpHeight;
 
-        spriteContainer.style.transform = isSideB
+        writeCombatVisualStyle(spriteContainer, { transform: isSideB
             ? `rotate(${angle}deg) scaleX(-1)`
-            : `rotate(${angle}deg)`;
+            : `rotate(${angle}deg)` });
 
-        spriteContainer.style.top = `${jumpOffset}px`;
+        writeCombatVisualStyle(spriteContainer, { top: `${jumpOffset}px` });
 
         direction *= -1;
         jumpDirection *= -1;
@@ -1497,7 +1507,7 @@ export function animateIndestructibility(targetId, saved = null) {
     let pulseUp = saved?.state?.pulseUp ?? (true);
 
     const pulseInterval = setIntervalFrom(() => {
-        canvas.style.transform = pulseUp ? "scale(1.06)" : "scale(1)";
+        writeCombatVisualStyle(canvas, { transform: pulseUp ? "scale(1.06)" : "scale(1)" });
         pulseUp = !pulseUp;
     }, 150, saved?.pulseRemaining);
 
@@ -1505,7 +1515,7 @@ export function animateIndestructibility(targetId, saved = null) {
     finishCanvasRun(visualRun);
         clearInterval(pulseInterval);
 
-        canvas.style.transform = previousTransform || "scale(1)";
+        writeCombatVisualStyle(canvas, { transform: previousTransform || "scale(1)" });
         canvas.style.transition = previousTransition || "";
 
         releaseEntityTint(canvas, "indestructibility");
@@ -1575,7 +1585,7 @@ export function animateEsoterism(targetId, saved = null) {
     let pulseUp = saved?.state?.pulseUp ?? (true);
 
     const pulseInterval = setIntervalFrom(() => {
-        canvas.style.transform = pulseUp ? "scale(1.04)" : "scale(1)";
+        writeCombatVisualStyle(canvas, { transform: pulseUp ? "scale(1.04)" : "scale(1)" });
         pulseUp = !pulseUp;
     }, 250, saved?.pulseRemaining);
 
@@ -1583,7 +1593,7 @@ export function animateEsoterism(targetId, saved = null) {
     finishCanvasRun(visualRun);
         clearInterval(pulseInterval);
 
-        canvas.style.transform = previousTransform || "scale(1)";
+        writeCombatVisualStyle(canvas, { transform: previousTransform || "scale(1)" });
         canvas.style.transition = previousTransition || "";
 
         releaseEntityTint(canvas, "esoterism");
@@ -1646,7 +1656,7 @@ export function animateAstrality(targetId, saved = null) {
   const previousOpacity = saved?.state?.previousOpacity ?? (canvas.style.opacity);
   const previousWillChange = saved?.state?.previousWillChange ?? (canvas.style.willChange);
 
-  canvas.style.opacity = "0.3";
+  writeCombatVisualStyle(canvas, { opacity: "0.3" });
   canvas.style.willChange = "opacity";
 
   console.log(`✨ Début animation Astralité sur ${targetId}`);
@@ -1657,7 +1667,7 @@ export function animateAstrality(targetId, saved = null) {
     finishCanvasRun(visualRun);
     releaseEntityTint(canvas, "astrality");
 
-    canvas.style.opacity = previousOpacity || "1";
+    writeCombatVisualStyle(canvas, { opacity: previousOpacity || "1" });
     canvas.style.willChange = previousWillChange || "";
 
     console.log(`✅ Fin animation Astralité pour ${targetId}`);
@@ -1671,7 +1681,7 @@ export function animateAstrality(targetId, saved = null) {
 
     applyEntityTint(canvas, "astrality", 0.45);
 
-    canvas.style.opacity = visualOpacity.toFixed(3);
+    writeCombatVisualStyle(canvas, { opacity: visualOpacity.toFixed(3) });
 
     if (t < 1) {
       requestAnimationFrame(frame);
@@ -1706,19 +1716,19 @@ export function animateDodge(entityId, saved = null) {
     sprite.style.position = "relative";
 
     if (isSideB) {
-        sprite.style.right = "60px";
-        sprite.style.left = "";
-        sprite.style.transform = "rotate(10deg)";
+        writeCombatVisualStyle(sprite, { right: "60px" });
+        writeCombatVisualStyle(sprite, { left: "" });
+        writeCombatVisualStyle(sprite, { transform: "rotate(10deg)" });
     } else {
-        sprite.style.left = "-60px";
-        sprite.style.right = "";
-        sprite.style.transform = "rotate(10deg)";
+        writeCombatVisualStyle(sprite, { left: "-60px" });
+        writeCombatVisualStyle(sprite, { right: "" });
+        writeCombatVisualStyle(sprite, { transform: "rotate(10deg)" });
     }
 
     }
     const restoreStyle = () => {
         finishCanvasRun(visualRun);
-        Object.assign(sprite.style, { transition: previousTransition, position: previousPosition, left: previousLeft, right: previousRight, transform: previousTransform });
+        writeCombatVisualStyle(sprite, { transition: previousTransition, position: previousPosition, left: previousLeft, right: previousRight, transform: previousTransform });
     };
     if (saved && clockNow() >= startedAt + 100) {
         setTimeout(restoreStyle, Math.max(0, startedAt + 400 - clockNow()));
@@ -1728,14 +1738,14 @@ export function animateDodge(entityId, saved = null) {
         sprite.style.transition = "left 0.3s ease-out, right 0.3s ease-out, transform 0.3s ease-out";
 
         if (isSideB) {
-            sprite.style.right = previousRight || "0px";
-            sprite.style.left = previousLeft || "";
+            writeCombatVisualStyle(sprite, { right: previousRight || "0px" });
+            writeCombatVisualStyle(sprite, { left: previousLeft || "" });
         } else {
-            sprite.style.left = previousLeft || "0px";
-            sprite.style.right = previousRight || "";
+            writeCombatVisualStyle(sprite, { left: previousLeft || "0px" });
+            writeCombatVisualStyle(sprite, { right: previousRight || "" });
         }
 
-        sprite.style.transform = previousTransform || "rotate(0deg)";
+        writeCombatVisualStyle(sprite, { transform: previousTransform || "rotate(0deg)" });
 
         setTimeout(restoreStyle, 300);
     }, Math.max(0, startedAt + 100 - clockNow()));
@@ -1827,7 +1837,7 @@ export function animatePreparation(entity, attack, forcedDuration = null) {
       castEffectDiv.remove();
     }
 
-    sprite.style.transform = previousTransform || "";
+    writeCombatVisualStyle(sprite, { transform: previousTransform || "" });
     sprite.style.willChange = previousWillChange || "";
 
     addIddle(sprite);
@@ -1870,7 +1880,7 @@ export function animatePreparation(entity, attack, forcedDuration = null) {
     }
 
     if (progress >= 1) {
-      sprite.style.transform = previousTransform || "";
+      writeCombatVisualStyle(sprite, { transform: previousTransform || "" });
 
       if (!cleanupPlanned) {
         cleanupPlanned = true;
@@ -1897,7 +1907,7 @@ export function animatePreparation(entity, attack, forcedDuration = null) {
     direction *= -1;
     Object.assign(state, { direction, maxBackward, phase, finalPhaseStarted });
 
-    sprite.style.transform = `translateX(${translateX}px)`;
+    writeCombatVisualStyle(sprite, { transform: `translateX(${translateX}px)` });
 
     setTimeout(() => {
       requestAnimationFrame(updateAnimation);
@@ -1928,16 +1938,16 @@ export function animateFinalPhase(castImg, saved = null) {
         const progress = elapsed / finalDuration;
 
         if (progress >= 1) {
-            castImg.style.transform = previousTransform || "";
-            castImg.style.filter = previousFilter || "";
+            writeCombatVisualStyle(castImg, { transform: previousTransform || "" });
+            writeCombatVisualStyle(castImg, { filter: previousFilter || "" });
             return;
         }
 
         const scaleUp = 1 + progress * 0.2;
         const brightness = 1 + progress;
 
-        castImg.style.transform = `scale(${scaleUp})`;
-        castImg.style.filter = `${castingFilter === 'none' ? '' : castingFilter} brightness(${brightness})`;
+        writeCombatVisualStyle(castImg, { transform: `scale(${scaleUp})` });
+        writeCombatVisualStyle(castImg, { filter: `${castingFilter === 'none' ? '' : castingFilter} brightness(${brightness})` });
 
         setTimeout(() => {
             requestAnimationFrame(finalAnimation);
@@ -1950,17 +1960,17 @@ export function animateFinalPhase(castImg, saved = null) {
         if (!castImg || !castImg.parentNode) return;
 
         castImg.style.transition = "transform 0.3s ease-in-out, opacity 0.3s ease-in-out";
-        castImg.style.transform = "scale(1.5)";
-        castImg.style.opacity = "0";
+        writeCombatVisualStyle(castImg, { transform: "scale(1.5)" });
+        writeCombatVisualStyle(castImg, { opacity: "0" });
     }, Math.max(0, finalStartTime + finalDuration - clockNow()));
 
     setTimeout(() => {
         if (!castImg) return;
 
-        castImg.style.transform = previousTransform || "";
-        castImg.style.filter = previousFilter || "";
+        writeCombatVisualStyle(castImg, { transform: previousTransform || "" });
+        writeCombatVisualStyle(castImg, { filter: previousFilter || "" });
         castImg.style.transition = previousTransition || "";
-        castImg.style.opacity = previousOpacity || "";
+        writeCombatVisualStyle(castImg, { opacity: previousOpacity || "" });
         castImg.style.willChange = previousWillChange || "";
     }, Math.max(0, finalStartTime + finalDuration + 350 - clockNow()));
     return { finalStartTime, previousTransform, previousFilter, castingFilter, previousTransition, previousOpacity, previousWillChange };
@@ -2010,7 +2020,7 @@ export function animateRecuperation(entity, attack) {
 
     const recoveryGif = saved && effectsContainer.querySelector(".recoveryGif") || document.createElement("img");
     if (!saved) playCachedGif(recoveryGif, `./media/assets/effects/recovery.gif`);
-    if (!saved) recoveryGif.style.opacity = "0";
+    if (!saved) writeCombatVisualStyle(recoveryGif, { opacity: "0" });
     recoveryGif.className = "recoveryGif";
     effectsContainer.appendChild(recoveryGif);
 
@@ -2020,7 +2030,7 @@ export function animateRecuperation(entity, attack) {
 
     setTimeout(() => {
         if (recoveryGif && recoveryGif.parentNode) {
-            recoveryGif.style.opacity = "1";
+            writeCombatVisualStyle(recoveryGif, { opacity: "1" });
         }
     }, Math.max(0, startTime + 50 - clockNow()));
 
@@ -2029,11 +2039,11 @@ export function animateRecuperation(entity, attack) {
         stopped = true; delete entity._recoveryVisual;
         if (entity.stopRecoveryAnimation === stopRecuperation) entity.stopRecoveryAnimation = null;
 
-        sprite.style.transform = previousTransform || "";
-        sprite.style.scale = previousScale || "";
+        writeCombatVisualStyle(sprite, { transform: previousTransform || "" });
+        writeCombatVisualStyle(sprite, { scale: previousScale || "" });
         sprite.style.willChange = previousWillChange || "";
 
-        recoveryGif.style.opacity = "0";
+        writeCombatVisualStyle(recoveryGif, { opacity: "0" });
 
         if (entity.battleStopped) recoveryGif.remove();
         else setTimeout(() => {
@@ -2074,8 +2084,8 @@ export function animateRecuperation(entity, attack) {
             ((Math.cos(elapsed * breathingSpeed * Math.PI * 2) + 1) / 2) *
             (recoveryScaleMax - recoveryScaleMin);
 
-        sprite.style.transform = `translate(${horizontalMove.toFixed(2)}px, ${verticalMove.toFixed(2)}px)`;
-        sprite.style.scale = recoveryScale.toFixed(3);
+        writeCombatVisualStyle(sprite, { transform: `translate(${horizontalMove.toFixed(2)}px, ${verticalMove.toFixed(2)}px)` });
+        writeCombatVisualStyle(sprite, { scale: recoveryScale.toFixed(3) });
 
         setTimeout(() => {
             requestAnimationFrame(updateAnimation);
@@ -2099,21 +2109,47 @@ export async function attachPhaserMonster(box, create) {
   const view = await create(layer.scene);
   if (!box.isConnected) { view.destroy(); return; }
   phaserMonsterViews.set(box, view);
+  monsterMenuObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["class","style"]}); refreshMonsterMenus();
   layer.host.hidden = false; layer.game.loop.wake();
 }
 export function wakePhaserMonsters() {
   if (phaserMonsterViews.size) phaserLayer?.game?.loop.wake();
 }
+let monsterMenusOpen = false, monsterMenusQueued = false, monsterBoardTransition = false;
+function refreshMonsterMenus() {
+  if(monsterMenusQueued || !phaserMonsterViews.size)return;
+  monsterMenusQueued=true;
+  queueMicrotask(()=>{
+    monsterMenusQueued=false;
+    monsterMenusOpen=monsterBoardTransition || [...document.querySelectorAll('.menu-map-container > *, .settings-menu, #gameOverMessage')]
+      .some(node=>node.getClientRects().length>0 && getComputedStyle(node).visibility!=='hidden');
+  });
+}
+// Board perspective remains the existing CSS transition. Hide the WebGL copy
+// during that transition, then compile its final geometry once.
+for(const name of ['transitionrun','transitionend','transitioncancel'])document.addEventListener(name,event=>{
+  if(event.target.id!=='hexGrid'||event.propertyName!=='transform')return;
+  monsterBoardTransition=name==='transitionrun';refreshMonsterMenus();
+  if(!monsterBoardTransition)for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
+});
+const monsterMenuObserver=new MutationObserver(records=>{
+  if(!phaserMonsterViews.size){monsterMenuObserver.disconnect();monsterBoardTransition=false;return;}
+  if(records.some(record=>record.target.id==='hexGrid' && record.type==='attributes'))
+    for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
+  if(records.some(record=>record.target instanceof Element && (record.target.closest('.Game-UI') ||
+    [...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1 && node.matches('.Game-UI,.menu-map-container,.settings-menu,#gameOverMessage')))))refreshMonsterMenus();
+});
 function updatePhaserMonsters() {
-  if (!phaserMonsterViews.size) return;
-  const visibility = new Map();
-  const showHTML = [...document.querySelectorAll('.menu-map-container > *, .settings-menu, #gameOverMessage')]
-    .some(node => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden');
-  for (const [box, view] of phaserMonsterViews) {
-    if (!box.isConnected || !view.active()) { view.destroy(); phaserMonsterViews.delete(box); }
-    else view.update(visibility, showHTML);
+  const now=clockNow();
+  for (const [box,view] of phaserMonsterViews) {
+    if(!box.isConnected || !view.active()){view.destroy();phaserMonsterViews.delete(box);}
+    else view.update(now,monsterMenusOpen);
   }
 }
+for(const name of ['resize','orientationchange','scroll'])window.addEventListener(name,()=>{
+  for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
+}, {passive:true});
+
 
 const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
 // The shared Phaser scene drives board travel while the HTML entity, HUD and
@@ -2135,6 +2171,12 @@ function validPlacement(entry) {
   return entry.box.isConnected && !entry.entity.isDEAD && !entry.entity.hasFled
     && String(entry.entity.position) === entry.visual.position
     && entry.box.closest('.hex')?.dataset.position === entry.visual.position;
+}
+export function getMonsterPlacementOffset(entity) {
+  const entry=phaserPlacements.get(String(entity.id));
+  if(!entry || entry.visual.position!==String(entity.position))return {x:0,y:0};
+  const t=1-placementProgress(entry.visual);
+  return {x:(entry.visual.from.x-entry.visual.to.x)*t,y:(entry.visual.from.y-entry.visual.to.y)*t};
 }
 export function getEntityPlacementOrigin(entity) {
   const entry = phaserPlacements.get(String(entity.id));
@@ -2162,7 +2204,7 @@ function updatePhaserPlacements() {
     const { from, to } = entry.visual, remaining = 1 - placementProgress(entry.visual);
     const dx = Number(((from.x-to.x)*remaining).toFixed(6)), dy = Number(((from.y-to.y)*remaining).toFixed(6));
     const transform = `translate(${dx}px, ${dy}px)`;
-    if (entry.box.style.transform !== transform) entry.box.style.transform = transform;
+    if (entry.box.style.transform !== transform) writeCombatVisualStyle(entry.box, { transform });
   }
 }
 export function animateEntityPlacement(entity, from, to, saved = null) {
@@ -2979,7 +3021,7 @@ export function RunawayAnimation(entite) {
     if (!recoveryGif) {
         recoveryGif = document.createElement("img");
         recoveryGif.className = "recoveryGif";
-        recoveryGif.style.opacity = "1";
+        writeCombatVisualStyle(recoveryGif, { opacity: "1" });
         effectsContainer.appendChild(recoveryGif);
     }
 
@@ -3196,14 +3238,14 @@ const previousCanvasOpacity = saved?.state?.previousCanvasOpacity ?? (canvas.sty
 function restoreCanvasEffects() {
   releaseEntityTint(canvas, "mysticism");
 
-  canvas.style.filter = previousFilter || "";
+  writeCombatVisualStyle(canvas, { filter: previousFilter || "" });
   canvas.style.transition = previousTransition || "";
   canvas.style.willChange = previousWillChange || "";
-  canvas.style.opacity = previousCanvasOpacity || "1";
+  writeCombatVisualStyle(canvas, { opacity: previousCanvasOpacity || "1" });
 }
 
   function restoreMysticismMotion() {
-    canvas.style.transform = previousCanvasTransform || "";
+    writeCombatVisualStyle(canvas, { transform: previousCanvasTransform || "" });
   }
 
   function removeExistingMysticismVFX() {
@@ -3284,10 +3326,10 @@ mysticismVFX._mysticismTO = setTimeout(() => {
 
     applyEntityTint(canvas, "mysticism", opacity);
 
-    canvas.style.filter = `
+    writeCombatVisualStyle(canvas, { filter: `
       drop-shadow(0 0 ${8 + opacity * 12}px rgba(79, 112, 179, ${0.35 + opacity}))
       brightness(${1 + opacity * 0.35})
-    `;
+    ` });
 
     if (progress < 1) {
       entryFrame = requestAnimationFrame(animateEntry);
@@ -3318,12 +3360,12 @@ mysticismVFX._mysticismTO = setTimeout(() => {
 
     applyEntityTint(canvas, "mysticism", opacity);
 
-    canvas.style.filter = `
+    writeCombatVisualStyle(canvas, { filter: `
       drop-shadow(0 0 ${6 + opacity * 10}px rgba(79, 112, 179, ${0.25 + opacity}))
       brightness(${1 + opacity * 0.25})
-    `;
+    ` });
 
-    canvas.style.transform = `scale(${scale.toFixed(3)})`;
+    writeCombatVisualStyle(canvas, { transform: `scale(${scale.toFixed(3)})` });
 
     tranceFrame = requestAnimationFrame(animateTrance);
   }
@@ -3412,7 +3454,7 @@ export function animateOccultism(targetId, saved = null) {
     sprite.classList.add("occultism-invisible-visual");
     sprite.style.transition = "filter 0.15s ease-in-out, opacity 0.15s ease-in-out";
     sprite.style.willChange = "filter, opacity";
-    sprite.style.filter = `${previousSpriteFilter} grayscale(1) saturate(0.25) brightness(0.75)`.trim();
+    writeCombatVisualStyle(sprite, { filter: `${previousSpriteFilter} grayscale(1) saturate(0.25) brightness(0.75)`.trim() });
   }
 
   if (canvas && !saved) {
@@ -3431,7 +3473,7 @@ export function animateOccultism(targetId, saved = null) {
 
     if (sprite) {
       sprite.classList.remove("occultism-invisible-visual");
-      sprite.style.filter = previousSpriteFilter;
+      writeCombatVisualStyle(sprite, { filter: previousSpriteFilter });
       sprite.style.transition = previousSpriteTransition;
       sprite.style.willChange = previousSpriteWillChange;
     }
@@ -3455,7 +3497,7 @@ export async function destructionItemAnimation({
       const impactTransform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg)`;
       return baseTransform ? `${impactTransform} ${baseTransform}` : impactTransform;
     };
-    shakeAnimation = target.animate([
+    shakeAnimation = animateCombatVisual(target, [
       { transform: transformAt(0, 0, 0) },
       { transform: transformAt(-3, -1, -1.2) },
       { transform: transformAt(3, 1, 1.2) },
@@ -3573,8 +3615,8 @@ export function soulScaling(level) {
   const soulTwoValue = soulTwoMin + (soulTwoMax - soulTwoMin) * ratio;
 
   if (element) {
-    element.style.opacity = (isMax ? opacityMax : opacity).toFixed(3);
-    element.style.transform = `scale(${(isMax ? scaleMax : scale).toFixed(3)})`;
+    writeCombatVisualStyle(element, { opacity: (isMax ? opacityMax : opacity).toFixed(3) });
+    writeCombatVisualStyle(element, { transform: `scale(${(isMax ? scaleMax : scale).toFixed(3)})` });
   }
 
   if (soul) {
@@ -3585,11 +3627,11 @@ export function soulScaling(level) {
       soul.style.width = `${size.toFixed(1)}px`;
       soul.style.height = `${size.toFixed(1)}px`;
     }
-    soul.style.filter = `saturate(${satPct.toFixed(1)}%) contrast(${ctrPct.toFixed(1)}%)`;
+    writeCombatVisualStyle(soul, { filter: `saturate(${satPct.toFixed(1)}%) contrast(${ctrPct.toFixed(1)}%)` });
   }
 
   if (soulTwo) {
-    soulTwo.style.opacity = (isMax ? soulTwoMax : soulTwoValue).toFixed(3);
+    writeCombatVisualStyle(soulTwo, { opacity: (isMax ? soulTwoMax : soulTwoValue).toFixed(3) });
   }
 }
 
@@ -3690,21 +3732,21 @@ function drawRealtimegraph(ctx, strength, agility, intelligence, hoverSlice = nu
 
       if (slice) {
         tooltip.textContent = buildStatGraphHelper(slice);
-        tooltip.style.left = e.pageX + 10 + 'px';
-        tooltip.style.top  = e.pageY + 10 + 'px';
-        tooltip.style.display = 'block';
+        writeCombatVisualStyle(tooltip, { left: e.pageX + 10 + 'px' });
+        writeCombatVisualStyle(tooltip, { top: e.pageY + 10 + 'px' });
+        writeCombatVisualStyle(tooltip, { display: 'block' });
 
         // redraw en mode focus
         drawRealtimegraph(ctx, strength, agility, intelligence, slice);
         return;
       }
     }
-    tooltip.style.display = 'none';
+    writeCombatVisualStyle(tooltip, { display: 'none' });
     drawRealtimegraph(ctx, strength, agility, intelligence, null);
   };
 
   canvas.onmouseleave = () => {
-    tooltip.style.display = 'none';
+    writeCombatVisualStyle(tooltip, { display: 'none' });
     drawRealtimegraph(ctx, strength, agility, intelligence, null);
   };
 }

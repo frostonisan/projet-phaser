@@ -1,3 +1,4 @@
+import { writeCombatVisualStyle, animateCombatVisual } from "./animations.js";
 import { clockNow, removeCombatVisualAfter } from "../combat/clock.js";
 import { EFFECT_VISUALS } from "../data/effectVisuals.js";
 
@@ -69,7 +70,7 @@ function expire(node, duration) {
 }
 
 function animateCard(node, body, frames, duration) {
-  animations.set(node, [body.animate(frames, { duration, fill: 'forwards', easing: 'linear' })]);
+  animations.set(node, [animateCombatVisual(body, frames, { duration, fill: 'forwards', easing: 'linear' })]);
   expire(node, duration);
 }
 
@@ -132,8 +133,8 @@ function addHistory(host, content) {
   while (history.children.length > POPUP_LIMITS.history) removeCard(history.firstElementChild);
   [...history.children].reverse().forEach((row, rank) => {
     const depth = Math.max(Number(row.dataset.depth) || 0, rank); row.dataset.depth = String(depth);
-    row.style.transform = `translateY(${-historySteps[depth]}px) scale(${Math.max(.2, .78 ** depth)})`;
-    row.style.opacity = String(Math.max(.24, .96 - depth * .09));
+    writeCombatVisualStyle(row, { transform: `translateY(${-historySteps[depth]}px) scale(${Math.max(.2, .78 ** depth)})` });
+    writeCombatVisualStyle(row, { opacity: String(Math.max(.24, .96 - depth * .09)) });
   });
   animateCard(node, body, [
     { transform: 'translateY(3px) scale(.86)', opacity: 0, offset: 0, easing: 'cubic-bezier(.16,1,.3,1)' },
@@ -160,7 +161,7 @@ export function showEffectPopup(host, content) {
     previous.classList.replace('combat-popup-front', 'combat-popup-outgoing');
     previous.style.zIndex = '0';
     const active = animations.get(previous) || previous.getAnimations({ subtree: true });
-    active.push(previous.animate([{ opacity: 1, transform: 'translateY(0) scale(1)' }, { opacity: 0, transform: 'translateY(-14px) scale(.96)' }],
+    active.push(animateCombatVisual(previous, [{ opacity: 1, transform: 'translateY(0) scale(1)' }, { opacity: 0, transform: 'translateY(-14px) scale(.96)' }],
       { duration: 280, easing: 'ease-out', fill: 'forwards' }));
     animations.set(previous, active);
     expire(previous, 280);

@@ -2,12 +2,12 @@ import {
   updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
   IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
-import { attachPhaserMonster, wakePhaserMonsters, renderEntityTint } from "./animations.js";
+import { attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset } from "./animations.js";
 import { persistentMediaMarkup, loadResource, loadSpriteAtlas, getAnimatedImageState } from "../data/loaderList.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
 import { calibrateEntityVisuals } from "./popups.js";
-import { setTimeout, requestAnimationFrame } from "../combat/clock.js";
+import { setTimeout, requestAnimationFrame, clockNow } from "../combat/clock.js";
 import { cachedResourceImage, cachedResourceUrl, playCachedGif } from "../data/loaderList.js";
 import { determineClasse } from "../board/deployment.js";
 import { AttackerSbireTargetPriority, AllySbireTargetPriority } from "../combat/roles.js";
@@ -1471,29 +1471,97 @@ export function CreateATBEntity(entite, { mirror = false } = {}) {
     return SpeedInterface; // On retourne l'élément DOM complet
 }
 
-// Experimental complete paint path for one species. HTML remains a temporary
-// layout/input adapter: its paint is suppressed only after WebGL is ready.
-// This deliberately exposes the cost of that adapter in the load comparison.
+// One species uses a compiled presentation: layout is sampled on creation/resize,
+// while frames consume combat data and timed presentation commands. The existing
+// HTML remains the input and paused-scene adapter.
 const monsterViews = new WeakSet(), monsterImages = new Map(), monsterResources = new Map();
 let monsterTextureId = 0, activeMonsterViews = 0, monsterCacheEpoch = 0;
-const monsterStyles = new WeakMap();
-function monsterVisibility(node, cache) {
-  if (!node) return { opacity: 1, visible: true };
-  if (cache.has(node)) return cache.get(node);
-  const parent = monsterVisibility(node.parentElement, cache), css = monsterStyle(node);
-  const value = { opacity: parent.opacity * Number(css.opacity), visible: parent.visible && css.display !== 'none' };
-  cache.set(node, value); return value;
+const monsterStyle = node => getComputedStyle(node);
+// Only creation, presentation commands and layout events sample the HTML.
+// Frames below read the compiled records and the combat clock exclusively.
+const monsterClamp = value => Math.max(0, Math.min(1, value));
+const monsterColorFilter = value => (String(value).match(/(?:grayscale|saturate|sepia|contrast|hue-rotate|invert)\([^)]+\)/g)||[]).join(' ');
+function monsterEase(value, easing = 'linear') {
+  if (easing === 'linear') return value;
+  const presets = { ease: [.25,.1,.25,1], 'ease-in': [.42,0,1,1], 'ease-out': [0,0,.58,1], 'ease-in-out': [.42,0,.58,1] };
+  const bezier = presets[easing] || easing.match(/cubic-bezier\(([^)]+)\)/)?.[1].split(',').map(Number);
+  if (!bezier) return value;
+  const [a,b,c,d] = bezier, cubic = (t,x,y) => 3*(1-t)**2*t*x+3*(1-t)*t*t*y+t**3;
+  let low=0, high=1;
+  for(let n=0;n<12;n++){const t=(low+high)/2;if(cubic(t,a,c)<value)low=t;else high=t;}
+  return cubic((low+high)/2,b,d);
 }
-function monsterStyle(node) {
-  if (!monsterStyles.has(node)) monsterStyles.set(node, getComputedStyle(node));
-  return monsterStyles.get(node); // Computed style declarations are live.
+function monsterValue(key, value, size = {width: 1, height: 1}) {
+  if (key === 'filter') {
+    const matches = [...String(value).matchAll(/brightness\(([^)]+)\)/g)];
+    return [matches.reduce((v, m) => v * parseFloat(m[1]) / (m[1].includes('%') ? 100 : 1), 1)];
+  }
+  if (key === 'transform') {
+    // DOMMatrix cannot resolve percentages. Resolve against the cached local
+    // box, including CSS calc() offsets, when compiling a command/keyframe.
+    const transform = String(value || 'none').replace(/(translate(?:3d|X|Y)?)\(((?:[^()]|calc\([^)]*\))*)\)/gi, (_, name, args) => {
+      const values = args.split(',').map((arg, i) => {
+        const length = name.toLowerCase() === 'translatey' || i === 1 ? size.height : size.width;
+        let result = arg.replace(/(-?[\d.]+)%/g, (_, n) => `${Number(n) * length / 100}px`);
+        result = result.replace(/calc\(([^)]+)\)/g, (_, expression) => `${[...expression.matchAll(/[+-]?\s*[\d.]+/g)].reduce((sum, m) => sum + Number(m[0].replace(/\s/g, '')), 0)}px`);
+        return result;
+      });
+      return `${name}(${values.join(',')})`;
+    });
+    const m = new DOMMatrixReadOnly(transform === 'none' ? undefined : transform);
+    return [m.a, m.b, m.c, m.d, m.e, m.f];
+  }
+  if (key === 'scale') {
+    const values = String(value || '1').split(' ').map(Number);
+    const x = Number.isFinite(values[0]) ? values[0] : 1;
+    return [x, Number.isFinite(values[1]) ? values[1] : x];
+  }
+  if (key === 'opacity') return [value === '' ? 1 : Number(value)];
+  return [parseFloat(value) || 0];
+}
+const monsterLerp = (a,b,t) => a.map((v,i)=>v+(b[i]-v)*t);
+function monsterAnimation(animation, binding) {
+  const timing=animation.effect.getTiming(), now=clockNow(), keys=['transform','scale','opacity','left','top','filter'];
+  const frames=animation.effect.getKeyframes(), tracks={};
+  for(const key of keys) {
+    const values=frames.filter(frame=>frame[key]!==undefined).map(frame=>({at:frame.computedOffset??frame.offset,value:monsterValue(key,frame[key],binding),easing:frame.easing}));
+    if(values.length)tracks[key]=values;
+  }
+  const data={tracks,start:now-Number(animation.currentTime||0),duration:Number(timing.duration)||1,delay:Number(timing.delay)||0,
+    iterations:timing.iterations,direction:timing.direction,easing:timing.easing,fill:timing.fill,rate:animation.playbackRate||1};
+  animation.addEventListener('cancel',()=>{data.cancelled=true;},{once:true});
+  return data;
+}
+function monsterAnimatedValues(binding, now) {
+  const values={...binding.values};
+  for(const [key,tween] of binding.tweens) {
+    const t=monsterClamp((now-tween.start)/tween.duration);
+    values[key]=monsterLerp(tween.from,tween.to,monsterEase(t,tween.easing));
+    if(t===1)binding.tweens.delete(key);
+  }
+  for(const animation of binding.animations) {
+    if(animation.cancelled)continue;
+    const elapsed=(now-animation.start)*animation.rate-animation.delay;
+    if(elapsed<0)continue;
+    const total=animation.duration*animation.iterations;
+    if(elapsed>=total && !['forwards','both'].includes(animation.fill))continue;
+    const iteration=Math.min(Math.floor(elapsed/animation.duration),Math.max(0,animation.iterations-1));
+    let t=elapsed>=total?1:(elapsed%animation.duration)/animation.duration;
+    if(animation.direction==='reverse'||animation.direction==='alternate'&&iteration%2||animation.direction==='alternate-reverse'&&!(iteration%2))t=1-t;
+    t=monsterEase(t,animation.easing);
+    for(const [key,frames] of Object.entries(animation.tracks)) {
+      let a=frames[0],b=frames.at(-1);
+      for(let i=1;i<frames.length;i++)if(t<=frames[i].at){a=frames[i-1];b=frames[i];break;}
+      values[key]=monsterLerp(a.value,b.value,monsterEase(monsterClamp((t-a.at)/(b.at-a.at||1)),a.easing));
+    }
+  }
+  return values;
 }
 const monsterPanels = new Map(), monsterTextTextures = new Map();
 function releaseMonsterText(entry, scene) {
   if (entry && --entry.users === 0) { scene.textures.remove(entry.texture); monsterTextTextures.delete(entry.key); }
 }
-function updateMonsterText(layer, scene, css) {
-  const text = layer.node.textContent;
+function updateMonsterText(layer, scene, css, text) {
   if (layer.text === text && layer.color === css.color) return;
   layer.text = text; layer.color = css.color;
   const font = `${css.fontStyle} ${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
@@ -1679,7 +1747,7 @@ async function monsterAsset(scene, source, filter = 'none', body = false) {
   return entry;
 }
 function disposeMonsterLayer(layer, scene) {
-  layer.cancelled = true; layer.image?.destroy(); layer.tint?.destroy();
+  layer.cancelled = true; layer.image?.destroy(); layer.overlay?.destroy(); layer.tint?.destroy(); layer.brightness?.destroy();
   releaseMonsterPanel(layer.panelEntry, scene); releaseMonsterText(layer.textEntry, scene);
   if (layer.node instanceof HTMLCanvasElement) {
     delete layer.node._phaserMonsterTint;
@@ -1691,166 +1759,287 @@ function mountWebGLMonster(entity, box) {
   monsterViews.add(box);
   void attachPhaserMonster(box, async scene => {
     activeMonsterViews++;
-    const layers = new Map(); let listDirty = true, destroyed = false;
-    const install = (node, kind) => {
-      if (layers.has(node)) return layers.get(node);
-      const ancestors = []; let flipX = false;
-      for (let parent = node; parent && parent !== box; parent = parent.parentElement) {
-        ancestors.push(parent); if (new DOMMatrixReadOnly(monsterStyle(parent).transform).a < 0) flipX = !flipX;
+    const layers=new Map(), bindings=new Map();
+    const grid=box.closest('#hexGrid');
+    let cells=new Map(), originCell, originPosition, boardScale={x:1,y:1}, destroyed=false, suspended=false, queued=false, geometryQueued=false;
+    const cssCopy=css=>Object.fromEntries(['opacity','display','transform','scale','left','top','right','fontStyle','fontWeight','fontSize','fontFamily','textShadow','textAlign','color','backgroundColor','backgroundImage','transitionProperty','transitionDuration','transitionTimingFunction','transformOrigin','filter'].map(key=>[key,css[key]]));
+    const bind = node => {
+      if(bindings.has(node))return bindings.get(node);
+      const css=cssCopy(getComputedStyle(node)), rect=node.getBoundingClientRect();
+      const width=node.offsetWidth||rect.width/boardScale.x||1, height=node.offsetHeight||rect.height/boardScale.y||1;
+      const origin=css.transformOrigin.split(' ').map(parseFloat), values={};
+      for(const key of ['transform','scale','opacity','left','top','right','filter'])values[key]=monsterValue(key,css[key],{width,height});
+      const b={node,css,rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height},width,height,
+        origin:{x:rect.left+(origin[0]||0)*boardScale.x,y:rect.top+(origin[1]||0)*boardScale.y},
+        values,base:{...values},tweens:new Map(),animations:[]};
+      b.animations=node.getAnimations().map(animation=>monsterAnimation(animation,b));
+      bindings.set(node,b);
+      node._monsterStyleChanged=(changes,now)=>{
+        try {
+        b.commanded=true;
+        for(const [key,value] of Object.entries(changes)) {
+          if(['transform','scale','opacity','left','top','right','filter'].includes(key)) {
+            const to=monsterValue(key,value,b), from=monsterAnimatedValues(b,now)[key];
+            const props=b.css.transitionProperty.split(',').map(s=>s.trim()), index=Math.max(0,props.indexOf(key));
+            const duration=parseFloat(b.css.transitionDuration.split(',')[index]||b.css.transitionDuration)*1000;
+            b.values[key]=to;
+            if(key==='filter'){
+              const changed=monsterColorFilter(b.css.filter)!==monsterColorFilter(value);b.css.filter=value;
+              if(changed){for(const layer of layers.values())if(layer.asset&&layer.chain.includes(b))layer.dirty=true;schedule();}
+            }
+            if(duration>0 && (props.includes(key)||props.includes('all')))b.tweens.set(key,{from,to,start:now,duration,easing:b.css.transitionTimingFunction});
+          } else if(key==='display'){if(b.css.display==='none'&&value!=='none')invalidateGeometry();b.css.display=value;}
+          else if(key==='width')b.fill=monsterClamp(parseFloat(value)/100);
+          else if(key==='animation')b.animations=node.getAnimations().map(animation=>monsterAnimation(animation,b));
+          else if(key==='animationDuration')for(const animation of b.animations)animation.duration=parseFloat(value)*(String(value).endsWith('ms')?1:1000);
+        }
+      } catch(error){fail(error);}
+      };
+      node._monsterAnimationStarted=animation=>{try{b.animations.push(monsterAnimation(animation,b));}catch(error){fail(error);}};
+      return b;
+    };
+    const chainFor=node=>{const chain=[];for(let n=node;n&&n!==grid;n=n.parentElement)chain.push(bind(n));return chain;};
+    const calibrateBoard=()=>{
+      cells=new Map([...grid.querySelectorAll('.hex[data-position]')].map(cell=>{
+        const rect=cell.getBoundingClientRect();return [cell.dataset.position,{x:rect.left,y:rect.top,w:rect.width,h:rect.height,localW:cell.offsetWidth||1,localH:cell.offsetHeight||1}];
+      }));
+      originPosition=String(entity.position);originCell=cells.get(originPosition)||{x:0,y:0,w:1,h:1,localW:1,localH:1};
+      boardScale={x:originCell.w/originCell.localW,y:originCell.h/originCell.localH};
+    };
+    calibrateBoard();
+    const install=(node,kind)=>{
+      if(layers.has(node))return layers.get(node);
+      const css=cssCopy(getComputedStyle(node)), rect=node.getBoundingClientRect();
+      const layer={node,kind,css,rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height},chain:chainFor(node),dirty:true,startedAt:performance.now(),fallbackText:node.textContent,textScaleX:rect.width/(node.offsetWidth||1),textScaleY:rect.height/(node.offsetHeight||1)};
+      if(kind==='bar') {
+        const parent=node.parentElement, r=parent.getBoundingClientRect();
+        layer.rect={x:r.left+parent.clientLeft*boardScale.x,y:r.top+parent.clientTop*boardScale.y,w:parent.clientWidth*boardScale.x,h:parent.clientHeight*boardScale.y};
+        layer.bar=node.classList.contains('health-bar')?'hp':node.classList.contains('armor-bar')?'armor':node.classList.contains('atb-fill')?'atb':'attack';
+        layer.fill=0;layer.fillTarget=-1;
+        const r0=node.getBoundingClientRect(), scaleX=r.width/(parent.offsetWidth||1), scaleY=r.height/(parent.offsetHeight||1);
+        layer.rect={x:r.left+parent.clientLeft*scaleX,y:r.top+parent.clientTop*scaleY,w:parent.clientWidth*scaleX,h:parent.clientHeight*scaleY};
+        if(layer.bar==='hp'||layer.bar==='armor')layer.rect.y=r0.top;
+        layer.barBinding=bind(node);
+        const fill=node.querySelector('.health-fill,.armor-fill');if(fill)layer.chain.unshift(bind(fill));
       }
-      const layer = { node, kind, ancestors, flipX, dirty: true, startedAt: performance.now() }; layers.set(node, layer); return layer;
+      layer.maxShift=node.classList.contains('max');
+      if(kind==='text')layer.textRole=node.classList.contains('HP-counter')?'hp':node.classList.contains('armor-text')?'armor':node.classList.contains('current-shift')?'shift':node.classList.contains('preparation')?'prep':node.classList.contains('execution')?'exec':'label';
+      layer.flipX=layer.chain.reduce((flip,b)=>b.values.transform[0]<0?!flip:flip,false);
+      const moving=getMonsterPlacementOffset(entity);layer.rect.x-=moving.x*boardScale.x;layer.rect.y-=moving.y*boardScale.y;
+      layers.set(node,layer);return layer;
     };
-    const refreshList = () => {
-      for (const node of box.querySelectorAll('canvas')) install(node, 'body');
-      for (const node of box.querySelectorAll(monsterPanelSelector)) install(node, 'panel');
-      for (const node of box.querySelectorAll('img')) if (!node.closest('.hud-ingame, .combat-popup-life')) install(node, 'asset');
-      for (const [node, layer] of layers) if (!box.contains(node)) { disposeMonsterLayer(layer, scene); layers.delete(node); }
-      for (const node of box.querySelectorAll(monsterBars)) install(node, 'bar');
-      for (const node of box.querySelectorAll(monsterTexts)) install(node, 'text');
-      listDirty = false;
+    const refreshList=()=>{
+      for(const node of box.querySelectorAll('canvas'))install(node,'body');
+      for(const node of box.querySelectorAll(monsterPanelSelector))install(node,'panel');
+      for(const node of box.querySelectorAll('img'))if(!node.closest('.hud-ingame,.combat-popup-life'))install(node,'asset');
+      for(const node of box.querySelectorAll(monsterBars))install(node,'bar');
+      for(const node of box.querySelectorAll(monsterTexts))install(node,'text');
+      for(const [node,layer] of layers)if(!box.contains(node)){disposeMonsterLayer(layer,scene);layers.delete(node);}
+      const used=new Set([...layers.values()].flatMap(layer=>layer.chain));
+      for(const [node,b] of bindings)if(!used.has(b)){
+        delete node._monsterStyleChanged;delete node._monsterAnimationStarted;bindings.delete(node);
+      }
     };
-    const prepare = async layer => {
-      if (layer.busy || layer.cancelled || layer.kind === 'text') return;
-      layer.busy = true; layer.dirty = false;
+    const prepare=async layer=>{
+      if(layer.busy||layer.cancelled||layer.kind==='text'||layer.kind==='bar'&&layer.bar==='hp')return;
+      layer.busy=true;layer.dirty=false;
       try {
-        let texture, panel;
-        if (layer.kind === 'panel' || layer.kind === 'bar') {
-          if (!layer.node.offsetWidth || !layer.node.offsetHeight) return;
-          const signature = monsterPanelKey(layer.node, entity);
-          if (signature === layer.signature) return;
-          const cached = await acquireMonsterPanel(scene, layer.node, signature);
-          if (destroyed || layer.cancelled) { releaseMonsterPanel(cached, scene); return; }
-          releaseMonsterPanel(layer.panelEntry, scene); layer.panelEntry = cached; layer.signature = signature;
-          panel = cached.panel; texture = cached.texture;
+        let texture,panel;
+        if(layer.kind==='panel'||layer.kind==='bar') {
+          if(!layer.node.offsetWidth||!layer.node.offsetHeight)return;
+          const signature=monsterPanelKey(layer.node,entity);if(signature===layer.signature)return;
+          const cached=await acquireMonsterPanel(scene,layer.node,signature);
+          if(destroyed||layer.cancelled){releaseMonsterPanel(cached,scene);return;}
+          releaseMonsterPanel(layer.panelEntry,scene);layer.panelEntry=cached;layer.signature=signature;panel=cached.panel;texture=cached.texture;
         } else {
-          const source = layer.kind === 'body' ? getEntitySpriteSource(entity) : getAnimatedImageState(layer.node)?.key || layer.node.currentSrc || layer.node.src;
-          if (!source) return;
-          layer.source = source;
-          const filters = [];
-          for (let node = layer.node; node && node !== box; node = node.parentElement) {
-            const filter = getComputedStyle(node).filter; if (filter !== 'none') filters.push(filter);
-          }
-          layer.asset = await monsterAsset(scene, source, filters.join(' ') || 'none', layer.kind === 'body'); texture = layer.asset.name;
+          const source=layer.kind==='body'?getEntitySpriteSource(entity):getAnimatedImageState(layer.node)?.key||layer.node.currentSrc||layer.node.src;
+          if(!source)return;
+          layer.source=source;
+          const filters=layer.chain.map(b=>b.css.filter).filter(filter=>filter&&filter!=='none');
+          // Changing brightness/pose is sampled from commands, never baked into
+          // hundreds of nearly identical GIF atlases during the battle.
+          const filter=filters.join(' ').replace(/brightness\([^)]+\)/g,'').trim()||'none';
+          layer.asset=await monsterAsset(scene,source,filter,layer.kind==='body');texture=layer.asset.name;
         }
-        if (destroyed || layer.cancelled) return;
-        if (!layer.image) layer.image = scene.add.image(0, 0, texture).setOrigin(0).setVisible(false);
-        else layer.image.setTexture(texture);
-        layer.texture = panel ? texture : null; layer.panel = panel;
-        if (layer.kind === 'body') {
-          const neutral = await monsterAsset(scene, layer.source, 'none', true);
-          if (destroyed || layer.cancelled) return;
-          texture = neutral.name;
-          layer.tint ||= scene.add.image(0, 0, texture).setOrigin(0).setVisible(false);
-          layer.tint.setTexture(texture);
-          layer.tintHandler = layer.node._phaserMonsterTint = store => {
-            layer.tone = [...(store?.values() || [])].sort((a, b) => b.priority - a.priority || b.updatedAt - a.updatedAt)[0];
-          };
+        if(destroyed||layer.cancelled)return;
+        if(!layer.image)layer.image=scene.add.image(0,0,texture).setOrigin(.5).setVisible(false);else layer.image.setTexture(texture);
+        layer.panel=panel;
+        if(layer.kind==='body') {
+          const neutral=await monsterAsset(scene,layer.source,'none',true);if(destroyed||layer.cancelled)return;
+          layer.tint ||= scene.add.image(0,0,neutral.name).setOrigin(.5).setVisible(false);layer.tint.setTexture(neutral.name);
+          layer.tintHandler=layer.node._phaserMonsterTint=store=>{layer.tone=[...(store?.values()||[])].sort((a,b)=>b.priority-a.priority||b.updatedAt-a.updatedAt)[0];};
           renderEntityTint(layer.node);
         }
-      } catch (error) {
-        // Never leave an invisible monster after a failed texture/decoder.
-        fail(error);
-      } finally { layer.busy = false; }
+      } catch(error){fail(error);} finally{layer.busy=false;if(layer.dirty&&!destroyed)schedule();}
     };
-    const observer = new MutationObserver(records => {
-      for (const record of records) {
-        if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === 1)) listDirty = true;
-        const target = record.target.nodeType === 1 ? record.target : record.target.parentElement;
-        if (record.type === 'attributes' && target?.classList.contains('sprite-container')) {
-          const body = box.querySelector('canvas'), layer = layers.get(body);
-          if (layer) layer.dirty = true;
-        }
-        if (!target || target.closest(`${monsterBars},${monsterTexts},.battle-timer-display`)) continue;
-        // Panel transforms/opacity are sampled by WebGL, not baked again.
-        if (record.type === 'attributes' && target.matches('.hud-ingame,.attaque-timers,.combat-popup-life')) continue;
-        const panel = target.closest(monsterPanelSelector);
-        if (panel && layers.has(panel)) layers.get(panel).dirty = true;
+    const schedule=()=>{
+      if(queued||destroyed)return;queued=true;
+      globalThis.requestAnimationFrame(()=>{
+        queued=false;if(destroyed)return;
+        refreshList();for(const layer of layers.values())if(layer.dirty)void prepare(layer);
+        wakePhaserMonsters();
+      });
+    };
+    const updateBinding=(node,attribute)=>{
+      const b=bindings.get(node);if(!b)return;
+      if(attribute==='style'){
+        const changes={};for(const key of ['transform','scale','opacity','left','top','right','display','filter'])if(node.style[key])changes[key]=node.style[key];
+        node._monsterStyleChanged(changes,clockNow());return;
       }
-      wakePhaserMonsters();
+      const previousDisplay=b.css.display, previousFilter=monsterColorFilter(b.css.filter);
+      b.css=cssCopy(getComputedStyle(node));
+      const layer=layers.get(node);if(layer)layer.css=b.css;
+      if(previousFilter!==monsterColorFilter(b.css.filter)){
+        for(const candidate of layers.values())if(candidate.asset&&candidate.chain.includes(b))candidate.dirty=true;
+        schedule();
+      }
+      if(previousDisplay==='none'&&b.css.display!=='none')invalidateGeometry();
+      for(const key of ['transform','scale','opacity','left','top','right','filter'])b.values[key]=monsterValue(key,b.css[key],b);
+      b.animations=node.getAnimations().map(animation=>monsterAnimation(animation,b));
+    };
+    const observer=new MutationObserver(records=>{
+      const commanded=new Set([...bindings.values()].filter(b=>b.commanded).map(b=>b.node));
+      const changed=new Map();
+      for(const record of records) {
+        const node=record.target.nodeType===1?record.target:record.target.parentElement;
+        if(record.type==='childList' && [...record.addedNodes,...record.removedNodes].some(n=>n.nodeType===1)){schedule();continue;}
+        if(record.type==='attributes') {
+          if(record.attributeName==='style'&&(commanded.has(node)||node===box||node.matches(monsterBars)))continue;
+          const b=bindings.get(node), signature=node.getAttribute(record.attributeName);
+          if(b && b[record.attributeName+'Signature']===signature)continue;
+          if(b)b[record.attributeName+'Signature']=signature;
+          changed.set(node,record.attributeName);
+        } else if(node) {
+          const layer=layers.get(node.closest(monsterTexts));
+          if(layer)layer.fallbackText=layer.node.textContent;
+          else {const panel=node.closest(monsterPanelSelector);if(panel&&layers.has(panel)){layers.get(panel).dirty=true;schedule();}}
+        }
+      }
+      for(const [node,attribute] of changed){
+        updateBinding(node,attribute);
+        const layer=layers.get(node);if(layer&&(attribute==='src'||layer.kind==='bar')){layer.dirty=true;schedule();}
+        if(attribute==='class')for(const candidate of layers.values())if(candidate.kind==='bar'&&node.contains(candidate.node)){candidate.dirty=true;schedule();}
+        if(attribute==='class' && node.matches('.dead-sprite'))invalidateGeometry();
+        const panel=node.closest(monsterPanelSelector);
+        if(panel&&layers.has(panel)&&!node.closest(monsterBars+','+monsterTexts)){layers.get(panel).dirty=true;schedule();}
+      }
+      for(const node of commanded)if(bindings.has(node))bindings.get(node).commanded=false;
     });
-    const destroy = () => {
-      if (destroyed) return; destroyed = true; observer.disconnect(); box.removeAttribute('data-monster-webgl');
-      for (const layer of layers.values()) disposeMonsterLayer(layer, scene); layers.clear();
-      if (--activeMonsterViews === 0) {
-        monsterCacheEpoch++;
-        for (const key of Object.keys(scene.textures.list)) if (key.startsWith('monster-')) scene.textures.remove(key);
-        monsterPanels.clear(); monsterImages.clear(); monsterResources.clear(); monsterTextTextures.clear();
+    const invalidateGeometry=(refreshBoard=false)=>{
+      if(destroyed||geometryQueued)return;geometryQueued=true;
+      // Geometry is only rebuilt for viewport/board sizing, never for a frame.
+      queueMicrotask(()=>{
+        geometryQueued=false;if(destroyed||!box.isConnected)return;
+        if(refreshBoard)calibrateBoard();
+        else {originCell=cells.get(String(entity.position))||originCell;boardScale={x:originCell.w/originCell.localW,y:originCell.h/originCell.localH};}
+        for(const node of bindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;}
+        bindings.clear();
+        for(const [node,layer] of [...layers]) {
+          layers.delete(node);const fresh=install(node,layer.kind);
+          Object.assign(layer,{rect:fresh.rect,chain:fresh.chain,css:fresh.css,barBinding:fresh.barBinding,flipX:fresh.flipX,textScaleX:fresh.textScaleX,textScaleY:fresh.textScaleY});layers.set(node,layer);
+          if(!layer.image)layer.dirty=true;
+        }
+        schedule();
+      });
+    };
+    const destroy=()=>{
+      if(destroyed)return;destroyed=true;observer.disconnect();resize.disconnect();box.removeAttribute('data-monster-webgl');delete box._monsterView;
+      for(const node of bindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;}bindings.clear();
+      for(const layer of layers.values())disposeMonsterLayer(layer,scene);layers.clear();
+      if(--activeMonsterViews===0){monsterCacheEpoch++;for(const key of Object.keys(scene.textures.list))if(key.startsWith('monster-'))scene.textures.remove(key);monsterPanels.clear();monsterImages.clear();monsterResources.clear();monsterTextTextures.clear();}
+    };
+    const fail=error=>{if(!destroyed){destroy();console.warn('[MonsterWebGL] HTML restored:',error);}};
+    const resize=new ResizeObserver(()=>invalidateGeometry(true));resize.observe(grid);
+    const barTexture=(kind)=>{
+      const key=`monster-bar-${kind}`;if(scene.textures.exists(key))return key;
+      const canvas=document.createElement('canvas');canvas.width=256;canvas.height=16;const ctx=canvas.getContext('2d');
+      if(kind==='overlay') {
+        for(const [x,y,a,b] of [[256,0,.23,.23],[0,16,.2,.3]]){const g=ctx.createLinearGradient(0,0,x,y);g.addColorStop(0,`rgba(255,255,255,${a})`);g.addColorStop(1,`rgba(0,0,0,${b})`);ctx.fillStyle=g;ctx.fillRect(0,0,256,16);}
+      } else {ctx.fillStyle='white';ctx.fillRect(0,0,256,16);}
+      scene.textures.addImage(key,canvas);return key;
+    };
+    barTexture('base');barTexture('overlay');
+    const pose=(rect,chain,frame)=>{
+      let x=rect.x+rect.w/2,y=rect.y+rect.h/2,w=rect.w,h=rect.h,angle=0,alpha=1,brightness=1,visible=true;
+      for(const binding of chain) {
+        const value=frame.get(binding), base=binding.base, m=value.transform, b=base.transform;
+        alpha*=value.opacity[0];brightness*=value.filter[0];visible&&=binding.css.display!=='none';
+        if(binding.node===box)continue; // placement comes from the logical board
+        const sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
+        const sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
+        const a=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
+        const dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
+        const dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
+        const ox=binding.origin.x,oy=binding.origin.y,px=(x-ox)*sx,py=(y-oy)*sy;
+        x=ox+px*Math.cos(a)-py*Math.sin(a)+dx;y=oy+px*Math.sin(a)+py*Math.cos(a)+dy;w*=sx;h*=sy;angle+=a;
+      }
+      return {x,y,w,h,angle,alpha,brightness,visible};
+    };
+    const update=(now,showHTML=false)=>{
+      if(destroyed)return;
+      if(suspended!==showHTML){suspended=showHTML;box.dataset.monsterWebgl=suspended?'suspended':'ready';for(const layer of layers.values())if(layer.tintHandler){if(suspended)delete layer.node._phaserMonsterTint;else layer.node._phaserMonsterTint=layer.tintHandler;renderEntityTint(layer.node);}}
+      if(suspended){for(const layer of layers.values()){layer.image?.setVisible(false);layer.overlay?.setVisible(false);layer.tint?.setVisible(false);layer.brightness?.setVisible(false);}return;}
+      const frame=new Map([...bindings.values()].map(binding=>[binding,monsterAnimatedValues(binding,now)]));
+      const cell=cells.get(String(entity.position))||originCell, ratio=cell.w/originCell.w, move=getMonsterPlacementOffset(entity);
+      const hp=Math.max(0,Math.min(entity.stats.HP.current,entity.stats.HP.max)),armor=Math.max(0,entity.stats.armor?.current||0),den=Math.max(entity.stats.HP.max,hp+armor)||1;
+      let atb=1;
+      if(entity.orderPhase==='orderDecision')atb=entity.recoveryTime/Math.max(1,entity.maxRecoveryTime)*(entity.ATBfillBeforeOrder||100)/100;
+      else if(entity.orderPhase==='orderExecution')atb=1-entity.orderExecutionTime/Math.max(1,entity.maxOrderExecutionTime);
+      else if(entity.recoveryTime>0)atb=entity.recoveryTime/Math.max(1,entity.maxRecoveryTime||entity.recoveryTime);
+      else if(entity.speedTimer>0 && !(entity.preparationTime>0||entity.executionTime>0))atb=1-entity.speedTimer/(Number(entity.stats.speed?.current)||1000);
+      const prep=Number(entity.preparationTime)||0,exec=Number(entity.executionTime)||0;
+      for(const layer of layers.values()) {
+        let rect={...layer.rect},visible=true,color=0xffffff;
+        if(layer.kind==='body'&&getEntitySpriteSource(entity)!==layer.source){layer.dirty=true;schedule();}
+        if(layer.kind==='text') {
+          const value=layer.textRole==='hp'?`HP : ${hp} / ${entity.stats.HP.max}`:layer.textRole==='armor'?`🛡️ ${armor}`:layer.textRole==='shift'?String(Math.round(Number(entity.stats.shift?.[layer.maxShift?'max':'current'])||0)):layer.textRole==='prep'?`${(prep/1000).toFixed(1)}s`:layer.textRole==='exec'?`${(exec/1000).toFixed(1)}s`:layer.fallbackText;
+          updateMonsterText(layer,scene,layer.css,value);
+          if(layer.textRole==='prep')visible=prep>0;if(layer.textRole==='exec')visible=prep<=0&&exec>0;
+          const entry=layer.textEntry,scaleX=layer.textScaleX,scaleY=layer.textScaleY;
+          const align=layer.css.textAlign,offset=align==='center'?(rect.w-entry.width*scaleX)/2:align==='right'?rect.w-entry.width*scaleX:0;
+          rect={x:rect.x+offset-entry.padding*scaleX,y:rect.y+(rect.h-entry.height*scaleY)/2-entry.padding*scaleY,w:(entry.width+entry.padding*2)*scaleX,h:(entry.height+entry.padding*2)*scaleY};
+        } else if(layer.kind==='bar') {
+          let target=layer.bar==='hp'?hp/den:layer.bar==='armor'?armor/den:layer.bar==='atb'?(layer.barBinding.fill??atb):prep>0?1-prep/Math.max(1,entity.currentAttack?.preparationTime||1):exec>0||entity.recoveryTime>0?1:0;
+          target=monsterClamp(target);
+          if(target!==layer.fillTarget){if(layer.fillTarget===-1)layer.fill=target;layer.fillFrom=layer.fill;layer.fillTarget=target;layer.fillAt=now;}
+          layer.fill=layer.fillFrom+(target-layer.fillFrom)*monsterEase(monsterClamp((now-layer.fillAt)/(layer.bar==='hp'||layer.bar==='armor'?300:100)),'ease-out');
+          if(layer.bar==='armor'){rect.x+=rect.w*(hp/den);color=0x4f70b3;visible=armor>0;}
+          else if(layer.bar==='hp'){const t=hp/Math.max(1,entity.stats.HP.max);color=entity.side==='B'?(Math.round(255-t*173)<<16):(Math.round(255-t*255)<<16)|(Math.round(t*255)<<8);}
+          else if(layer.bar==='atb')color=exec>0?0xff0000:entity.recoveryTime>0?0x0000ff:0xffd700;
+          else color=prep>0?0xa300ff:exec>0?0xf74b4b:0x4caf50;
+          rect.w*=layer.fill;visible&&=rect.w>0;
+          if(!layer.image&&layer.bar==='hp'){layer.image=scene.add.image(0,0,barTexture('base')).setOrigin(.5);layer.overlay=scene.add.image(0,0,barTexture('overlay')).setOrigin(.5);}
+          if(layer.bar==='hp')layer.image.setTint(color);
+        }
+        if(!layer.image)continue;
+        const p=pose(rect,layer.chain,frame),image=layer.image;
+        const x=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio;
+        let w=p.w*ratio,h=p.h*ratio,px=x,py=y;
+        if(layer.panel){const a=layer.panel;w*=a.w/a.width;h*=a.h/a.height;px+=(a.w-a.width-2*a.padding)/2/a.width*p.w*ratio;}
+        else if(layer.asset){w*=layer.asset.width/layer.asset.contentWidth;h*=layer.asset.height/layer.asset.contentHeight;}
+        const depth=-100+(layer.kind==='text'?5:layer.kind==='bar'?4:layer.kind==='body'?1:layer.kind==='asset'?2:3);
+        image.setPosition(px,py).setDisplaySize(w,h).setRotation(p.angle).setAlpha(p.alpha).setVisible(visible&&p.visible&&w>0&&h>0).setDepth(depth);
+        if(layer.kind==='asset'||layer.kind==='body'){
+          image.setFlipX(layer.flipX);
+          const shade=Math.round(255*Math.min(1,p.brightness));image.setTint((shade<<16)|(shade<<8)|shade);
+          const a=layer.asset,playback=getAnimatedImageState(layer.node);let elapsed=(performance.now()-(playback?.startedAt??layer.startedAt))%a.total,idx=0;
+          while(idx<a.count-1&&elapsed>=a.nativeDurations[idx])elapsed-=a.nativeDurations[idx++];image.setFrame(idx);
+          if(p.brightness>1&&!layer.brightness)layer.brightness=scene.add.image(0,0,a.name).setOrigin(.5).setBlendMode('ADD');
+          if(layer.brightness)layer.brightness.setTexture(a.name,idx).setPosition(px,py).setDisplaySize(w,h).setRotation(p.angle)
+            .setFlipX(layer.flipX).setAlpha(p.alpha*Math.min(1,p.brightness-1)).setDepth(depth+.0000001).setVisible(image.visible&&p.brightness>1);
+        }
+        if(layer.overlay)layer.overlay.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setAlpha(p.alpha).setVisible(image.visible).setDepth(depth+.000001);
+        if(layer.tint){const tone=layer.tone,rgb=tone?.color.split(',').map(Number)||[0,0,0];layer.tint.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setFlipX(layer.flipX).setDepth(depth+.000001).setVisible(image.visible&&Boolean(tone)).setAlpha(p.alpha*(tone?.opacity||0)).setTintFill((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);}
       }
     };
-    const fail = error => { if (destroyed) return; destroy(); console.warn('[MonsterWebGL] HTML restored:', error); };
-    let suspended = false;
-    const update = (visibility = new Map(), showHTML = false) => {
-      if (destroyed) return;
-      // HTML menus live in a different stacking context from the shared canvas.
-      // While a menu covers the board, let the original paint keep its layering.
-      if (suspended !== showHTML) {
-        suspended = showHTML; box.dataset.monsterWebgl = suspended ? 'suspended' : 'ready';
-        for (const layer of layers.values()) if (layer.tintHandler) {
-          if (suspended) delete layer.node._phaserMonsterTint;
-          else layer.node._phaserMonsterTint = layer.tintHandler;
-          renderEntityTint(layer.node);
-        }
-      }
-      if (suspended) {
-        for (const layer of layers.values()) { layer.image?.setVisible(false); layer.tint?.setVisible(false); }
-        return;
-      }
-      if (listDirty) refreshList();
-      const style = monsterStyle;
-      let order = 0;
-      for (const layer of layers.values()) {
-        const node = layer.node;
-        if (layer.kind === 'asset' && (getAnimatedImageState(node)?.key || node.currentSrc || node.src) !== layer.source) layer.dirty = true;
-        if (layer.kind === 'body' && getEntitySpriteSource(entity) !== layer.source) layer.dirty = true;
-        if (layer.kind === 'text') {
-          updateMonsterText(layer, scene, style(node));
-        } else if (layer.kind === 'bar') {
-          if (monsterPanelKey(node, entity) !== layer.signature) void prepare(layer);
-        } else if (layer.dirty) void prepare(layer);
-        if (!layer.image) continue;
-        const { opacity, visible } = monsterVisibility(node, visibility), flipX = layer.flipX;
-        const image = layer.image;
-        if (!visible || opacity <= 0) { image.setVisible(false); layer.tint?.setVisible(false); continue; }
-        const rect = node.getBoundingClientRect();
-        image.setVisible(rect.width > 0 && rect.height > 0).setAlpha(opacity);
-        const depth = layer.kind === 'text' ? 5 : layer.kind === 'bar' ? 4 : layer.kind === 'body' ? 1 : layer.kind === 'asset' && node.closest('.cast-animation-container') ? 0 : layer.kind === 'asset' ? 2 : 3;
-        image.setDepth(-100 + depth + order++ / 100000);
-        if (layer.kind === 'text') {
-          const entry = layer.textEntry, sx = rect.width / (node.offsetWidth || 1), sy = rect.height / (node.offsetHeight || 1);
-          const align = style(node).textAlign, offset = align === 'center' ? (rect.width - entry.width * sx) / 2 : align === 'right' ? rect.width - entry.width * sx : 0;
-          image.setPosition(rect.left + offset - entry.padding * sx, rect.top + (rect.height - entry.height * sy) / 2 - entry.padding * sy)
-            .setDisplaySize((entry.width + entry.padding * 2) * sx, (entry.height + entry.padding * 2) * sy);
-        } else if (layer.panel) {
-          const p = layer.panel, sx = rect.width / p.width, sy = rect.height / p.height;
-          image.setPosition(rect.left - p.padding * sx, rect.top - p.padding * sy).setDisplaySize(p.w * sx, p.h * sy);
-        } else {
-          const a = layer.asset, sx = rect.width / a.contentWidth, sy = rect.height / a.contentHeight;
-          image.setPosition(rect.left - a.padding * sx, rect.top - a.padding * sy).setDisplaySize(a.width * sx, a.height * sy).setFlipX(flipX);
-          const playback = getAnimatedImageState(node);
-          let elapsed = (performance.now() - (playback?.startedAt ?? layer.startedAt)) % a.total, frame = 0;
-          while (frame < a.count - 1 && elapsed >= a.nativeDurations[frame]) elapsed -= a.nativeDurations[frame++];
-          image.setFrame(frame);
-        }
-        if (layer.tint) {
-          const tone = layer.tone, rgb = tone?.color.split(',').map(Number) || [0, 0, 0];
-          layer.tint.setPosition(rect.left, rect.top).setDisplaySize(rect.width, rect.height).setFlipX(flipX)
-            .setDepth(image.depth + .000001).setVisible(image.visible && Boolean(tone)).setAlpha(opacity * (tone?.opacity || 0)).setTintFill((rgb[0] << 16) | (rgb[1] << 8) | rgb[2]);
-        }
-      }
-    };
-    refreshList();
-    await Promise.all([...layers.values()].map(prepare));
-    if (!destroyed) {
-      if (!document.getElementById('monster-webgl-style')) {
-        const css = document.createElement('style'); css.id = 'monster-webgl-style';
-        css.textContent = '[data-monster-webgl="ready"] :is(canvas,img,.hud-ingame,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer){visibility:hidden!important}'; document.head.append(css);
-      }
-      box.dataset.monsterWebgl = 'ready';
-      observer.observe(box, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'src'] });
-      update();
+    refreshList();await Promise.all([...layers.values()].map(prepare));
+    if(!destroyed){
+      if(!document.getElementById('monster-webgl-style')){const css=document.createElement('style');css.id='monster-webgl-style';css.textContent='[data-monster-webgl="ready"] :is(canvas,img,.hud-ingame,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer){visibility:hidden!important}';document.head.append(css);}
+      box.dataset.monsterWebgl='ready';box._monsterView={invalidateGeometry};
+      observer.observe(box,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['style','class','src']});update(clockNow());
     }
-    return { update, destroy, active: () => !destroyed };
-  }).catch(error => { monsterViews.delete(box); console.warn('[MonsterWebGL]', error); });
+    return {update,destroy,invalidateGeometry,active:()=>!destroyed};
+  }).catch(error=>{monsterViews.delete(box);console.warn('[MonsterWebGL]',error);});
 }
 
 window.addEventListener('combatPauseRestored', () => {

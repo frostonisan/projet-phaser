@@ -66,6 +66,25 @@ const server = createServer(async (req, res) => {
     if (poolPrototype && checksOn && file.endsWith(`${sep}rendering${sep}animations.js`)) {
       data = require('./combat-fx-pool-prototype.cjs')(data.toString());
     }
+    if (file.endsWith(`${sep}rendering${sep}animations.js`) && data.includes('else view.update(now,monsterMenusOpen);')) {
+      data = replace(data, 'else view.update(now,monsterMenusOpen);', `else {
+        globalThis.__monsterFrame = true;
+        try { if(globalThis.__loadProbe.active)globalThis.__loadProbe.monsterFrames++; view.update(now,monsterMenusOpen); }
+        finally { globalThis.__monsterFrame = false; }
+      }`);
+    }
+    if (file.endsWith(`${sep}rendering${sep}animations.js`) && data.includes('else view.update(visibility, showHTML);')) {
+      data = replace(data, 'else view.update(visibility, showHTML);', `else {
+        globalThis.__monsterFrame = true;
+        try { if(globalThis.__loadProbe.active)globalThis.__loadProbe.monsterFrames++; view.update(visibility, showHTML); }
+        finally { globalThis.__monsterFrame = false; }
+      }`);
+    }
+    if (file.endsWith(`${sep}rendering${sep}entities.js`) && data.includes('box._monsterView={invalidateGeometry}')) {
+      data = replace(data, 'box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,update,
+        inspect:()=>[...layers.values()].map(l=>({kind:l.kind,role:l.textRole,bar:l.bar,text:l.text,
+          fill:l.fillTarget,x:l.image?.x,y:l.image?.y,visible:l.image?.visible}))}`);
+    }
     const recoveryEnabled = Boolean(baselineDirectory) || checksOn;
     if (file.endsWith(`${sep}combat${sep}loop.js`)) {
       data = data.toString();
@@ -138,6 +157,17 @@ function installProbe(options) {
   const probe = window.__loadProbe = { active: false, calls: {}, workMs: 0, scheduled: 0, maxPending: 0,
     recoveries: [], effects: {}, interactions: {}, impacts: 0, impactBuckets: {}, turns: 0, errors: [],
     creates: {}, removes: 0, animations: 0, poolHits: 0, renderCalls: {} };
+  probe.monsterFrames=0; probe.monsterDOMReads={};
+  const recordRead = name => {if(globalThis.__monsterFrame&&probe.active)probe.monsterDOMReads[name]=(probe.monsterDOMReads[name]||0)+1;};
+  for(const [owner,name] of [[globalThis,'getComputedStyle'],[Element.prototype,'getBoundingClientRect'],
+    [Element.prototype,'getAnimations'],[Element.prototype,'querySelector'],[Element.prototype,'querySelectorAll'],
+    [Document.prototype,'getElementById'],[Document.prototype,'querySelector'],[Document.prototype,'querySelectorAll']]){
+    const original=owner[name];owner[name]=function(...args){recordRead(name);return original.apply(this,args);};
+  }
+  for(const [owner,name] of [[HTMLElement.prototype,'offsetWidth'],[HTMLElement.prototype,'offsetHeight'],[Node.prototype,'textContent']]){
+    const descriptor=Object.getOwnPropertyDescriptor(owner,name);
+    Object.defineProperty(owner,name,{...descriptor,get(){recordRead(name);return descriptor.get.call(this);}});
+  }
   const create = Document.prototype.createElement, remove = Element.prototype.remove, animate = Element.prototype.animate;
   Document.prototype.createElement = function (name, ...args) {
     if (probe.active) probe.creates[name] = (probe.creates[name] || 0) + 1;
@@ -195,7 +225,7 @@ async function fixture(count) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   await page.addInitScript(installProbe, { profile });
   page.on('pageerror', error => errors.push(error.stack || error.message));
-  await page.goto(`${origin}/index.html${process.env.LOAD_MONSTERS === "webgl" && checksOn ? "?monsters=webgl" : ""}`);
+  await page.goto(`${origin}/index.html${process.env.LOAD_MONSTERS === "webgl" && (checksOn || process.env.LOAD_BASELINE_MONSTERS === "webgl") ? "?monsters=webgl" : ""}`);
   await page.addStyleTag({ url: `${origin}/css/combat.css` });
   // Cost isolation only, never a proposed production visual change.
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
@@ -273,7 +303,7 @@ async function fixture(count) {
       longObserver.observe({ type: 'longtask', buffered: false });
     };
   }, { count, scenario });
-  if (process.env.LOAD_MONSTERS === 'webgl' && checksOn) {
+  if (process.env.LOAD_MONSTERS === 'webgl' && (checksOn || process.env.LOAD_BASELINE_MONSTERS === 'webgl')) {
     await page.waitForFunction(count => document.querySelectorAll('[data-monster-webgl="ready"]').length === count, count, { timeout: 90000 });
     assert.equal(await page.evaluate(async () => {
       const original = Math.random; let calls = 0;
@@ -288,6 +318,25 @@ async function fixture(count) {
     }), 0, 'Painting text and effects must not consume gameplay randomness');
   }
   await page.waitForTimeout(1000);
+  if(process.env.LOAD_MONSTERS==='webgl'&&checksOn){
+    const result=await page.evaluate(()=>{
+      const entity=E.entites[0],box=document.getElementById(`Box_Entite_${entity.id}`),view=box._monsterView;
+      if(!view?.inspect)return null;
+      const saved={hp:entity.stats.HP.current,armor:entity.stats.armor,position:entity.position};
+      const before=view.inspect().find(l=>l.kind==='body'), html=box.querySelector('.HP-counter').textContent;
+      try{
+        entity.stats.HP.current=321;entity.stats.armor={current:9000,max:9000};
+        entity.position=E.entites.find(e=>e.position!==saved.position).position;
+        view.update(Clock.clockNow()+1000);
+        const layers=view.inspect(),body=layers.find(l=>l.kind==='body');
+        return {hp:layers.find(l=>l.role==='hp').text,fill:layers.find(l=>l.bar==='hp').fill,
+          moved:Math.hypot(body.x-before.x,body.y-before.y)>10,
+          htmlUntouched:html===box.querySelector('.HP-counter').textContent};
+      }finally{entity.stats.HP.current=saved.hp;if(saved.armor===undefined)delete entity.stats.armor;else entity.stats.armor=saved.armor;entity.position=saved.position;view.update(Clock.clockNow());}
+    });
+    if(result){assert.equal(result.hp,'HP : 321 / 8000');assert.equal(result.fill,321/9321);
+      assert.ok(result.moved&&result.htmlUntouched,'Combat state drives the image while HTML remains untouched');}
+  }
   return page;
 }
 const percentile = (values, fraction) => { const v = [...values].sort((a, b) => a - b); return v[Math.min(v.length - 1, Math.floor(v.length * fraction))] || 0; };
@@ -303,7 +352,9 @@ function validateLive(entry) {
   // Keep pre-change faults in the report; the optimized build must have none.
   if (!baselineDirectory || entry.enabled) assert.deepEqual(entry.probe.recoveries, [], 'No healthy entity may be restarted under real rendering load');
   assert.deepEqual(entry.probe.errors, [], 'No real-time combat errors');
-  if (process.env.LOAD_MONSTERS === 'webgl') assert.equal(entry.webglMonsters, entry.enabled ? entry.count : 0, 'Every prototype actor remains on WebGL for the entire fight');
+  if(entry.enabled){assert.deepEqual(entry.probe.monsterDOMReads, {}, 'Monster frames never sample HTML geometry, style or text');
+    if(process.env.LOAD_MONSTERS==='webgl')assert.ok(entry.probe.monsterFrames>=entry.count,'The pure render loop is exercised for every actor');}
+  if (process.env.LOAD_MONSTERS === 'webgl') assert.equal(entry.webglMonsters, entry.enabled || process.env.LOAD_BASELINE_MONSTERS === 'webgl' ? entry.count : 0, 'Every prototype actor remains on WebGL for the entire fight');
   // Supports and controlled actors need not land a hit within the sample.
   // Require actual battle activity and applied effects, not one hit per actor.
   assert.ok(entry.probe.impacts >= entry.count / 2 && entry.probe.interactions.movement > 0,
