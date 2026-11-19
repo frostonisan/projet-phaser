@@ -238,6 +238,87 @@ export async function preloadResources(sources, { onProgress = () => {}, concurr
   return errors;
 }
 
+export const PROJECTILE_ASSETS = {
+  'jarret-fx': { file: 'projectile-jarret.png', width: 40, height: 40,
+    impact: { file: 'impact-jarret.gif', width: 120, height: 120, offsetY: -15 } },
+  'profanation-fx': { file: 'projectile-profanation.gif', width: 90, height: 90,
+    impact: { file: 'impact-profanation.gif', width: 230, height: 230, offsetY: -45 } },
+  'deadshot-fx': { file: 'projectile-deadshot.png', width: 54, height: 11 },
+};
+
+// Decode original GIF frames with the browser's image decoder, then composite
+// disposal/transparency into one small atlas. A canvas texture cannot play a GIF.
+// Only the few projectile assets use this cache; no additional media files.
+const spriteAtlases = new Map();
+export function loadSpriteAtlas(source, width, height) {
+  const key = `${resourceKey(source)}:${width}:${height}`;
+  if (spriteAtlases.has(key)) return spriteAtlases.get(key);
+  const promise = (async () => {
+    const resource = await loadResource(source);
+    const bytes = new Uint8Array(await resource.blob.arrayBuffer());
+    const canvas = document.createElement('canvas');
+    if (String.fromCharCode(...bytes.slice(0, 3)) !== 'GIF') {
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(resource.image, 0, 0, width, height);
+      return { canvas, width, height, count: 1, durations: [1000], total: 1000, columns: 1 };
+    }
+    const word = i => bytes[i] | bytes[i + 1] << 8;
+    const headerEnd = 13 + ((bytes[10] & 128) ? 3 * (2 << (bytes[10] & 7)) : 0);
+    const frames = [];
+    let offset = headerEnd, control = null;
+    const skipBlocks = () => {
+      let length;
+      do {
+        if (offset >= bytes.length) throw new Error('Truncated GIF sub-block');
+        length = bytes[offset++]; offset += length;
+      } while (length);
+    };
+    while (offset < bytes.length) {
+      const marker = bytes[offset++];
+      if (marker === 0x3b) break;
+      if (marker === 0x21) {
+        const label = bytes[offset++], start = offset - 2;
+        skipBlocks();
+        if (label === 0xf9) control = bytes.slice(start, offset);
+      } else if (marker === 0x2c) {
+        const start = offset - 1, left = word(offset), top = word(offset + 2);
+        const w = word(offset + 4), h = word(offset + 6), packed = bytes[offset + 8];
+        offset += 9 + ((packed & 128) ? 3 * (2 << (packed & 7)) : 0);
+        offset++; skipBlocks(); // LZW minimum code size, then compressed data.
+        const descriptor = bytes.slice(start, offset);
+        descriptor.fill(0, 1, 5); // Decode this rectangle at its own origin.
+        const header = bytes.slice(0, headerEnd);
+        header[6] = w & 255; header[7] = w >> 8;
+        header[8] = h & 255; header[9] = h >> 8;
+        frames.push({ left, top, w, h, disposal: control ? (control[3] >> 2) & 7 : 0,
+          delay: Math.max(20, control ? (control[4] | control[5] << 8) * 10 : 100),
+          blob: new Blob([header, ...(control ? [control] : []), descriptor, new Uint8Array([0x3b])], { type: 'image/gif' }) });
+        control = null;
+      } else throw new Error('Invalid GIF block');
+    }
+    if (!frames.length) throw new Error('Empty GIF');
+    const columns = Math.max(1, Math.min(frames.length, Math.floor(2048 / width)));
+    canvas.width = columns * width; canvas.height = Math.ceil(frames.length / columns) * height;
+    const context = canvas.getContext('2d'), stage = document.createElement('canvas');
+    stage.width = word(6); stage.height = word(8);
+    const composite = stage.getContext('2d');
+    for (let i = 0; i < frames.length; i++) {
+      const frame = frames[i];
+      const previous = frame.disposal === 3 ? composite.getImageData(0, 0, stage.width, stage.height) : null;
+      const bitmap = await createImageBitmap(frame.blob);
+      composite.drawImage(bitmap, frame.left, frame.top); bitmap.close();
+      context.drawImage(stage, (i % columns) * width, Math.floor(i / columns) * height, width, height);
+      if (frame.disposal === 2) composite.clearRect(frame.left, frame.top, frame.w, frame.h);
+      else if (previous) composite.putImageData(previous, 0, 0);
+    }
+    const durations = frames.map(frame => frame.delay);
+    return { canvas, width, height, count: frames.length, columns, durations,
+      total: durations.reduce((sum, duration) => sum + duration, 0) };
+  })().catch(error => { spriteAtlases.delete(key); throw error; });
+  spriteAtlases.set(key, promise);
+  return promise;
+}
+
 // Independent GIF decoders replay cached bytes without new HTTP requests.
 export function playCachedGif(image, source, { background = false } = {}) {
   const assignment = {};
@@ -318,6 +399,10 @@ export function collectEntityResources(entity, sources = new Set()) {
 
 export function collectLevelResources({ entities = [], biome, stage = {}, inventory = [] } = {}) {
   const sources = new Set(commonEffects.map(file => resourceKey(`./media/assets/effects/${file}`)));
+  for (const asset of Object.values(PROJECTILE_ASSETS)) {
+    sources.add(resourceKey(`./media/assets/projectiles/${asset.file}`));
+    if (asset.impact) sources.add(resourceKey(`./media/assets/projectiles/${asset.impact.file}`));
+  }
   for (const visual of Object.values(EFFECT_VISUALS)) sources.add(resourceKey(visual.src));
   collectValues(PERMANENT_CRYSTAL_LEVELS, sources);
   sources.add(resourceKey('./media/assets/ui/hexastone.png'));

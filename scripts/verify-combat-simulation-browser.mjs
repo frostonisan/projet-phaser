@@ -77,23 +77,27 @@ try {
     window.before = JSON.stringify(E.entites, (k, v) => typeof v === 'function' || v instanceof Node ? undefined : v);
     window.beforeStorage = JSON.stringify(Object.entries(localStorage));
   });
-  const phaserPilot = await page.evaluate(async () => {
-    const pilot = structuredClone(snapshot);
-    let count = 0;
-    for (const entity of pilot.entities) for (const key of ['attacks', 'attackDetails', 'nativeAttacks']) {
-      if (!Array.isArray(entity[key])) continue;
-      for (const attack of entity[key]) if (attack && typeof attack === 'object') {
-        attack.functionName = 'shot-p-r'; attack.attackRange = ['range']; count++;
+  for (const nature of ['physicalDamage', 'magicalDamage', 'hybridalDamage', 'piercingDamage', 'triple']) {
+    const result = await page.evaluate(async nature => {
+      const board = structuredClone(snapshot);
+      let count = 0;
+      for (const entity of board.entities) for (const key of ['attacks', 'attackDetails', 'nativeAttacks']) {
+        if (!Array.isArray(entity[key])) continue;
+        for (const attack of entity[key]) if (attack && typeof attack === 'object') {
+          attack.attackRange = ['range'];
+          attack.attacknature = nature === 'triple' ? ['hybridalDamage','piercingDamage'] : [nature];
+          count++;
+        }
       }
-    }
-    if (!count) throw Error('Pilot fixture must replace real attack definitions');
-    const options = {seed:92,durationMs:5000,trace:true};
-    const first = await Sim.simulateTrial(pilot, options), second = await Sim.simulateTrial(pilot, options);
-    const metric = trial => ({end:trial.end,winner:trial.winner,entities:trial.entities,journal:trial.journal});
-    return {first:metric(first),second:metric(second)};
-  });
-  assert.deepEqual(phaserPilot.second, phaserPilot.first, 'The Phaser-selected attack remains deterministic in the simulator');
-  assert.ok(phaserPilot.first.journal.some(entry => entry.type === 'damage_resolution'), 'The pilot simulation must resolve real attacks: ' + JSON.stringify(phaserPilot.first.journal.map(entry=>entry.type)));
+      if (!count) throw Error('Projectile fixture must replace real attack definitions');
+      const options = {seed:92,durationMs:5000,trace:true};
+      const first = await Sim.simulateTrial(board, options), second = await Sim.simulateTrial(board, options);
+      const metric = trial => ({end:trial.end,winner:trial.winner,entities:trial.entities,journal:trial.journal});
+      return {first:metric(first),second:metric(second)};
+    }, nature);
+    assert.deepEqual(result.second, result.first, nature + ' remains deterministic in the simulator');
+    assert.ok(result.first.journal.some(entry => entry.type === 'damage_resolution'), nature + ' simulation resolves real attacks');
+  }
   assert.deepEqual(phaserRequests, [], 'Simulation never loads the Phaser renderer');
   const restoredFromData = await page.evaluate(async () => {
     const dirty = structuredClone(snapshot), doc = new DOMParser().parseFromString(dirty.boardHtml, 'text/html');

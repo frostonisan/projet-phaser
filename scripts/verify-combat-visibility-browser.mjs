@@ -64,6 +64,8 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const boardController = await import('/js/board/controller.js');
+    boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
     window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
     window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
@@ -99,13 +101,13 @@ const ready = page => page.waitForFunction(() => Clock.isCombatPaused() && !P.is
   && sessionStorage.getItem('DarkPitPausedCombat:available') === '1');
 const snapshot = page => page.evaluate(() => ({now:Clock.clockNow(),entities:E.entites.map(e=>({hp:e.stats.HP.current,
   turn:e.turnCount,phase:e._combatAction,prep:e.preparationTime,speed:e.speedTimer})),
-  projectiles:[...document.querySelectorAll('.projectile-parent')].map(e=>e.style.transform)}));
+  projectiles:E.entites.flatMap(e => (e.projectiles || []).filter(p => p.status === 'in-flight').map(p => p.visual))}));
 try {
   const page=await fixture({A:{range:'range'},B:{range:'range'}});
   await visibilityFixture(page);
   const resumeButton=page.getByRole('button',{name:'Reprendre la partie',exact:true});
   await page.evaluate(()=>G.startGame());
-  await page.waitForSelector('.projectile-parent');
+  await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
   await page.evaluate(()=>setTabHidden(true));
   assert.equal(await page.evaluate(()=>Clock.isCombatPaused()),true,'hide freezes synchronously');
   await ready(page);const before=await snapshot(page);

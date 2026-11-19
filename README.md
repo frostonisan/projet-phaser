@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.90.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.91.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -53,7 +53,7 @@ Les anciens historiques restent dans `frostonisan/DarkPit` et dans le dossier
 local d'origine. Ce nouveau depot commence par un instantane independant.
 
 Les règles de combat, leur exécution et leur rendu sont progressivement séparés.
-Un premier projectile Phaser est intégré depuis la version 0.90.0-dev.
+Tous les projectiles utilisent Phaser depuis la version 0.91.0-dev.
 
 ## Architecture
 
@@ -124,19 +124,23 @@ calculées dans `board/placementRules.js` ; `board/controller.js` applique ensui
 le placement et actualise les vues. Le rendu d’un projectile retrouve sa case
 par identifiant, sans choisir lui-même son occupant.
 
-## Premier projectile Phaser — v0.90.0-dev
+## Projectiles Phaser — v0.91.0-dev
 
-L’attaque **Tir p r** (`shot-p-r`), utilisée notamment par **Porc physic range**
-(serial 8), affiche maintenant un projectile rouge lumineux et sa traînée dans
-Phaser. Placer ce monstre face à un ennemi en mode admin puis lancer le combat
-permet de voir le pilote. Les variantes devenues magiques ou dotées d’un effet
-visuel spécialisé continuent d’utiliser leur rendu existant.
+Tous les tirs à distance partagent un canvas Phaser transparent : physiques,
+magiques, hybrides, triples, soins, résurrection, poison, brûlure, Jarret,
+Profanation et Dead-shot. Leurs médias existants et les images des GIF sont réutilisés.
 
-Le code reste dans `rendering/attackTransport.js`. La dépendance Phaser 3.90.0 et
-sa licence MIT sont dans `docs/vendor/`, servies avec le jeu, sans CDN à l’exécution.
-Le moteur se prépare au début du tir et sa couche transparente laisse passer les
-clics. Le simulateur exécute la même attaque sans charger Phaser.
+`rendering/attackTransport.js` relie le combat à l’affichage ; la scène et les
+animations sont regroupées dans `rendering/animations.js`. `data/loaderList.js`
+précharge les médias et prépare leurs textures partagées. Aucun nouveau module de jeu.
+Les anciens styles propres aux projectiles HTML ont été retirés de `css/combat.css`.
 
-Les dégâts et l’échéance d’impact restent sous la responsabilité du combat.
-Ce premier pilote couvre le rendu et le trajet ; il n’ajoute pas de collisions
-physiques aux règles de placement ou de dégâts.
+Le combat conserve les dégâts, le guidage logique, les cases visées et l’échéance
+d’impact. Phaser dessine le trajet, la dispersion magique, les restes physiques
+et les effets à l’arrivée. Un chargement lent du rendu ne retarde pas les dégâts.
+La pause, F5 et le redimensionnement reprennent les données visuelles sauvegardées.
+
+Le simulateur utilise les mêmes règles sans charger Phaser. La dépendance locale
+reste Phaser 3.90.0 avec sa licence MIT dans `docs/vendor/`, sans CDN à l’exécution.
+Cette étape n’introduit pas de collisions physiques ni de changement des formules
+et ne revendique pas de gain de FPS.

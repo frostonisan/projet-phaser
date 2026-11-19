@@ -5676,34 +5676,6 @@ function eventEntityAttackDomElement(entity) {
   return getBattleEntityElement(entity);
 }
 
-function applyEventProjectileVisualMetadata(attacker, token, attack) {
-  if (typeof document === 'undefined') return;
-
-  const projectile = Array.isArray(attacker?.projectiles)
-    ? attacker.projectiles.find((candidate) => candidate?.eventEntityAttackToken === token)
-    : null;
-  if (!projectile?.id) return;
-
-  const parent = document.getElementById(projectile.id);
-  if (!parent) return;
-
-  const child = parent.querySelector('.projectile');
-  const classes = eventAttackProjectileVisualClasses(attack);
-
-  parent.classList.add('event-entity-attack-projectile');
-  child?.classList.add('event-entity-attack-projectile');
-
-  for (const className of classes) {
-    parent.classList.add(className);
-    child?.classList.add(className);
-  }
-
-  if (attack?.attackAsset) {
-    parent.dataset.attackAsset = String(attack.attackAsset);
-    if (child) child.dataset.attackAsset = String(attack.attackAsset);
-  }
-}
-
 async function runEventRangeAttackVisual({
   attacker,
   target,
@@ -5749,11 +5721,13 @@ async function runEventRangeAttackVisual({
         attackId: attack?.attackId ?? null,
         damage: 0,
         status: 'in-flight',
-        cosmeticOnly: true
+        cosmeticOnly: true,
+        executionTime: duration,
+        attacknature: attack?.attacknature,
+        effectProjectileClasses: eventAttackProjectileVisualClasses(attack),
+        attackAsset: attack?.attackAsset,
       }
     );
-
-    applyEventProjectileVisualMetadata(attacker, token, attack);
   });
 }
 

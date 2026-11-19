@@ -68,6 +68,7 @@ try {
     };
     const actor = make('A', 0), enemy = make('B', 1), ally = make('A', 2), corpse = make('A', 3);
     corpse.isDEAD = true; corpse.stats.HP.current = 0;
+    (await import('/js/board/controller.js')).rebuildBoardOccupancy(board);
     setEntityAttackDefinitions(actor, ['quickAttack', 'soin', 'resurrection'], attackDetails);
     let attacks = readAttackDefinitionsForEntity(actor, attackDetails);
     selection.setAttackPriority(actor, attacks, 'soin', 1);
@@ -188,7 +189,7 @@ try {
     const { entiteTurn, selectAttackDecision, runAttackCooldownWait } = await import("/js/combat/loop.js");
     const { attackDetails } = await import('/js/data/attackList.js');
     const { setEntityAttackDefinitions, readAttackDefinitionsForEntity } = await import("/js/combat/attackResolution.js");
-    const { getHexes } = await import("/js/board/controller.js");
+    const { rebuildBoardOccupancy } = await import("/js/board/controller.js");
     const selection = await import("/js/combat/attackResolution.js");
     const { setGameOver, setOrderSide } = await import("/js/app/state.js");
     const reports = [];
@@ -232,7 +233,7 @@ try {
     await Promise.all([first, duplicate]);
     await until(() => completions.length === 2);
     check(completions.join(',') === 'quickAttack,soin', 'Actual consecutive turns switch from offense to heal without waiting for first cooldown');
-    check(document.querySelectorAll('.projectile-parent').length >= 2, 'Two different ranged attacks coexist in flight');
+    check(actor.projectiles.filter(p => p.status === 'in-flight' && p.visual?.renderer === 'phaser').length >= 2, 'Two different ranged attacks coexist in flight');
     await sleep(1400);
     check(enemy.stats.HP.current < 3000 && ally.stats.HP.current > 10, 'Concurrent flights retain their separate offensive and healing effects and targets');
     document.removeEventListener('entityTurnCompleted', completed);
@@ -335,16 +336,15 @@ try {
       'Search recovery finishes with an empty ATB');
     actor.battleStopped = false;
 
-    const board = getHexes();
-    const originalHexes = board.hexesSideA.slice();
-    board.hexesSideA.splice(0, board.hexesSideA.length, ...host.querySelectorAll('.hex'));
+    const board = host.querySelector('.board-fixture');
+    board.id = 'hexGrid'; rebuildBoardOccupancy(board);
     actor.type = 'sbire';
     setEntityAttackDefinitions(actor, ['lancedejarret', 'quickAttack'], attackDetails);
     attacks = readAttackDefinitionsForEntity(actor, attackDetails);
     selection.setAttackPriority(actor, attacks, 'lancedejarret', 1);
     let decision = await selectAttackDecision(actor);
     check(decision.key === 'lancedejarret' && decision.target.classList.contains('hex'), 'Hex invocation participates in the same multi-attack decision');
-    board.hexesSideA.splice(0, board.hexesSideA.length, ...originalHexes);
+    board.removeAttribute('id');
     actor.type = 'sbire';
 
     setEntityAttackDefinitions(actor, ['quickAttack', 'soin'], attackDetails);

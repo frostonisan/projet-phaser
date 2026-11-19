@@ -48,11 +48,14 @@ try {
     const { entiteTurn, runTargetSearchWindow } = await import("/js/combat/loop.js");
     const { combatNow } = await import("/js/combat/timeline.js");
     const { rebuildBoardOccupancy, refreshHexOccupancy, invalidateFootprintGeometry } = await import("/js/board/controller.js");
+    const { captureCombatState } = await import('/js/combat/clock.js');
+    const bursts = id => captureCombatState()['projectile-effects'].filter(effect => effect.projectileId === id && effect.visual.kind === 'burst');
+    const visualOf = id => attacker.projectiles.find(p => p.id === id)?.visual;
     const reports = [];
     const check = (condition, message) => { if (!condition) throw Error(message); reports.push(message); if (reports.length % 10 === 0) console.log('FLIGHT ' + reports.length + ': ' + message); };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     const waitForVisual = async predicate => {
-      for (let i = 0; i < 100 && !predicate(); i++) await sleep(5);
+      for (let i = 0; i < 1200 && !predicate(); i++) await sleep(5);
     };
     const host = document.createElement('div');
     host.id = 'combat-fixture';
@@ -147,10 +150,46 @@ try {
       target.stats.HP.current = initialHp;
       const finalPilot = launchPilot(300);
       await finalPilot.done;
+      await sleep(100);
       check(document.querySelectorAll('#phaser-projectiles canvas').length === 1 && document.querySelector('#phaser-projectiles').hidden,
         'The next shot reuses one canvas and the idle renderer becomes hidden');
       target.stats.HP.current = initialHp;
     } finally { Math.random = previousPilotRandom; }
+    // Original animated assets are composited once and share one atlas per file.
+    const { loadSpriteAtlas } = await import('/js/data/loaderList.js');
+    for (const [file, width, height, count] of [
+      ['projectile-profanation.gif', 90, 90, 16], ['impact-jarret.gif', 120, 120, 30],
+      ['impact-profanation.gif', 230, 230, 34], ['projectile-jarret.png', 40, 40, 1],
+      ['projectile-deadshot.png', 54, 11, 1],
+    ]) {
+      const source = '/media/assets/projectiles/' + file;
+      const atlas = await loadSpriteAtlas(source, width, height);
+      check(atlas.count === count && atlas === await loadSpriteAtlas(source, width, height), file + ' keeps all original frames in a shared atlas');
+      const ctx = atlas.canvas.getContext('2d');
+      const first = ctx.getImageData(0, 0, width, height).data;
+      check(first.some((value, i) => i % 4 === 3 && value > 0), file + ' has visible decoded pixels');
+      if (count > 1) {
+        const second = ctx.getImageData(width, 0, width, height).data;
+        check(first.some((value, i) => value !== second[i]), file + ' retains animation, transparency and changing frames');
+      }
+    }
+    for (const [effect, nature, color] of [
+      ['poison-fx', 'physicalDamage', 0x026800], ['brulure-fx', 'magicalDamage', 0x740000],
+      ['heal-fx', 'magicalDamage', 0xcdfdff], ['rez-fx', 'magicalDamage', 0xccfff3],
+      ['jarret-fx', 'physicalDamage'], ['profanation-fx', 'magicalDamage'], ['deadshot-fx', 'physicalDamage'],
+    ]) {
+      let calls = 0;
+      const id = 'special-' + effect;
+      const done = animationProjectile(attacker, target, () => { calls++; return 'hit'; }, {
+        id, executionTime: 500, attacknature: [nature], effectProjectileClasses: [effect],
+      });
+      await sleep(200);
+      check(visualOf(id)?.renderer === 'phaser' && !document.getElementById(id), effect + ' uses only the shared Phaser canvas');
+      if (color) check(visualOf(id).profile.color === color, effect + ' retains its distinct color');
+      await window.captureCombatTest('phaser-' + effect);
+      await done; check(calls === 1, effect + ' completes exactly once');
+    }
+    await sleep(100);
     const beforeAvoidance = getEntityCombatDetails(target).physicalProjectilesAvoided;
     const avoided = createAttackFlight(attacker, target, physical, { physical: 40 });
     move(target, hexes[4]);
@@ -264,19 +303,19 @@ try {
     await sleep(80);
     const pureDispelStartedAt = performance.now();
     attacker.isDEAD = true;
-    await waitForVisual(() => document.querySelector(`.magic-projectile-dispersion[data-projectile-id="${CSS.escape(f.id)}"]`));
-    check(document.querySelectorAll(`.magic-projectile-dispersion[data-projectile-id="${CSS.escape(f.id)}"] .magic-projectile-dispel-particle`).length === 7,
+    await waitForVisual(() => bursts(f.id).length);
+    check(bursts(f.id)[0]?.visual.particleCount === 7,
       'Magical projectile disperses into forward particles when its caster dies');
     check(await result === 'dispelled' && hitCount === 0
       && performance.now() - pureDispelStartedAt < 250
-      && Boolean(document.querySelector(`.magic-projectile-dispersion[data-projectile-id="${CSS.escape(f.id)}"]`)),
+      && Boolean(bursts(f.id).length),
     'Magical shot resolves immediately while its detached dispersion continues');
     attacker.isDEAD = false;
     f = createAttackFlight(attacker, target, magical, { magical: 40 });
     result = launch(f, () => {
-      const el = document.getElementById(f.id);
+      const visual = visualOf(f.id);
       const rect = document.getElementById(`sbire_${target.id}`).getBoundingClientRect();
-      const transform = new DOMMatrix(getComputedStyle(el).transform);
+      const transform = { m41: visual.x * innerWidth };
       check(Math.abs(transform.m41 - rect.left - rect.width / 2) < 6, 'Magical homing reaches moved target');
       return 'hit';
     });
@@ -287,13 +326,11 @@ try {
     result = launch(f, () => 'hit');
     await sleep(80);
     attacker.isDEAD = true;
-    await waitForVisual(() => document.getElementById(f.id)?.classList.contains('mixed-piercing-remnant'));
-    const spectralProjectile = document.getElementById(f.id);
-    check(spectralProjectile?.classList.contains('mixed-piercing-remnant')
-      && spectralProjectile.classList.contains('piercingDamage')
-      && !spectralProjectile.classList.contains('physicalDamage'),
-    'Spectrale visually becomes a piercing remnant, never a physical one');
-    check(getComputedStyle(spectralProjectile.querySelector('.projectile')).backgroundColor === 'rgb(185, 154, 0)',
+    await waitForVisual(() => visualOf(f.id)?.remnantNature === 'piercing');
+    const spectralProjectile = visualOf(f.id);
+    check(spectralProjectile?.remnantNature === 'piercing',
+      'Spectrale visually becomes a piercing remnant, never a physical one');
+    check(spectralProjectile.profile.color === 0xb99a00,
       'Spectrale piercing remnant visibly turns yellow');
     await result;
     attacker.isDEAD = false;
@@ -354,12 +391,12 @@ try {
       'Living caster keeps hybrid projectile guided after target movement');
     attacker.isDEAD = true;
     await sleep(40);
-    const hybridProjectile = document.getElementById(f.id);
+    const hybridProjectile = visualOf(f.id);
     check(f.guidanceLost && f.lockedHex === hexes[4].dataset.position
-      && hybridProjectile?.classList.contains('hybrid-physical-remnant')
-      && document.querySelectorAll(`.magic-projectile-dispersion[data-projectile-id="${CSS.escape(f.id)}"] .magic-projectile-dispel-particle`).length === 7,
+      && hybridProjectile?.remnantNature === 'physical'
+      && bursts(f.id)[0]?.visual.particleCount === 7,
     'Caster death disperses hybrid magic and turns the moving core into a physical remnant');
-    check(getComputedStyle(hybridProjectile.querySelector('.projectile')).backgroundColor === 'rgb(176, 0, 0)',
+    check(hybridProjectile.profile.color === 0xb00000,
       'Hybrid physical remnant visibly turns red');
     move(target, hexes[3]);
     move(replacement, hexes[4]);
@@ -580,7 +617,7 @@ try {
     const before = performance.now();
     await executeAttack(attacker, target, attack(['physicalDamage'], { executionTime: 900 }));
     const elapsed = performance.now() - before;
-    check(elapsed < 600 && document.querySelector('.projectile-parent'), 'Recovery completes while physical projectile remains airborne');
+    check(elapsed < 600 && document.querySelector('#phaser-projectiles:not([hidden])'), 'Recovery completes while physical projectile remains airborne');
     await sleep(1100);
 
     const interruptedPreparation = executeAttack(attacker, target,
@@ -606,7 +643,7 @@ try {
     attacker.isDEAD = true;
     await sleep(80);
     const interruptedClone = document.querySelector(`[id^="meleeClone_${attacker.id}_"].melee-clone-death`);
-    check(!!interruptedClone, 'Live melee controller freezes clone on attacker death');
+    check(!!interruptedClone, 'Live melee controller freezes clone on attacker death: ' + JSON.stringify({phase:attacker.currentPhase,action:attacker._combatAction?.stage,clones:[...document.querySelectorAll('canvas[id^=meleeClone_]')].map(c=>({id:c.id,classes:c.className}))}));
     await window.captureCombatTest('melee-death');
     const frozenRect = interruptedClone.getBoundingClientRect();
     await sleep(180);
@@ -624,7 +661,7 @@ try {
     attacker.isDEAD = true; replacement.isDEAD = true;
     const hpBeforeEnd = target.stats.HP.current;
     check(checkGameOver([attacker, target]) === true, 'Last dead ally ends combat immediately despite a released projectile');
-    check(!document.querySelector('.projectile-parent'), 'Terminal combat outcome removes projectiles immediately');
+    check(!document.querySelector('#phaser-projectiles:not([hidden])'), 'Terminal combat outcome removes projectiles immediately');
     check(await resolveAttackImpact(pending) === 'miss' && target.stats.HP.current === hpBeforeEnd,
       'Late impact cannot damage a target after combat resolution');
     check(await pendingImpact === false, 'Defeat cancels the scheduled gameplay impact');
@@ -641,7 +678,7 @@ try {
     let resolutionCount = 0;
     const countResolution = () => { resolutionCount++; };
     window.addEventListener('battleResolved', countResolution);
-    check(checkGameOver([attacker, target]) === true && !document.querySelector('.projectile-parent'),
+    check(checkGameOver([attacker, target]) === true && !document.querySelector('#phaser-projectiles:not([hidden])'),
       'Last dead enemy triggers immediate victory and removes its outstanding projectiles');
     checkGameOver([attacker, target]);
     check(resolutionCount === 1, 'Repeated terminal checks resolve the battle only once');

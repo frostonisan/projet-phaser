@@ -1,9 +1,9 @@
 import { applyMovementDestabilisation, wakeFromMovement } from "../combat/effects.js";
 import {
   setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
-  clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow,
+  clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow, isCombatPaused,
 } from "../combat/clock.js";
-import { playCachedGif, cachedResourceUrl } from "../data/loaderList.js";
+import { playCachedGif, cachedResourceUrl, loadSpriteAtlas, PROJECTILE_ASSETS } from "../data/loaderList.js";
 import { QuitCurrentLevel } from "../app/stages.js";
 import { getSafe, getBattleEntityDomPrefix, getBattleEntityElement } from "../entities/rules.js";
 import { getAttackResolutionFlags } from "../combat/attackResolution.js";
@@ -191,7 +191,6 @@ const meleeOriginalVisibilityLocks = new Map();
 const meleeOriginalRecoveryAnimations = new Map();
 const meleePostRecoveryOpacityLocks = new WeakMap();
 let meleeAnimationSequence = 0;
-let projectileCleanupToken = 0;
 const meleeTrailPool = [];
 const MELEE_ORIGINAL_RECOVERY_DURATION = 750;
 
@@ -2239,507 +2238,345 @@ function unregisterProjectileFollower(key, follower) {
     projectileTargetFollowers.delete(key);
 }
 
+// One shared Phaser scene projects combat time; it never resolves an attack.
+const phaserFlights = new Map(), phaserEffects = new Map();
+let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
+const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
+function viewCenter(element) {
+  if (!element?.isConnected) return null;
+  const rect = element.getBoundingClientRect(), { width, height } = viewport();
+  return { x: (rect.left + rect.width / 2) / width, y: (rect.top + rect.height / 2) / height };
+}
+function projectileProfile(attacker, data) {
+  const classes = [data.effectProjectile, data.effectProjectileClass, ...(data.effectProjectileClasses || [])].flat().filter(Boolean);
+  const natures = data.attacknature ?? data.natures ?? attacker.currentAttack?.attacknature ?? [];
+  const flags = getAttackResolutionFlags({ attacknature: natures });
+  const lord = getBattleEntityDomPrefix(attacker) === 'lord';
+  let color = lord ? 0x080010 : 0xff3028, glow = lord ? 0x8b00ff : 0xff3028;
+  if (flags.hasMagical) color = glow = 0x8f5dff;
+  if (natures.includes('hybridalDamage')) color = glow = 0xd600ae;
+  if (natures.includes('piercingDamage')) color = glow = 0xffda24;
+  for (const [effect, core, aura] of [
+    ['poison-fx', 0x026800, 0x76ff04], ['brulure-fx', 0x740000, 0xff0000],
+    ['heal-fx', 0xcdfdff, 0x00f6ff], ['rez-fx', 0xccfff3, 0xccfff3],
+  ]) if (classes.includes(effect)) { color = core; glow = aura; }
+  const effect = Object.keys(PROJECTILE_ASSETS).find(key => classes.includes(key));
+  if (effect === 'profanation-fx') glow = 0xff0000;
+  if (effect === 'jarret-fx') glow = 0xffd800;
+  return { color, glow, radius: lord ? 6.5 : 5, effect: effect || null,
+    aura: data.aura || null, mysticism: Boolean(data.isLaunchedUnderMysticism) };
+}
+function hideIdlePhaser() {
+  if (!phaserLayer?.game) return;
+  const visible = phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
+  phaserLayer.host.hidden = !visible;
+  if (!visible) phaserLayer.game.loop.sleep();
+}
+function destroyProjectileDisplay(entry) {
+  entry.graphic?.destroy(); entry.sprite?.destroy(); entry.impactSprite?.destroy();
+}
+function removePhaserFlight(entry, status = 'removed') {
+  if (phaserFlights.get(entry.record.id) !== entry) return;
+  phaserFlights.delete(entry.record.id); clearTimeout(entry.timer);
+  destroyProjectileDisplay(entry);
+  entry.record.status = status; entry.record.impactTime = clockNow();
+  cleanupOldProjectiles(entry.attacker);
+  entry.resolve?.(status); hideIdlePhaser();
+}
+function removePhaserEffect(entry) {
+  phaserEffects.delete(entry.id); clearTimeout(entry.timer); destroyProjectileDisplay(entry); hideIdlePhaser();
+}
+function clearPhaserProjectiles() {
+  for (const entry of [...phaserFlights.values()]) removePhaserFlight(entry);
+  for (const entry of [...phaserEffects.values()]) removePhaserEffect(entry);
+}
+for (const event of ['projectileVisualsCleared', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearPhaserProjectiles);
+for (const event of ['combatResumed', 'resize']) window.addEventListener(event, () => {
+  if (phaserFlights.size || phaserEffects.size) phaserLayer?.game?.loop.wake();
+});
+function wakeProjectileRenderer() {
+  void ensurePhaserLayer().then(layer => {
+    hideIdlePhaser();
+    if (!layer.host.hidden) layer.game.loop.wake();
+  }).catch(error => console.warn('[PhaserProjectile]', error));
+}
+export function prepareProjectileRenderer(effectClasses = []) {
+  if (globalThis.__combatSimulation) return;
+  void ensurePhaserLayer().then(layer => {
+    for (const effect of effectClasses) {
+      const asset = PROJECTILE_ASSETS[effect];
+      requestProjectileTexture(layer.scene, asset);
+      requestProjectileTexture(layer.scene, asset?.impact);
+    }
+  }).catch(error => console.warn('[PhaserProjectile]', error));
+}
+function addPhaserEffect(visual, profile, projectileId) {
+  const entry = { id: `projectile-effect-${++projectileEffectSequence}`, visual, profile, projectileId };
+  phaserEffects.set(entry.id, entry);
+  entry.timer = setTimeout(() => removePhaserEffect(entry), Math.max(0, visual.until - clockNow()));
+  wakeProjectileRenderer();
+  return entry;
+}
+function disperseProjectile(entry) {
+  const visual = entry.record.visual;
+  addPhaserEffect({ kind: 'burst', x: visual.x, y: visual.y, angle: visual.angle,
+    startTime: clockNow(), until: clockNow() + 720, particleCount: 7 },
+    { ...visual.profile, glow: visual.profile.glow || 0x8f5dff }, entry.record.id);
+}
+function projectileTarget(entry) {
+  const flight = entry.flight;
+  flight?.sample();
+  if (flight?.mode === 'physical') return flight.cellView(flight.aimedHex);
+  if (flight?.mode === 'mixed' && flight.guidanceLost) return flight.cellView(flight.lockedHex);
+  return entry.target?.nodeType === 1 ? entry.target : getBattleEntityElement(entry.target);
+}
+function sampleProjectile(entry, timestamp = clockNow(), arriving = false) {
+  const visual = entry.record.visual;
+  if (visual.phase !== 'flight') return false;
+  const target = viewCenter(projectileTarget(entry));
+  if (entry.flight?.expired()) { removePhaserFlight(entry); return false; }
+  if (entry.flight?.consumeMagicalLoss()) {
+    disperseProjectile(entry);
+    visual.remnantNature = entry.flight.remnantNature;
+    visual.profile.color = visual.remnantNature === 'piercing' ? 0xb99a00 : 0xb00000;
+    visual.profile.glow = visual.remnantNature === 'piercing' ? 0xffda24 : 0xf00000;
+  }
+  if (entry.flight?.cancelled()) {
+    if (entry.flight.mode === 'magical' && entry.flight.casterLost) disperseProjectile(entry);
+    visual.phase = 'hidden'; destroyProjectileDisplay(entry);
+    entry.resolve?.('dispelled');
+    // Keep the data until the combat scheduler settles, including across F5.
+    if (!entry.impactPromise) removePhaserFlight(entry, 'dispelled');
+    hideIdlePhaser(); return false;
+  }
+  if (!target) return false;
+  const { width, height } = viewport();
+  const dx = target.x - visual.x, dy = target.y - visual.y;
+  if (dx || dy) visual.angle = Math.atan2(dy * height, dx * width);
+  const remaining = visual.startTime + visual.duration - visual.lastTime;
+  const step = arriving ? 1 : Math.min(1, Math.max(0, timestamp - visual.lastTime) / Math.max(1, remaining));
+  visual.x += dx * step; visual.y += dy * step;
+  visual.lastTime = timestamp;
+  visual.progress = Math.min(1, Math.max(0, (timestamp - visual.startTime) / visual.duration));
+  return true;
+}
+function settleProjectile(entry, status = 'hit') {
+  if (phaserFlights.get(entry.record.id) !== entry) return;
+  sampleProjectile(entry, clockNow(), true);
+  if (phaserFlights.get(entry.record.id) !== entry) return;
+  const visual = entry.record.visual;
+  if (visual.phase !== 'hidden' && status !== 'dispelled' && status !== 'removed' && status !== 'error') {
+    const missed = status === 'miss' || status === 'dodged', rect = projectileTarget(entry)?.getBoundingClientRect();
+    addPhaserEffect({ ...visual, kind: missed ? 'miss' : 'hit', startTime: clockNow(),
+      until: clockNow() + (missed ? 220 : 80),
+      overshoot: Math.max(63, Math.hypot(rect?.width || 0, rect?.height || 0) * .875) }, visual.profile, entry.record.id);
+  }
+  removePhaserFlight(entry, status);
+}
+const projectileTextures = new Map();
+function requestProjectileTexture(scene, asset) {
+  if (!asset) return null;
+  const key = `projectile:${asset.file}`;
+  if (!projectileTextures.has(key)) {
+    const state = {};
+    projectileTextures.set(key, state);
+    void loadSpriteAtlas(`./media/assets/projectiles/${asset.file}`, asset.width, asset.height).then(atlas => {
+      if (!scene.sys.isActive()) return;
+      const texture = scene.textures.addCanvas(key, atlas.canvas);
+      for (let i = 0; i < atlas.count; i++) texture.add(i, 0,
+        (i % atlas.columns) * atlas.width, Math.floor(i / atlas.columns) * atlas.height, atlas.width, atlas.height);
+      state.atlas = atlas;
+      // A paused cold restore still needs one frame once its media are ready.
+      phaserLayer?.game?.loop.wake();
+    }).catch(error => console.warn('[ProjectileTexture]', asset.file, error));
+  }
+  return { key, ...projectileTextures.get(key) };
+}
+function drawProjectileSprite(entry, property, scene, asset, elapsed, x, y, angle, alpha = 1, scale = 1) {
+  const texture = requestProjectileTexture(scene, asset);
+  if (!texture?.atlas) return false;
+  let time = Math.max(0, elapsed) % texture.atlas.total, frame = 0;
+  while (frame < texture.atlas.count - 1 && time >= texture.atlas.durations[frame]) time -= texture.atlas.durations[frame++];
+  const sprite = entry[property] ||= scene.add.image(0, 0, texture.key, frame).setName(entry.record?.id || entry.projectileId);
+  sprite.setFrame(frame).setPosition(x, y + (asset.offsetY || 0)).setRotation(angle).setAlpha(alpha).setScale(scale);
+  const remnant = entry.record?.visual.remnantNature || entry.visual?.remnantNature;
+  sprite.setTint(remnant ? (remnant === 'piercing' ? 0xffda24 : 0xf00000) : 0xffffff);
+  return true;
+}
+function drawProjectile(entry, scene) {
+  const visual = entry.record?.visual || entry.visual;
+  if (visual.phase === 'hidden') return;
+  const { width, height } = viewport(), profile = visual.profile || entry.profile;
+  const elapsed = clockNow() - visual.startTime;
+  const graphic = entry.graphic ||= scene.add.graphics().setName(entry.record?.id || entry.projectileId);
+  let x = visual.x * width, y = visual.y * height, alpha = 1;
+  graphic.clear();
+  if (visual.kind === 'burst') {
+    // Decorative spread never consumes the combat's random-number stream.
+    for (let i = 0; i < visual.particleCount; i++) {
+      const progress = Math.max(0, Math.min(1, (elapsed - (i % 3) * 14) / (480 + (i * 37 % 210))));
+      const angle = visual.angle - .75 + 1.5 * i / (visual.particleCount - 1);
+      const distance = (56 + i * 19 % 48) * (1 - (1 - progress) ** 2);
+      const px = x + Math.cos(angle) * distance, py = y + Math.sin(angle) * distance;
+      graphic.fillStyle(profile.glow, (1 - progress) * .18).fillCircle(px, py, 6);
+      graphic.fillStyle(profile.glow, 1 - progress).fillCircle(px, py, (2 + i % 3) * (1 - progress * .88));
+    }
+    return;
+  }
+  if (visual.kind === 'miss') {
+    const progress = Math.min(1, elapsed / 220);
+    x += Math.cos(visual.angle) * visual.overshoot * progress;
+    y += Math.sin(visual.angle) * visual.overshoot * progress; alpha = 1 - progress;
+  }
+  const aura = profile.aura === 'ambidextry' ? 0xedff00 : profile.mysticism ? 0xd2ebff : profile.glow;
+  graphic.setPosition(x, y).setRotation(visual.angle).setAlpha(alpha);
+  graphic.lineStyle(6, aura, .18).lineBetween(-26, 0, 0, 0);
+  graphic.lineStyle(2, aura, .75).lineBetween(-20, 0, 0, 0);
+  const asset = PROJECTILE_ASSETS[profile.effect];
+  graphic.fillStyle(aura, .12).fillCircle(0, 0, asset ? Math.min(asset.width, asset.height) * .4 : profile.radius + 7);
+  graphic.fillStyle(aura, .3).fillCircle(0, 0, profile.radius + 3);
+  const spin = profile.effect === 'jarret-fx' ? elapsed / 700 * Math.PI * 2 : visual.angle;
+  const scale = profile.effect === 'profanation-fx' ? .8 + .2 * Math.sin(elapsed / 500 * Math.PI * 2)
+    : profile.effect === 'jarret-fx' ? 1 + .05 * Math.sin(elapsed / 1000 * Math.PI) ** 2 : 1;
+  if (!drawProjectileSprite(entry, 'sprite', scene, asset, elapsed, x, y, spin, alpha, scale)) {
+    graphic.fillStyle(profile.color, 1).fillCircle(0, 0, profile.radius);
+    graphic.fillStyle(0xfff2dd, 1).fillCircle(1, -1, 2);
+  }
+  if (visual.kind === 'hit') drawProjectileSprite(entry, 'impactSprite', scene, asset?.impact, elapsed, x, y, 0);
+  else if (asset?.impact) requestProjectileTexture(scene, asset.impact);
+}
+
+async function ensurePhaserLayer() {
+  if (phaserReady) return phaserReady;
+  phaserReady = (async () => {
+    // Local, pinned dependency; neither menus nor simulation download or boot it.
+    const Phaser = await import('../../vendor/phaser-3.90.0.esm.min.js');
+    const host = document.createElement('div');
+    host.id = 'phaser-projectiles'; host.setAttribute('aria-hidden', 'true'); host.hidden = true;
+    document.body.append(host);
+    const layer = phaserLayer = { host, game: null, scene: null };
+    await new Promise((resolve, reject) => {
+      const timeout = globalThis.setTimeout(() => reject(new Error('Initialisation Phaser trop longue.')), 10000);
+      try {
+        layer.game = new Phaser.Game({
+          type: Phaser.AUTO, parent: host, ...viewport(), transparent: true, banner: false, autoFocus: false,
+          audio: { noAudio: true }, input: { keyboard: false, mouse: false, touch: false, gamepad: false },
+          scale: { mode: Phaser.Scale.NONE }, render: { antialias: true },
+          seed: ['dark-pit-projectiles'],
+          scene: {
+            create() {
+              layer.scene = this;
+              layer.game = this.game;
+              this.game.canvas.setAttribute('aria-hidden', 'true');
+              globalThis.clearTimeout(timeout); resolve();
+              hideIdlePhaser();
+            },
+            update() {
+              const { width, height } = viewport();
+              if (this.scale.width !== width || this.scale.height !== height) this.scale.resize(width, height);
+              for (const entry of [...phaserFlights.values()]) {
+                if (!isCombatPaused()) sampleProjectile(entry);
+                if (phaserFlights.get(entry.record.id) === entry) drawProjectile(entry, this);
+              }
+              for (const entry of phaserEffects.values()) drawProjectile(entry, this);
+              hideIdlePhaser();
+              if (isCombatPaused()) this.game.loop.sleep();
+            },
+          },
+        });
+      } catch (error) { globalThis.clearTimeout(timeout); reject(error); }
+    });
+    return layer;
+  })().catch(error => {
+    if (phaserLayer) {
+      phaserLayer.game?.destroy(true); phaserLayer.game?.loop.wake(); phaserLayer.host.remove();
+    }
+    phaserLayer = null; phaserReady = null; projectileTextures.clear();
+    throw error;
+  });
+  return phaserReady;
+}
+
+
+export async function animationProjectile(attacker, target, onHit, data = {}) {
+  if (globalThis.__combatSimulation) return 'hidden';
+  data ||= {};
+  const { flight, impactPromise, restoredVisual, ...metadata } = data;
+  const from = restoredVisual?.from || viewCenter(getBattleEntityElement(attacker));
+  if (!from) return 'cancelled';
+  const duration = Math.max(1, Number(data.executionTime ?? data.travelDuration ?? data.duration
+    ?? attacker.currentAttack?.executionTime ?? attacker.executionTime) || 1000);
+  const now = clockNow();
+  const visual = restoredVisual || { renderer: 'phaser', phase: 'flight', from, x: from.x, y: from.y,
+    angle: 0, progress: 0, startTime: now, lastTime: now, duration, profile: projectileProfile(attacker, data) };
+  const record = { ...metadata, id: data.id || `projectile_${crypto.randomUUID()}`,
+    attackerId: attacker.id, targetId: target.id, attackId: data.attackId ?? attacker.currentAttack?.attackId,
+    flightMode: flight?.mode, startTime: visual.startTime, status: 'in-flight', visual };
+  attacker.projectiles ||= [];
+  cleanupOldProjectiles(attacker);
+  attacker.projectiles = attacker.projectiles.filter(candidate => candidate.id !== record.id);
+  attacker.projectiles.push(record);
+  const entry = { record, attacker, target, flight, impactPromise };
+  phaserFlights.set(record.id, entry);
+  const done = new Promise(resolve => { entry.resolve = resolve; });
+  if (impactPromise) {
+    impactPromise.then(status => settleProjectile(entry, status), error => {
+      removePhaserFlight(entry, 'error'); console.error('[ProjectileImpact]', error);
+    });
+  } else {
+    // Scripted visuals use the combat clock too, even if WebGL has not booted.
+    entry.timer = setTimeout(async () => {
+      if (phaserFlights.get(record.id) !== entry) return;
+      sampleProjectile(entry, clockNow(), true);
+      if (phaserFlights.get(record.id) !== entry) return;
+      try { settleProjectile(entry, await onHit?.() || 'hit'); }
+      catch (error) { removePhaserFlight(entry, 'error'); console.error('[ProjectileImpact]', error); }
+    }, Math.max(0, visual.startTime + visual.duration - now));
+  }
+  wakeProjectileRenderer();
+  return done;
+}
+
+// Active flights already save their visual through attackExecution. Only the
+// detached bursts and short impact/miss tails belong to this rendering section.
+registerCombatState('projectile-effects', () => [...phaserEffects.values()].map(entry => ({
+  visual: entry.visual, profile: entry.profile, projectileId: entry.projectileId,
+})), effects => {
+  for (const entry of [...phaserEffects.values()]) removePhaserEffect(entry);
+  for (const effect of effects || []) addPhaserEffect(effect.visual, effect.profile, effect.projectileId);
+});
+// Movement notifications also drive the existing melee target followers.
 export function notifyProjectileTargetMoved(targetOrId, movementEffect = null, movementOrigin = 'automatic') {
-    if (targetOrId && typeof targetOrId === 'object') applyMovementDestabilisation(targetOrId, movementEffect, movementOrigin);
-    if (targetOrId && typeof targetOrId === 'object') wakeFromMovement(targetOrId);
-    let targetId = targetOrId;
-    if (targetOrId?.nodeType === 1) {
-        const domId = String(targetOrId.id || "");
-        const entityIdMatch = domId.match(/^(?:Box_Entite_|sbire_|lord_)(.+)$/);
-        targetId = entityIdMatch?.[1]
-            ?? targetOrId.dataset?.entityId
-            ?? targetOrId.dataset?.position
-            ?? domId;
-    } else if (targetOrId && typeof targetOrId === "object") {
-        targetId = targetOrId.id
-            ?? targetOrId.dataset?.entityId
-            ?? targetOrId.dataset?.position;
-    }
-    if (targetId == null) return 0;
-
-    let refreshed = 0;
-    for (const record of projectileTargetFollowers.values()) {
-        if (String(record.targetId) !== String(targetId)) continue;
-        refreshProjectileFollowers(record);
-        refreshed += record.followers.size;
-    }
-    window.dispatchEvent(new CustomEvent('entityCombatInteraction', {
-        detail: { entity: targetOrId?.stats ? targetOrId : null, entityId: targetId, kind: 'movement' },
-    }));
-    return refreshed;
+  if (targetOrId && typeof targetOrId === 'object') {
+    applyMovementDestabilisation(targetOrId, movementEffect, movementOrigin);
+    wakeFromMovement(targetOrId);
+  }
+  const domId = String(targetOrId?.id || '');
+  const targetId = targetOrId?.nodeType === 1
+    ? domId.match(/^(?:Box_Entite_|sbire_|lord_)(.+)$/)?.[1] ?? targetOrId.dataset?.entityId ?? targetOrId.dataset?.position ?? domId
+    : typeof targetOrId === 'object' ? targetOrId?.id : targetOrId;
+  if (targetId == null) return 0;
+  let count = [...phaserFlights.values()].filter(entry => String(entry.target?.id) === String(targetId)).length;
+  for (const record of projectileTargetFollowers.values()) {
+    if (String(record.targetId) !== String(targetId)) continue;
+    refreshProjectileFollowers(record); count += record.followers.size;
+  }
+  window.dispatchEvent(new CustomEvent('entityCombatInteraction', {
+    detail: { entity: targetOrId?.stats ? targetOrId : null, entityId: targetId, kind: 'movement' },
+  }));
+  return count;
 }
-
 export function notifyAllProjectileTargetsMoved() {
-    let refreshed = 0;
-    for (const record of projectileTargetFollowers.values()) {
-        refreshProjectileFollowers(record);
-        refreshed += record.followers.size;
-    }
-    return refreshed;
+  let count = phaserFlights.size;
+  for (const record of projectileTargetFollowers.values()) {
+    refreshProjectileFollowers(record); count += record.followers.size;
+  }
+  return count;
 }
-
-if (typeof document !== "undefined") {
-    document.addEventListener("projectileTargetsMoved", () => {
-        notifyAllProjectileTargetsMoved();
-    });
-}
-
-export function disperseMagicalProjectile(projectileParent, projectileChild, direction = {}, options = {}) {
-    if (!projectileParent?.isConnected) return Promise.resolve();
-
-    const rawX = Number(direction.x) || 0;
-    const rawY = Number(direction.y) || 0;
-    const magnitude = Math.hypot(rawX, rawY) || 1;
-    const directionX = rawX / magnitude;
-    const directionY = rawY / magnitude;
-    const baseAngle = Math.atan2(directionY, directionX);
-    const particleColor = projectileChild?.classList.contains('heal-fx')
-        ? '#00f6ff'
-        : projectileChild?.classList.contains('rez-fx')
-            ? '#ccfff3'
-            : projectileParent.classList.contains('hybridalDamage')
-                ? '#d600ae'
-                : '#8f5dff';
-
-    const sourceRect = (projectileChild || projectileParent).getBoundingClientRect();
-    const effect = document.createElement('span');
-    effect.className = 'magic-projectile-dispersion';
-    effect.dataset.projectileId = String(projectileParent.id || 'projectile');
-    effect.style.setProperty('--magic-dispel-color', particleColor);
-    effect.style.left = `${sourceRect.left + sourceRect.width / 2}px`;
-    effect.style.top = `${sourceRect.top + sourceRect.height / 2}px`;
-    document.body.appendChild(effect);
-
-    if (!options.preserveProjectile && projectileChild) projectileChild.style.opacity = '0';
-
-    const particleCount = 7;
-    const particleAnimations = Array.from({ length: particleCount }, (_, index) => {
-        const particle = document.createElement('span');
-        particle.className = 'magic-projectile-dispel-particle';
-        const spread = -0.75 + (1.5 * index / (particleCount - 1)) + (Math.random() - 0.5) * 0.16;
-        const angle = baseAngle + spread;
-        const distance = 56 + Math.random() * 48;
-        const travelX = Math.cos(angle) * distance;
-        const travelY = Math.sin(angle) * distance;
-        const size = 4 + Math.random() * 3;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        effect.appendChild(particle);
-
-        const animation = particle.animate([
-            { transform: 'translate(-50%, -50%) translate3d(0, 0, 0) scale(1)', opacity: 1 },
-            { transform: `translate(-50%, -50%) translate3d(${travelX * 0.62}px, ${travelY * 0.62}px, 0) scale(.82)`, opacity: .86, offset: .46 },
-            { transform: `translate(-50%, -50%) translate3d(${travelX * 0.88}px, ${travelY * 0.88}px, 0) scale(.5)`, opacity: .42, offset: .78 },
-            { transform: `translate(-50%, -50%) translate3d(${travelX}px, ${travelY}px, 0) scale(.12)`, opacity: 0 },
-        ], {
-            duration: 480 + Math.random() * 210,
-            delay: (index % 3) * 14,
-            easing: 'linear',
-            fill: 'forwards',
-        });
-        return animation.finished.catch(() => undefined);
-    });
-
-    return Promise.all(particleAnimations).finally(() => effect.remove());
-}
-
-function convertMixedProjectileToRemnant(projectileParent, remnantNature = 'physical') {
-    if (!projectileParent?.isConnected || projectileParent.classList.contains('mixed-projectile-remnant')) return;
-    const piercing = remnantNature === 'piercing';
-    projectileParent.classList.remove('hybridalDamage', 'magicalDamage', 'magicalPiercingDamage');
-    projectileParent.classList.add(
-        'mixed-projectile-remnant',
-        piercing ? 'piercingDamage' : 'physicalDamage',
-        piercing ? 'mixed-piercing-remnant' : 'hybrid-physical-remnant'
-    );
-    projectileParent.animate([
-        { filter: 'drop-shadow(0 0 10px rgba(214, 0, 174, .85))' },
-        { filter: piercing
-            ? 'drop-shadow(0 0 12px rgba(255, 218, 36, .95))'
-            : 'drop-shadow(0 0 12px rgba(236, 0, 0, .95))' },
-    ], { duration: 320, easing: 'ease-out' });
-}
-
-export async function animationProjectile(attackerObj, targetObj, onHit, projectileData = null) {
-    const attackerPrefix = getBattleEntityDomPrefix(attackerObj);
-
-    const targetPrefix =
-        targetObj.nodeType === 1 && targetObj.classList.contains("hex")
-            ? "hex"
-            : getBattleEntityDomPrefix(targetObj);
-
-    const source = getBattleEntityElement(attackerObj);
-    const cible =
-        targetPrefix === "hex"
-            ? targetObj
-            : getBattleEntityElement(targetObj);
-
-    if (!source || !cible) {
-        console.error("Source ou cible introuvable");
-        return "cancelled";
-    }
-
-    if (!Array.isArray(attackerObj.projectiles)) {
-        attackerObj.projectiles = [];
-    }
-
-    const projectileId = projectileData?.id || `projectile_${crypto.randomUUID()}`;
-    const projectileToken = projectileCleanupToken;
-    // Runtime references stay in the closure, never in serializable entity data.
-    const { flight: flightContext, impactPromise, restoredVisual, ...projectileRecord } = projectileData || {};
-
-    const projectile = {
-        ...projectileRecord,
-        flightMode: flightContext?.mode,
-        id: projectileId,
-        attackerId: attackerObj.id,
-        targetId: targetObj.id,
-        attackId: projectileData?.attackId ?? attackerObj.currentAttack?.attackId,
-        damage: projectileData?.damage || 0,
-        startTime: clockNow(),
-        status: "in-flight",
-    };
-    const projectileVisualClasses = [
-        projectile.effectProjectile,
-        projectile.effectProjectileClass,
-        ...(Array.isArray(projectile.effectProjectileClasses)
-            ? projectile.effectProjectileClasses
-            : []),
-    ]
-        .flatMap((value) => Array.isArray(value) ? value : [value])
-        .map((value) => String(value || "").trim())
-        .filter((value) => value && value !== "none");
-
-    attackerObj.projectiles = attackerObj.projectiles.filter(p => p.id !== projectileId);
-    attackerObj.projectiles.push(projectile);
-    if (restoredVisual) document.getElementById(projectileId)?.remove();
-
-    const projectileParent = document.createElement("div");
-    projectileParent.className = "projectile-parent";
-    projectileParent.id = projectileId;
-    projectileVisualClasses.forEach((cls) => projectileParent.classList.add(cls));
-
-    const natures = projectileData?.attacknature
-        ?? projectileData?.natures
-        ?? attackerObj?.currentAttack?.attacknature;
-
-    if (Array.isArray(natures)) {
-        natures.forEach((nature) => {
-            const cls = String(nature)
-                .trim()
-                .replace(/[^a-zA-Z0-9_-]/g, "-");
-
-            if (cls) projectileParent.classList.add(cls);
-        });
-    }
-
-  const projectileChild = document.createElement("div");
-projectileChild.className = `projectile ${attackerPrefix}-projectile`.trim();
-projectileVisualClasses.forEach((cls) => projectileChild.classList.add(cls));
-
-const projectileFilters = [];
-
-if (projectile.aura === "ambidextry") {
-  projectileChild.classList.add("ambidextry-aura");
-  projectileFilters.push(
-    "drop-shadow(0 0 6px #edff00)",
-    "drop-shadow(0 0 12px #edff00)"
-  );
-}
-
-if (projectile.isLaunchedUnderMysticism) {
-  projectileChild.classList.add("mysticism-aura");
-  projectileParent.classList.add("mysticism-projectile");
-
-  projectileFilters.push(
-    "drop-shadow(0 0 6px rgba(255,255,255,1))",
-    "drop-shadow(0 0 14px rgba(210,235,255,0.95))",
-    "drop-shadow(0 0 26px rgba(160,210,255,0.85))",
-    "brightness(1.8)"
-  );
-}
-
-if (projectileFilters.length > 0) {
-  projectileChild.style.filter = projectileFilters.join(" ");
-}
-
-projectileParent.appendChild(projectileChild);
-
-    const startRect = source.getBoundingClientRect();
-
-    const posXStart = startRect.left + startRect.width / 2;
-    const posYStart = startRect.top + startRect.height / 2;
-    let posXCurrent = restoredVisual?.x ?? posXStart;
-    let posYCurrent = restoredVisual?.y ?? posYStart;
-
-    Object.assign(projectileParent.style, {
-        position: "absolute",
-        left: "0px",
-        top: "0px",
-        transform: `translate3d(${posXCurrent}px, ${posYCurrent}px, 0)`,
-        willChange: "transform",
-        visibility: "visible",
-    });
-
-    const configuredExecutionTime = Number(
-        projectile.executionTime
-        ?? projectile.travelDuration
-        ?? projectile.duration
-        ?? attackerObj.currentAttack?.executionTime
-        ?? attackerObj.executionTime
-        ?? 1000
-    );
-    const executionTime = Number.isFinite(configuredExecutionTime) && configuredExecutionTime > 0
-        ? configuredExecutionTime
-        : 1000;
-    let startTime = restoredVisual?.startTime ?? (impactPromise ? clockNow() : null);
-    let scheduledImpactSettled = false;
-    impactPromise?.then(() => { scheduledImpactSettled = true; }, () => { scheduledImpactSettled = true; });
-    let cachedTargetElement = null;
-    let cachedTargetX = null;
-    let cachedTargetY = null;
-    let lastDirectionX = restoredVisual?.dx ?? 1;
-    let lastDirectionY = restoredVisual?.dy ?? 0;
-    const targetTrackingId = targetPrefix === "hex"
-        ? (targetObj.dataset?.position ?? targetObj.id ?? "hex")
-        : targetObj.id;
-    const targetTrackingKey = `${targetPrefix}:${String(targetTrackingId)}`;
-
-    function getCurrentTargetElement() {
-        const flight = projectileData?.flight;
-        flight?.sample?.();
-        if (flight?.mode === 'physical') return flight.cellView(flight.aimedHex);
-        if (flight?.mode === 'mixed' && flight.guidanceLost) return flight.cellView(flight.lockedHex);
-        if (targetPrefix === "hex") return targetObj;
-        return getBattleEntityElement(targetObj);
-    }
-
-    function refreshTargetPosition(timestamp = clockNow()) {
-        const currentTarget = getCurrentTargetElement();
-        if (!currentTarget) return false;
-
-        const targetRect = currentTarget.getBoundingClientRect();
-        cachedTargetElement = currentTarget;
-        cachedTargetX = targetRect.left + targetRect.width / 2;
-        cachedTargetY = targetRect.top + targetRect.height / 2;
-        return true;
-    }
-
-    const projectileFollower = {
-        getTargetElement: getCurrentTargetElement,
-        refreshTargetPosition
-    };
-
-    let flightSettled = false;
-    let resolveFlight = null;
-    let rejectFlight = null;
-    const flightDone = new Promise((resolve, reject) => {
-        resolveFlight = resolve;
-        rejectFlight = reject;
-    });
-
-    function finishFlight(result = "removed", error = null) {
-        if (flightSettled) return;
-        flightSettled = true;
-        if (error) {
-            rejectFlight?.(error);
-            return;
-        }
-        resolveFlight?.(result);
-    }
-
-    function removeProjectile(result = "removed", error = null) {
-        projectile.status = result;
-        projectile.impactTime = clockNow();
-        unregisterProjectileFollower(targetTrackingKey, projectileFollower);
-        if (projectileParent && projectileParent.parentNode) {
-            projectileParent.remove();
-        }
-
-        cleanupOldProjectiles(attackerObj);
-        finishFlight(result, error);
-    }
-
-    async function animerProjectile(timestamp) {
-        if (projectileToken !== projectileCleanupToken || !projectileParent?.isConnected) {
-            removeProjectile();
-            return;
-        }
-
-        const flight = projectileData?.flight;
-        if (flight?.consumeMagicalLoss?.()) {
-            disperseMagicalProjectile(projectileParent, projectileChild, {
-                x: lastDirectionX,
-                y: lastDirectionY,
-            }, { preserveProjectile: true }).catch(() => undefined);
-            convertMixedProjectileToRemnant(projectileParent, flight.remnantNature);
-            refreshTargetPosition(timestamp);
-        }
-
-        if (flight?.cancelled()) {
-            projectile.status = 'dispelled';
-            unregisterProjectileFollower(targetTrackingKey, projectileFollower);
-            const magicalCasterDispel = flight.mode === 'magical'
-                && flight.casterLost
-                && !flight.expired();
-            if (magicalCasterDispel) {
-                disperseMagicalProjectile(projectileParent, projectileChild, {
-                    x: lastDirectionX,
-                    y: lastDirectionY,
-                }).catch(() => undefined);
-                removeProjectile('dispelled');
-                return;
-            } else {
-                removeCombatVisualAfter(projectileParent, 180);
-                const fade = projectileParent.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' });
-                try { await fade.finished; } catch { /* Battle cleanup may cancel the fade. */ }
-            }
-            removeProjectile('dispelled');
-            return;
-        }
-        // Homing also works during continuous movement, not only after a drop.
-        refreshTargetPosition(timestamp);
-
-        if (!startTime) startTime = timestamp;
-
-        const elapsedTime = timestamp - startTime;
-        const remainingTime = executionTime - elapsedTime;
-
-        if (!cachedTargetElement?.isConnected) {
-            console.error("Cible perdue pendant le vol du projectile !");
-            removeProjectile();
-            return;
-        }
-
-        const posXEnd = cachedTargetX;
-        const posYEnd = cachedTargetY;
-
-        const dx = posXEnd - posXCurrent;
-        const dy = posYEnd - posYCurrent;
-
-        const distanceRestante = Math.sqrt(dx * dx + dy * dy);
-
-        if (impactPromise ? scheduledImpactSettled : distanceRestante < 5 || remainingTime <= 0) {
-            posXCurrent = posXEnd;
-            posYCurrent = posYEnd;
-            projectileParent.style.transform = `translate3d(${posXEnd}px, ${posYEnd}px, 0)`;
-            unregisterProjectileFollower(targetTrackingKey, projectileFollower);
-
-            let impactResult = "hit";
-            if (typeof onHit === "function") {
-                try {
-                    impactResult = await onHit() || projectileData?.status || "hit";
-                } catch (error) {
-                    console.error("Erreur pendant l'impact du projectile :", error);
-                    const storedProjectile = attackerObj.projectiles.find(
-                        (p) => p.id === projectileId
-                    );
-
-                    if (storedProjectile) {
-                        storedProjectile.status = "error";
-                        storedProjectile.impactTime = clockNow();
-                    }
-
-                    removeProjectile("error", error);
-                    return;
-                }
-            }
-
-            const storedProjectile = attackerObj.projectiles.find(
-                (p) => p.id === projectileId
-            );
-
-            if (storedProjectile) {
-                storedProjectile.status = impactResult;
-                storedProjectile.impactTime = clockNow();
-            }
-
-            if (impactResult === "miss" || impactResult === "dodged") {
-                const travelX = posXEnd - posXStart;
-                const travelY = posYEnd - posYStart;
-                const travelDistance = Math.hypot(travelX, travelY) || 1;
-                const directionX = travelX / travelDistance;
-                const directionY = travelY / travelDistance;
-                const targetRect = cachedTargetElement.getBoundingClientRect();
-                const overshootDistance = Math.max(
-                    63,
-                    Math.hypot(targetRect.width, targetRect.height) * 0.875
-                );
-                const passX = posXEnd + directionX * overshootDistance;
-                const passY = posYEnd + directionY * overshootDistance;
-
-                const passAnimation = projectileParent.animate(
-                    [
-                        { transform: `translate3d(${posXEnd}px, ${posYEnd}px, 0)`, opacity: "1" },
-                        { transform: `translate3d(${passX}px, ${passY}px, 0)`, opacity: "0" },
-                    ],
-                    {
-                        duration: 220,
-                        easing: "linear",
-                        fill: "forwards",
-                    }
-                );
-
-                removeCombatVisualAfter(projectileParent, 220);
-                try {
-                    await passAnimation.finished;
-                } catch {
-                    // Le projectile a été supprimé avant la fin de son dépassement.
-                }
-                removeProjectile(impactResult);
-                return;
-            }
-
-            const impactDiv = document.createElement("div");
-            impactDiv.className = `projectile-impacte ${attackerPrefix}-impacte`.trim();
-            projectileVisualClasses.forEach((cls) => impactDiv.classList.add(cls));
-
-            Object.assign(impactDiv.style, {
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-                visibility: "visible",
-            });
-
-            projectileParent.appendChild(impactDiv);
-
-            removeCombatVisualAfter(projectileParent, 80);
-            setTimeout(() => removeProjectile(impactResult), 80);
-            return;
-        }
-
-        const safeRemainingTime = Math.max(16, remainingTime);
-        const vitesse = distanceRestante / (safeRemainingTime / 16);
-
-        const directionX = distanceRestante > 0 ? dx / distanceRestante : lastDirectionX;
-        const directionY = distanceRestante > 0 ? dy / distanceRestante : lastDirectionY;
-        lastDirectionX = directionX;
-        lastDirectionY = directionY;
-
-        posXCurrent += directionX * vitesse;
-        posYCurrent += directionY * vitesse;
-        projectileParent.style.transform = `translate3d(${posXCurrent}px, ${posYCurrent}px, 0)`;
-
-        projectile.visual = { x: posXCurrent, y: posYCurrent, startTime, dx: lastDirectionX, dy: lastDirectionY };
-        requestAnimationFrame(animerProjectile);
-    }
-
-    projectile.visual = { x: posXCurrent, y: posYCurrent, startTime, dx: lastDirectionX, dy: lastDirectionY };
-    refreshTargetPosition();
-    // Measure source and target before inserting our own overlay. No extra
-    // layout between these reads; moving targets are still sampled every frame.
-    document.body.appendChild(projectileParent);
-    if (projectileData?.flight?.mode !== 'physical') {
-        registerProjectileFollower(targetTrackingKey, targetTrackingId, projectileFollower);
-    }
-    requestAnimationFrame(animerProjectile);
-    return flightDone;
-}
+document.addEventListener('projectileTargetsMoved', notifyAllProjectileTargetsMoved);
 
 export function clearProjectileEffects(entityList = []) {
     window.dispatchEvent(new Event('projectileVisualsCleared'));
-    projectileCleanupToken += 1;
     projectileTargetFollowers.clear();
 
     document.querySelectorAll('.projectile-parent, .projectile-impacte, .magic-projectile-dispersion, .melee-clone-death-blood')

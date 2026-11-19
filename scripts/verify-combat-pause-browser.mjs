@@ -57,8 +57,8 @@ async function fixture(config = {}) {
         baseStats: { HP: 1000, strength: 0, intelligence: 0, agility: 0, physicalDamage: 40, magicalDamage: 40,
           speed: config.speed ?? 100, extraLife: own.extraLife || 0 },
         attacks: [{ functionName: config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
-          combatFunction: own.support ? 'Support' : 'Attaquant', attacknature: [magic ? 'magicalDamage' : 'physicalDamage'],
-          attackRange: [own.range || 'melee'], attackTarget: [own.support ? 'ally' : 'enemy'], deadTarget: ['no'], type: [], effets: own.support ? ['heal'] : [], selfEffects: [],
+          combatFunction: own.support ? 'Support' : 'Attaquant', attacknature: own.natures || [magic ? 'magicalDamage' : 'physicalDamage'],
+          attackRange: [own.range || 'melee'], attackTarget: [own.support ? 'ally' : 'enemy'], deadTarget: ['no'], type: [], effets: own.effects || (own.support ? ['heal'] : []), selfEffects: [],
           preparationTime: own.preparation ?? 500, executionTime: own.execution ?? 1800, recoveryTime: own.recovery ?? 300, cooldown: 20000,
           physicalRatio: magic ? 0 : 1, magicalRatio: magic ? 1 : 0, piercingRatio: 0 }] });
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
@@ -81,14 +81,18 @@ async function fixture(config = {}) {
 
 try {
   if (!process.env.PAUSE_EXTRA_ONLY) {
-  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee', 'phaser'])) {
-  const page = await fixture({ phaser: mode === 'phaser', A: { range: mode === 'phaser' ? 'range' : mode, execution: mode === 'phaser' ? 6000 : 1800 }, B: { range: mode === 'phaser' ? 'range' : mode, execution: mode === 'phaser' ? 6000 : 1800 } });
+  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee', 'phaser', 'magical', 'mixed', 'triple'])) {
+  const natures = mode === 'magical' ? ['magicalDamage'] : mode === 'mixed' ? ['hybridalDamage']
+    : mode === 'triple' ? ['hybridalDamage', 'piercingDamage'] : ['physicalDamage'];
+  const own = { range: mode === 'melee' ? 'melee' : 'range', natures,
+    execution: mode === 'phaser' ? 6000 : 1800, magic: mode === 'magical' };
+  const page = await fixture({ phaser: mode === 'phaser', A: own, B: own });
   await page.evaluate(async () => {
     G.startGame();
     const {poison} = await import("/js/combat/effects.js");
     poison(E.entites[0], { effectDot: 9, effectDuration: 4, type: ['alteration'] }, E.entites[1]);
   });
-  await page.waitForSelector(mode === 'phaser' ? '#phaser-projectiles:not([hidden]) canvas' : mode === 'range' ? '.projectile-parent' : 'canvas[id^=meleeClone_]');
+  await page.waitForSelector(mode !== 'melee' ? '#phaser-projectiles:not([hidden]) canvas' : 'canvas[id^=meleeClone_]');
   await page.waitForTimeout(150);
   await page.keyboard.press('Space');
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
@@ -100,7 +104,7 @@ try {
       positions: entites.map(entity => document.getElementById(`Box_Entite_${entity.id}`)?.closest('.hex')?.dataset.position),
       e: entites.map(e => ({ id:e.id,hp:e.stats.HP.current,turn:e.turnCount,prep:e.preparationTime,speed:e.speedTimer,action:e._combatAction,cooldowns:e.attackSelection?.readyAt })),
       projectiles:[...document.querySelectorAll('.projectile-parent')].map(el=>({id:el.id,transform:el.style.transform})),
-      phaser: entites.flatMap(entity => (entity.projectiles || []).filter(p => p.visual?.renderer === 'phaser').map(p => ({id:p.id, visual:p.visual}))),
+      phaser: entites.flatMap(entity => (entity.projectiles || []).filter(p => p.status === 'in-flight' && p.visual?.renderer === 'phaser').map(p => ({id:p.id, visual:p.visual}))),
       effects: [...document.querySelectorAll('.effect-vfx')].map(el=>el.id),
       melee: [...document.querySelectorAll('canvas[id^=meleeClone_]')].map(el=>({id:el.id, transform:getComputedStyle(el).transform,opacity:getComputedStyle(el).opacity})),
     };
@@ -112,7 +116,7 @@ try {
     assert.equal(await page.locator('.projectile-parent').count(), 0);
     await page.screenshot({path:resolve(output,'phaser-paused.png')});
   }
-  assert.equal(before.paused,true); if (mode === 'range') assert.equal(before.projectiles.length,2);
+  assert.equal(before.paused,true); if (mode === 'range') assert.equal(before.phaser.length,2);
   await page.waitForTimeout(2600);
   assert.deepEqual(await read(),before,'live pause freezes deadlines, positions, damage and phases');
   await page.evaluate(async () => {
@@ -139,7 +143,7 @@ try {
   });
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
-  if (mode === 'phaser') await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+  if (mode !== 'melee') await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
   const restored = await read();
   const compare=(actual,expected,message)=>{
     const {melee:am,...a}=actual,{melee:bm,...b}=expected;assert.deepEqual(a,b,message);
@@ -155,12 +159,22 @@ try {
   await page.waitForTimeout(1800);
   compare(await read(),before,'reload does not restart timers');
   await page.screenshot({path:resolve(output,'restored-paused.png')});
+  await page.evaluate(() => {
+    window.resumedImpacts = [];
+    window.addEventListener('combatLogEntry', event => {
+      if (event.detail.type === 'damage_resolution' && ['simultaneous-test','shot-p-r'].includes(event.detail.data.attack?.functionName))
+        resumedImpacts.push(event.detail.data.attacker.id);
+    });
+  });
   await page.keyboard.press('Space');
   await page.waitForFunction(async () => !(await import("/js/combat/clock.js")).isCombatPaused());
-  await page.waitForTimeout(mode === 'phaser' ? 6400 : 2400);
+  await page.waitForFunction(() => resumedImpacts.length >= 2, null, {timeout:10000});
+  await page.waitForTimeout(100);
+  // Freeze before an ordinary next turn can resolve another legitimate attack.
+  await page.evaluate(async () => (await import('/js/combat/pause.js')).pauseCombat());
   const after = await read();
   assert.ok(after.e.every((e,i)=>e.hp<before.e[i].hp),'both saved impacts apply after resume');
-  assert.ok(after.e.every((e,i)=>before.e[i].hp-e.hp<100),'no duplicate impact');
+  assert.deepEqual(await page.evaluate(()=>resumedImpacts.sort()), before.e.map(e=>e.id).sort(), 'Each saved attack resolves exactly once, for every nature');
   await page.evaluate(async () => (await import("/js/combat/pause.js")).pauseCombat());
   const pausedAgain = await read();
   await page.reload();
@@ -271,7 +285,7 @@ try {
       (await import("/js/storage/gameStorage.js")).setAdminMode(false);
       window.levelRunning='scripted'; F.initFightEntites(); G.startGame();
     });
-    await page.waitForSelector('.projectile-parent');await page.evaluate(()=>P.pauseCombat());
+    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');await page.evaluate(()=>P.pauseCombat());
     const before=await page.evaluate(()=>E.entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction})));
     await page.reload();
     await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
@@ -320,6 +334,66 @@ try {
     await page.evaluate(() => G.StopGame({preserveScene:true}));
     assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true);
     await page.close(); console.log('PASS Phaser: paused mobile resize, transparent input and stop cleanup');
+  }
+  {
+    const page = await fixture({speed:20000});
+    await page.evaluate(async () => {
+      window.An = await import('/js/rendering/animations.js');
+      An.prepareProjectileRenderer();
+    });
+    await page.waitForSelector('#phaser-projectiles canvas', {state:'attached'});
+    await page.evaluate(() => G.startGame());
+    await page.evaluate(() => {
+      void An.animationProjectile(E.entites[0], E.entites[1], () => {throw Error('Dispel cannot hit');}, {
+        id:'paused-magic-burst', executionTime:1000, attacknature:['magicalDamage'],
+        flight:{mode:'magical',casterLost:true,sample(){},consumeMagicalLoss(){return false;},expired(){return false;},cancelled(){return true;}},
+      });
+    });
+    await page.waitForFunction(() => Clock.captureCombatState()['projectile-effects'].some(e=>e.visual.kind==='burst'));
+    await page.evaluate(() => {
+      void An.animationProjectile(E.entites[0], E.entites[1], () => 'miss', {
+        id:'paused-jarret-tail', executionTime:120, effectProjectileClasses:['jarret-fx'], attacknature:['physicalDamage'],
+      });
+    });
+    await page.waitForFunction(() => Clock.captureCombatState()['projectile-effects'].some(e=>e.visual.kind==='miss'));
+    await page.evaluate(() => P.pauseCombat());
+    const read = () => page.evaluate(async () => (await import('/js/combat/clock.js')).captureCombatState()['projectile-effects']);
+    const before = await read();
+    assert.ok(before.some(e=>e.visual.kind==='burst' && e.visual.particleCount===7));
+    assert.ok(before.some(e=>e.visual.kind==='miss'));
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
+    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+    assert.deepEqual(await read(), before, 'F5 restores detached magic particles and Jarret overshoot');
+    await page.waitForTimeout(900);
+    assert.deepEqual(await read(), before, 'Detached effects stay frozen past their normal lifetime');
+    await page.keyboard.press('Space');
+    await page.evaluate(async () => { window.RestoredClock = await import('/js/combat/clock.js'); });
+    await page.waitForFunction(() => !RestoredClock.isCombatPaused() && RestoredClock.captureCombatState()['projectile-effects'].length===0);
+    assert.equal(await page.locator('#phaser-projectiles').evaluate(node=>node.hidden), true);
+    await page.close(); console.log('PASS Phaser: detached dispersion and miss tail survive pause/F5 and expire once');
+  }
+  {
+    const page = await fixture({speed:20000});
+    const result = await page.evaluate(async () => {
+      G.startGame();
+      const {eventEntityAttack} = await import('/js/events/runtime.js');
+      (await import('/js/combat/attackResolution.js')).setEntityAttackDefinitions(E.entites[0], ['soin'], (await import('/js/data/attackList.js')).attackDetails);
+      const target = E.entites[1], hp = target.stats.HP.current;
+      const done = eventEntityAttack({side:'B',attackerSide:'A',targetId:target.id,attackerId:E.entites[0].id,
+        attackFunction:'soin',percent:10,executionTime:400,shakescreen:false});
+      await new Promise(resolve=>setTimeout(resolve,80));
+      const projectile = E.entites[0].projectiles.find(p=>p.cosmeticOnly && p.status==='in-flight');
+      const before = target.stats.HP.current;
+      const profile = projectile?.visual.profile, renderer = projectile?.visual.renderer;
+      await done;
+      return {hp,before,after:target.stats.HP.current,profile,renderer};
+    });
+    assert.equal(result.renderer,'phaser');
+    assert.equal(result.profile.color,0xcdfdff,'Event spell keeps its original healing visual');
+    assert.equal(result.before,result.hp,'Event damage waits for the configured deadline');
+    assert.equal(result.after,result.hp*.9,'Event keeps exactly its requested damage, without triggering healing');
+    await page.close();console.log('PASS Phaser: scripted ranged event keeps its visual and cosmetic-only combat contract');
   }
   for (const mode of ['slow','unavailable']) {
     const page = await fixture({phaser:true,A:{range:'range',preparation:100,execution:500},B:{range:'range',preparation:100,execution:500}});

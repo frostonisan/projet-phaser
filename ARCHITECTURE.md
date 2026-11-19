@@ -743,53 +743,48 @@ Le test de résurrection utilise maintenant le véritable bouton de reprise, qui
 attend la fin de la sauvegarde, puis vérifie séparément que l’horloge a repris.
 
 
-## Premier projectile Phaser — v0.90.0-dev
+## Projectiles Phaser — v0.91.0-dev
 
-Le transport `shot-p-r` (physique, à distance, sans classe d’effet spécialisée)
-passe par une scène Phaser transparente. `rendering/attackTransport.js` conserve
-le choix du rendu, la scène et ses instances ; aucun module de jeu supplémentaire.
-La définition du tir et les formules de dégâts ne sont pas modifiées.
+Le transport de toutes les attaques à distance passe désormais par `animationProjectile`
+dans `rendering/animations.js`. Le fichier `rendering/attackTransport.js` prépare le
+moteur et transmet l’échéance de combat, les effets et la nature du tir. Aucun module
+supplémentaire ; le suivi des cibles également utilisé par la mêlée reste partagé.
 
-`combat/attackExecution.js` préchauffe le rendu pendant la préparation et conserve
-la programmation de l’impact. Le transport observe cette promesse et utilise
-`clockNow()` pour la progression, indépendamment du nombre d’images affichées.
-Ni la fin du dessin ni une collision Phaser ne déclenchent de dégâts. Un chargement
-lent ou impossible du moteur ne repousse pas le résultat du combat.
+`combat/attackExecution.js` conserve la programmation et la résolution des impacts.
+Le rendu observe sa promesse ; ni une collision Phaser ni la fin du dessin ne causent
+les dégâts. Les animations d’attaques d’événements utilisent aussi l’horloge de combat,
+indépendamment du chargement des images ou du moteur. Le simulateur quitte le transport
+visuel avant l’import de Phaser.
 
-Le départ est capturé dans le repère du viewport ; l’arrivée est la vue de la case
-verrouillée par l’état logique. Les coordonnées normalisées permettent de redessiner
-après redimensionnement. La position, le départ et le temps du vol sont conservés
-par les données visuelles de l’instantané de vol existant. F5 recrée la scène depuis
-ces données ; le canvas n’est pas une sauvegarde du combat. Le format de pause reste 2.
+Une scène transparente et un canvas servent tous les tirs, soins, résurrections et
+projectiles spécialisés. Les trajectoires suivent les cases verrouillées ou la cible
+guidée choisies par `attackFlight`. La perte du lanceur disperse la magie en sept
+particules ; les hybrides et spectraux conservent respectivement leur reste physique
+ou perforant. Les triples restent guidés. Ces règles restent dans le combat.
 
-Un seul canvas est partagé par les tirs simultanés. La boucle dort lorsque tous
-les tirs sont terminés ou quand le combat est en pause ; reprise et redimensionnement
-la réveillent. L’arrêt du combat et `clearProjectileEffects` retirent les instances,
-y compris celles qui attendaient encore le chargement du moteur. La couche ne prend
-aucune entrée clavier, tactile ou souris. Le pilote n’active aucun moteur physique.
-Le projectile simple s’arrête visuellement à la résolution ; les variantes de sorts
-et leurs effets de dispersion restent dans le transport HTML.
+Positions normalisées, profil visuel et temps de vol sont sérialisés avec les vols
+existants. La section visuelle `projectile-effects` conserve uniquement les particules
+détachées et les fins d’impact/dépassement : elle ne contient aucune règle ni référence
+DOM. L’horloge de combat pilote les positions, les images GIF, la rotation et l’effacement.
+F5 reconstitue le canvas et ses textures ; le format de pause reste 2. La boucle dort
+sans effet visible ou en pause. Reprise, redimensionnement et arrivée d’une texture la
+réveillent ; arrêt et nettoyage annulent aussi les effets qui attendent le moteur.
 
-Le simulateur ignore ce transport visuel avant tout import de Phaser. Les règles
-et le journal de cette attaque restent exécutés dans son environnement isolé.
+`data/loaderList.js` regroupe le catalogue et le préchargement des médias de projectiles.
+Le navigateur décode chaque rectangle des GIF originaux ; la composition respecte
+transparence, délais et dispositions 2/3. Les images sont réduites à leur taille affichée
+puis regroupées dans un atlas partagé par fichier. Aucun nouvel asset ni décodeur tiers.
+Les particules décoratives ne consomment pas les tirages aléatoires du combat.
+Les styles HTML devenus inutiles sont supprimés de `css/combat.css`.
 
-Dépendance locale : Phaser **3.90.0**, distribution ESM minifiée de
+Dépendance locale inchangée : Phaser **3.90.0**, distribution ESM minifiée de
 https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.esm.min.js ; licence MIT
-conservée dans `docs/vendor/PHASER-LICENSE.md`. Empreinte SHA-256 du fichier distribué :
+conservée dans `docs/vendor/PHASER-LICENSE.md`. Empreinte SHA-256 :
 `9327deb5e2f7d382cd054842f641fd504b9a784a730a2bdb94ea63516790ead1`.
-Documentation de l’API utilisée : https://docs.phaser.io/api-documentation/3.90.0/class/game.
-Les fichiers du moteur sont chargés uniquement pour ce pilote ; leur taille brute
-est de 1 197 130 octets. Aucun gain de FPS n’est revendiqué dans cette étape.
+Documentation : https://docs.phaser.io/api-documentation/3.90.0/class/textures-texturemanager.
+Aucun moteur de collisions activé, aucun gain de FPS revendiqué.
 
-Validation et captures conservées dans `outputs/phaser-projectile/`,
-`outputs/combat-tests/` et `outputs/paused-combat/`. Les tests existants de vol,
-de pause et de simulation accueillent les contrôles du pilote.
-
-Résultats : 57 tests Node, syntaxe et ressources statiques validés ; 146 contrôles
-de combat, 35 imports indépendants et quatre profils de démarrage passent.
-Les nouveaux cas couvrent l’absence de projectile HTML doublon, une perte de PV
-identique avec et sans rendu pour le même tir et le même jet, le départ de la cible,
-la suppression visuelle sans annulation de l’impact, deux tirs simultanés,
-la pause/F5/reprise sans double dégât, le redimensionnement mobile pendant la pause
-et un moteur retardé ou indisponible. La simulation du tir reste reproductible
-sans requête vers Phaser ; sa suite complète et ses lots de 20 + 20 essais passent.
+Validation et captures : `outputs/phaser-all/`, `outputs/combat-tests/`,
+`outputs/paused-combat/`. Les suites existantes couvrent règles de vol, dégâts,
+soins/résurrection, guidage, perte du lanceur/cible, ambidextrie, récupération,
+arrêt, pause/F5, redimensionnement, ressources animées, simulateur et imports.
