@@ -16,6 +16,7 @@ const baselineDirectory = process.env.LOAD_BASELINE && resolve(process.env.LOAD_
 const profile = process.env.LOAD_PROFILE === '1';
 const tracing = profile && process.env.LOAD_TRACE === '1';
 const scenario = process.env.LOAD_SCENARIO || 'mixed';
+const biome = process.env.LOAD_BIOME || '';
 const poolPrototype = process.env.LOAD_POOL === '1';
 const diagnosticFiltersOff = process.env.LOAD_FILTERS_OFF === '1';
 // Freeze code for the whole run: concurrent workspace edits must not mix two
@@ -236,7 +237,7 @@ async function fixture(count) {
   await page.addStyleTag({ url: `${origin}/css/combat.css` });
   // Cost isolation only, never a proposed production visual change.
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
-  await page.evaluate(async ({ count, scenario }) => {
+  await page.evaluate(async ({ count, scenario, biome }) => {
     const U = await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
     window.E = await import("/js/entities/runtime.js"); window.G = await import("/js/app/state.js");
     window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
@@ -249,6 +250,7 @@ async function fixture(count) {
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} }); S.saveToLocalStorage('equippedItems', []);
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"><div id="score"></div></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
     const grid = document.getElementById('hexGrid');
+    if(biome){const root=document.createElement('div');root.id='game-windows';root.style.cssText='width:1920px;height:1080px;position:relative;transform:none';const container=document.getElementById('game-container');container.replaceWith(root);root.append(container);const board=document.createElement('div');board.className='board';container.append(board);board.append(grid);}
     grid.style.cssText = 'position:absolute;top:80px;left:35px;width:2600px;height:1400px;transform:scale(.68);transform-origin:top left';
     const columnsPerSide = count / 10, columns = columnsPerSide * 2 + 2;
     for (let row = 0; row < 6; row++) for (let col = 0; col < columns; col++) {
@@ -300,6 +302,7 @@ async function fixture(count) {
     // The load fixture builds its own cells/entities instead of the normal
     // placement pipeline. Publish that initial board before starting combat.
     (await import("/js/board/controller.js")).syncEntityFootprints(grid);
+    if(biome)(await import("/js/board/controller.js")).applyBiomeRealtime(biome);
     (await import("/js/app/stages.js")).configureBattleSystemsOnce();
     window.snapshot = Sim.captureSimulationBoard();
     window.captureFrames = () => {
@@ -309,10 +312,11 @@ async function fixture(count) {
       window.longObserver = new PerformanceObserver(list => { for (const entry of list.getEntries()) longTasks.push(entry.duration); });
       longObserver.observe({ type: 'longtask', buffered: false });
     };
-  }, { count, scenario });
+  }, { count, scenario, biome });
   if (process.env.LOAD_MONSTERS === 'webgl' && (checksOn || process.env.LOAD_BASELINE_MONSTERS === 'webgl')) {
     await page.waitForFunction(count => document.querySelectorAll('[data-monster-webgl="ready"]').length === count, count, { timeout: 90000 });
     assert.equal(await page.evaluate(async () => {
+      Clock.freezeCombatClock(); // Isolate painting from the weather's own random particle resets.
       const original = Math.random; let calls = 0;
       Math.random = () => { calls++; return original(); };
       const host = document.querySelector('[id^="PopUp_"]'), content = document.createElement('span');
@@ -321,7 +325,7 @@ async function fixture(count) {
         (await import('/js/rendering/popups.js')).showDamagePopup(host, content);
         await new Promise(resolve => globalThis.setTimeout(resolve, 200));
         return calls;
-      } finally { Math.random = original; host.replaceChildren(); }
+      } finally { Math.random = original; host.replaceChildren(); Clock.resumeCombatClock(); }
     }), 0, 'Painting text and effects must not consume gameplay randomness');
   }
   await page.waitForTimeout(1000);
@@ -373,7 +377,7 @@ function validateLive(entry) {
   }
 }
 async function save() { await writeFile(resolve(output, 'results.json'), JSON.stringify({ passed, failure, workspaceChanges, scenario, poolPrototype, diagnosticFiltersOff,
-  profiled: profile, tracing, panelConversionProbe: 'serialized-html-elements', browser: browser.version(), gpu, baselineFingerprints, comparison: baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
+  profiled: profile, tracing, panelConversionProbe: 'serialized-html-elements', browser: browser.version(), gpu, baselineFingerprints, biome, comparison: baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
 try {
   if (process.env.LOAD_RESUME === '1') {
     const previous = JSON.parse(await readFile(resolve(output, 'results.json'), 'utf8'));

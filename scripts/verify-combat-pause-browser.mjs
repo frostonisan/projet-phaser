@@ -29,6 +29,7 @@ const server = createServer(async (req, res) => {
           kind:l.kind,bar:l.bar,text:l.text,x:l.image?.x,y:l.image?.y,alpha:l.image?.alpha,
           width:l.image?.displayWidth,height:l.image?.displayHeight,visible:l.image?.visible}))}`);
     }
+    if(process.env.CANVAS_BOARD_ONLY&&file===resolve(root,'js/rendering/boardAdapter.js'))data=data.toString().replace('  const now=paint.now','  globalThis.__boardRoots=roots;\n  const now=paint.now');
     res.end(data); }
   catch { res.writeHead(404).end(); }
 });
@@ -119,6 +120,93 @@ async function fixture(config = {}) {
 }
 
 try {
+  if(process.env.MONSTER_WEBGL==='1'){
+    const page=await fixture({speed:20000});
+    const panels=await page.evaluate(async()=>{
+      const R=await import('/js/rendering/entities.js'),V=await import('/js/rendering/vitalFeedback.js'),UI=await import('/js/ui/attacks.js'),H=await import('/js/rendering/hud.js');
+      G.startGame();Clock.freezeCombatClock();const e=E.entites[0];
+      R.createHeadUpInDom(e.id);const command=UI.showCombatAttackControlPanel(e.id);await Promise.resolve();
+      const hiddenBars=document.querySelector(`#Box_Entite_${e.id} .life-bars-container`),before=hiddenBars.innerHTML;
+      e.stats.HP.current=600;e.stats.armor={current:200,max:200};V.presentEntityVitals(e);
+      const read=root=>({hp:root.querySelector('.HP-counter').textContent,hpWidth:root.querySelector('.health-bar').style.width,armorWidth:root.querySelector('.armor-bar').style.width});
+      const headsup=read(document.getElementById(`HeadsupLifeBars_${e.id}`)),control=read(command),unchanged=hiddenBars.innerHTML===before;
+      document.querySelector('.AllEntitiesHud').remove();UI.hideCombatAttackControlPanel();const disposed=!R.hasExternalLifeBars(e.id);
+      const attack=e.attackDetails[0],attacks=e.attacks;H.updateEntityAttackTargetDisplay(e,attack,E.entites[1]);
+      H.clearBattleTargetDisplays([e]);e.currentAttack=null;e.attacks=[];H.updateEntityAttackTargetDisplay(e);
+      const neutral=document.getElementById(`TargetroleContainer_${e.id}`).classList.contains('no-target');
+      e.attacks=attacks;H.updateEntityAttackTargetDisplay(e,attack,E.entites[1]);
+      const restored=!document.getElementById(`TargetroleContainer_${e.id}`).classList.contains('no-target');
+      const paint=()=>new Promise(r=>globalThis.requestAnimationFrame(()=>globalThis.requestAnimationFrame(r)));
+      e.stats.HP.current=200;V.presentEntityVitals(e);await paint();
+      const presentation=()=>Clock.captureCombatState().phaserPresentation.find(row=>row.id===String(e.id)).state;
+      const blink=presentation().bindings.flatMap(b=>b.animations).find(a=>a.vitalBlink);
+      if(!blink)throw Error('Low HP must blink without changing hidden HTML');
+      Clock.restoreCombatClock(blink.start+blink.duration/2);await paint();
+      const dim=document.getElementById(`Box_Entite_${e.id}`)._monsterView.inspect().find(l=>l.bar==='hp').alpha;
+      e.stats.HP.current=600;V.presentEntityVitals(e);await paint();
+      const healed=!presentation().bindings.some(b=>b.animations.some(a=>a.vitalBlink));
+      return {headsup,control,unchanged,disposed,neutral,restored,dim,healed};
+    });
+    for(const name of ['headsup','control'])assert.deepEqual(panels[name],{hp:'HP : 600 / 1000',hpWidth:'60%',armorWidth:'20%'});
+    for(const name of ['unchanged','disposed','neutral','restored','healed'])assert.equal(panels[name],true,name);
+    assert.ok(Math.abs(panels.dim-.1)<.01,'Native low-HP blink reaches the theme opacity');
+    await page.close();console.log('PASS native vitals: open HUD/command panels update, hidden actor bars stay unchanged, target reset works');
+  }
+  if(process.env.CANVAS_BOARD_ONLY){
+    const page=await fixture({speed:20000});
+    await page.evaluate(async()=>{
+      const B=await import('/js/board/controller.js'),R=await import('/js/rendering/entities.js');
+      const boxes=E.entites.map(e=>document.getElementById(`Box_Entite_${e.id}`));boxes.forEach(n=>document.getElementById('game-container').append(n));document.getElementById('hexGrid').remove();
+      document.dispatchEvent(new CustomEvent('biomeUpdated',{detail:'prison'}));B.StageLoading();B.createHexGrid();B.applyBiomeRealtime('prison');
+      const grid=document.getElementById('hexGrid');for(const [i,e] of E.entites.entries()){boxes[i].remove();const hex=grid.querySelectorAll(`.Side${e.side}`)[5];e.position=hex.dataset.position;const created=R.createEntiteInDOM(e);hex.append(created.element);await created.spriteReady;}
+      B.syncEntityFootprints(grid);(await import('/js/ui/display.js')).resetParallaxView({force:true});
+      document.querySelectorAll('.entitylootContainer,.worldmap,.menu-map-container').forEach(n=>n.remove());
+    });
+    await page.waitForTimeout(5000);
+    for(const biome of ['prison','marecage','desert','glacier']){
+      await page.evaluate(async biome=>(await import('/js/board/controller.js')).applyBiomeRealtime(biome),biome);
+      await page.waitForFunction(()=>document.querySelector('.ground[data-canvas-painted]')&&document.querySelector('.foreground-img[data-canvas-painted]'));
+      await page.waitForTimeout(500);
+      const geometry=await page.evaluate(async()=>{const A=await import('/js/rendering/boardAdapter.js');return [...__boardRoots.values()].filter(e=>e.node.isConnected).map(e=>{const actual=A.sampleCanvasPlane(e.node);return {node:e.node.className,error:Math.max(...[[0,0],[128,128]].map(([x,y])=>{const a=e.project(x,y),b=actual(x,y);return Math.hypot(a.x-b.x,a.y-b.y);})),kind:e.kind,meshSizeOK:e.objects.every(o=>o.type!=='Mesh'||o.width===innerWidth&&o.height===innerHeight)};});});
+      assert.ok(geometry.every(e=>e.meshSizeOK),'Mesh pixel scale follows the viewport after texture changes');
+      assert.ok(geometry.every(e=>e.error<.5),JSON.stringify(geometry.filter(e=>e.error>=.5)));
+      await page.evaluate(()=>{window.weatherDraws=0;const draw=CanvasRenderingContext2D.prototype.clearRect;CanvasRenderingContext2D.prototype.clearRect=function(...args){if(this.canvas.matches('#meteo-fx canvas,#ground-fx canvas'))weatherDraws++;return draw.apply(this,args);};});
+      await page.waitForTimeout(450);assert.equal(await page.evaluate(()=>weatherDraws),0,'Native weather does not repaint hidden 2D canvases');
+      assert.equal(await page.locator('#phaser-projectiles canvas').count(),1);
+      await page.screenshot({path:resolve(output,`canvas-board-${biome}.png`)});
+    }
+    await page.evaluate(()=>document.getElementById('hexGrid').style.transform='perspective(2000px) rotateX(65deg)');
+    for(let i=0;i<4;i++){await page.waitForTimeout(250);assert.equal(await page.locator('[data-monster-webgl="ready"]').count(),2,'Camera never falls back to HTML actors');}
+    await page.waitForTimeout(500);await page.evaluate(async()=>{(await import('/js/ui/display.js')).resetParallaxView({force:true});});await page.waitForTimeout(1600);
+    await page.evaluate(async()=>{
+      const S=await import('/js/storage/gameStorage.js'),L=await import('/js/items/loot.js'),B=await import('/js/board/controller.js');
+      const stage={id:'pause-test',level_type:'admin',reward:'chest'};S.saveToLocalStorage('GameStages',{stages:[stage]});
+      const chest=S.getOrCreateStageChest(stage);window.testChestId=chest.id;L.createChestLoot(chest,{stageId:stage.id,spawnMode:'in-place'});
+      const hex=[...document.querySelectorAll('#hexGrid .hex.SideA')].find(n=>!n.classList.contains('occupied'));
+      const M=await import('/js/combat/summons.js');M.placeGroundItem(hex,{itemId:'canvas-test-item',itemAsset:'./media/assets/misc/glitter-loot.svg',displayName:'Canvas test'}, {infinite:true,durationMs:20000});
+    });
+    await page.waitForFunction(()=>document.querySelector('.chest-container[data-canvas-painted] canvas')?._canvasNative&&document.querySelector('.consommable-container[data-canvas-painted]'));
+    await page.waitForTimeout(2200);
+    assert.ok(await page.evaluate(()=>[...__boardRoots.values()].filter(e=>e.node.matches('.chest-container,.consommable-container')).every(e=>e.recipe.parts.some(p=>p.mesh&&p.mesh.visible))),'Passive objects have native meshes');
+    await page.locator('.chest-loot').dispatchEvent('click');await page.waitForTimeout(100);
+    assert.ok(await page.evaluate(()=>document.querySelector('.chest-loot')._canvasTint?.opacity>0),'Locked chest click animates the native tint');
+    await page.waitForTimeout(700);await page.screenshot({path:resolve(output,'canvas-board-loot.png')});
+    await page.evaluate(async()=>{(await import('/js/combat/summons.js')).releaseGroundItem('canvas-test-item');});await page.waitForTimeout(100);
+    await page.evaluate(async()=>{const e=E.entites[0],V=await import('/js/rendering/vitalFeedback.js');e.stats.HP.current=200;e.stats.armor={current:200,max:200};V.presentEntityVitals(e);e.stats.armor.current=100;V.presentEntityVitals(e);G.startGame();await P.pauseCombat();});
+    const savedVitals=await page.evaluate(()=>Clock.captureCombatState().phaserPresentation.map(r=>({id:r.id,flash:r.state.armorFlashAt,blink:r.state.bindings.flatMap(b=>b.animations).filter(a=>a.vitalBlink)})));
+    const saved=await page.evaluate(()=>({weather:Clock.captureCombatState().weather,board:Clock.captureCombatState().canvasBoard.map(rows=>rows.map(r=>({key:r.key,epoch:r.epoch})).sort((a,b)=>a.key.localeCompare(b.key)))}));
+    await page.reload();await page.waitForFunction(()=>document.getElementById('hexGrid')?._canvasBoardView&&document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
+    await page.evaluate(async()=>{window.Clock=await import('/js/combat/clock.js');window.P=await import('/js/combat/pause.js');});
+    assert.deepEqual(await page.evaluate(()=>Clock.captureCombatState().weather),saved.weather,'F5 retains paused weather particles');
+    assert.deepEqual(await page.evaluate(()=>Clock.captureCombatState().phaserPresentation.map(r=>({id:r.id,flash:r.state.armorFlashAt,blink:r.state.bindings.flatMap(b=>b.animations).filter(a=>a.vitalBlink)}))),savedVitals,'F5 retains native HP blink and armor impact phase');
+    assert.deepEqual(await page.evaluate(()=>Clock.captureCombatState().canvasBoard.map(rows=>rows.map(r=>({key:r.key,epoch:r.epoch})).sort((a,b)=>a.key.localeCompare(b.key)))),saved.board,'F5 retains board animation epochs');
+    await page.setViewportSize({width:390,height:844});await page.waitForTimeout(500);await page.screenshot({path:resolve(output,'canvas-board-mobile-paused.png')});
+    assert.equal(await page.locator('#phaser-projectiles canvas').count(),1);
+    await page.evaluate(async()=>{const B=await import('/js/board/controller.js');B.applyBiomeRealtime('prison',{size:B.getBoardSizeOptions().at(-1).key});});await page.waitForTimeout(1500);
+    assert.ok(await page.evaluate(()=>{const grid=document.getElementById('hexGrid');return grid._canvasBoardView.screenCells.size===grid.querySelectorAll('.hex[data-position]').length;}),'Resizing the board refreshes every native cell');
+    assert.deepEqual(errors,[]);await page.close();
+    console.log('PASS full canvas board: four biomes, native weather, camera, chests/items, pause/F5, mobile resize');
+  } else {
   {
     const page=await fixture({speed:20000});
     const result=await page.evaluate(async()=>{
@@ -609,4 +697,5 @@ try {
   }
   assert.deepEqual(errors,[]);
   console.log('PASS: space, frozen ranged flights and poison, F5 exact paused restoration, resume with no duplicate damage, repeated checkpoint, stop.');
+}
 } finally { await browser.close(); await new Promise(done=>server.close(done)); }

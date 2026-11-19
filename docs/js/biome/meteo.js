@@ -52,22 +52,25 @@ function animate() {
         return;
     }
     Object.keys(activeEffects).forEach(effect => {
-        const { ctx, elements, update, draw, render, dispose } = activeEffects[effect];
+        const state = activeEffects[effect];
+        const { ctx, elements, update, draw, render, dispose } = state;
+        ctx.canvas._combatWeather = state;
+        const native = ctx.canvas.dataset.canvasPainted !== undefined;
         if (!ctx.canvas.isConnected) {
             dispose?.();
             delete activeEffects[effect];
             return;
         }
         if (render) {
-            render();
+            render(native);
             return;
         }
 
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        if (!native) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         elements.forEach(element => {
             update(element);
-            draw(ctx, element);
+            if (!native) draw(ctx, element);
         });
     });
 
@@ -361,17 +364,17 @@ export function initDroplet(canvasId, saved = null) {
         }
     }
 
-    function drawCircles() {
+    function drawCircles(native = false) {
         if (clockNow() - lastCircleTime >= 500) {
             generateCircles();
             lastCircleTime = clockNow();
         }
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!native) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         for (let i = 0; i < circles.length; i++) {
             circles[i].update();
-            circles[i].draw();
+            if (!native) circles[i].draw();
             if (circles[i].opacity <= 0) {
                 circles.splice(i, 1);
                 i--;
@@ -491,21 +494,21 @@ export function initWaterDrop(canvasId, options = {}, saved = null) {
     }
 
     // Fonction pour mettre à jour la position des gouttes
-    function updateDrops() {
+    function updateDrops(native = false) {
         const currentTime = clockNow();
         if (currentTime - lastDropTime >= dropInterval) {
             createDrop();
             lastDropTime = currentTime;
         }
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!native) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         for (let i = drops.length - 1; i >= 0; i--) {
             const drop = drops[i];
             drop.y += drop.speed;
 
             // Appliquer l'effet de flou
-            applyBlur(drop.blur);
+            if (!native) applyBlur(drop.blur);
 
             // Calculer la nouvelle opacité pour le fondu
             const fadeOutStart = drop.fallDistance * 0.8;
@@ -517,7 +520,7 @@ export function initWaterDrop(canvasId, options = {}, saved = null) {
             // Dessiner la goutte sous forme d'ovale (étirée verticalement)
             const ovalWidth = drop.size;  // Largeur du cercle
             const ovalHeight = drop.size * 2; // Hauteur étirée
-            drawOval(drop.x, drop.y, ovalWidth, ovalHeight, drop.color, drop.opacity);
+            if (!native) drawOval(drop.x, drop.y, ovalWidth, ovalHeight, drop.color, drop.opacity);
 
             // Supprimer la goutte si elle atteint la fin de sa chute ou devient invisible
             if (drop.y > drop.fallDistance || drop.opacity <= 0) {
@@ -526,7 +529,7 @@ export function initWaterDrop(canvasId, options = {}, saved = null) {
         }
 
         // Réinitialiser le filtre de flou
-        ctx.filter = 'none';
+        if (!native) ctx.filter = 'none';
 
     }
 

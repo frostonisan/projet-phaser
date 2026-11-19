@@ -1319,6 +1319,8 @@ async function refreshChestCanvasSprite(canvas) {
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, cssWidth, cssHeight);
   const draw = computeBackgroundDrawRect(image, cssWidth, cssHeight, descriptor);
+  canvas.dataset.canvasSource = descriptor.url;
+  canvas.dataset.canvasDraw = JSON.stringify(draw);
   context.drawImage(image, draw.x, draw.y, draw.width, draw.height);
   context.setTransform(1, 0, 0, 1, 0, 0);
   chestCanvasOriginalImages.set(
@@ -1336,6 +1338,7 @@ function scheduleChestCanvasRefresh(canvas) {
   requestAnimationFrame(() => requestAnimationFrame(() => refreshChestCanvasSprite(canvas)));
 }
 function entiteTint(canvas, color = "255, 0, 0", opacity = 0.6) {
+  if (canvas?._canvasNative) { canvas._canvasTint = { color, opacity }; return true; }
   const context = canvas?.getContext?.("2d");
   const original = chestCanvasOriginalImages.get(canvas);
   if (!context || !original) return false;
@@ -1348,6 +1351,7 @@ function entiteTint(canvas, color = "255, 0, 0", opacity = 0.6) {
   return true;
 }
 function releaseChestTint(canvas) {
+  if (canvas?._canvasNative) { canvas._canvasTint = null; return; }
   const context = canvas?.getContext?.("2d");
   const original = chestCanvasOriginalImages.get(canvas);
   if (context && original) context.putImageData(original, 0, 0);

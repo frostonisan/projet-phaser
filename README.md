@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.97.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.98.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -616,3 +616,79 @@ simulateur. Les contrôles de pause/interactions après cette correction sont
 dans `functional-resize-final/`, ceux du rendu habituel dans `html-final/`,
 et les contrôles de syntaxe, imports, assets et règles dans `static-final.log`,
 sous `outputs/canvas-combat/`.
+
+
+## Plateau visible dans le canvas commun — v0.98.0-dev
+
+Le mode `?monsters=webgl` dessine maintenant le fond, le sol, les socles,
+les empreintes, le premier plan, la météo et les objets au sol dans le même
+canvas Phaser que les monstres, projectiles, panneaux et effets. Les tuiles
+sont regroupées en maillages réutilisés, limités à la zone visible. La neige,
+les rayons, les gouttes et les remous conservent leurs données et leur horloge ;
+leurs anciens canvas 2D cachés ne sont plus redessinés. Les GIF partagent les
+textures décodées existantes. Aucune nouvelle dépendance ni fichier de jeu.
+
+Les barres de PV et d'armure lisent directement l'état des combattants. Les
+écritures HTML des combattants sont évitées ; seuls les panneaux ouverts
+(HUD, pilotage, inspection) reçoivent leur projection HTML. Les panneaux de cible
+identiques ne sont plus reconstruits. Une armure
+initialement absente peut apparaître et réagir aux impacts sans reconstruire
+le HTML du combattant. Le clignotement des PV faibles et le flash d'armure
+utilisent l'horloge sauvegardée. Les valeurs d'animation et les transformations
+immobiles sont réutilisées entre images ; une commande, une animation ou un
+changement de géométrie invalide la pose concernée.
+
+Les menus et les contrôles restent en HTML. Des éléments invisibles conservent
+les formes de hitbox, les événements et l'adaptateur de sauvegarde existants :
+**un canvas visible ne signifie pas suppression complète du DOM**. Les thèmes
+et géométries sont encore compilés lors de la création, des changements d'état,
+du chargement d'images et des redimensionnements. Pendant les transitions de
+caméra, quelques plans communs sont recalés ; les acteurs restent dans Phaser.
+Leur boucle d'image ne lit toujours pas les positions et PV dans le HTML.
+
+La section de sauvegarde `canvasBoard` conserve les animations par identifiants
+stables de cases, surfaces et objets, indépendamment de l'ordre des nœuds après
+F5. Le suivi tactile passe par le pointeur et le glisser-déposer de Phaser sans
+faire passer le canvas opaque devant les menus ou le voile de pause. Les règles
+de ciblage, dégâts, placement, coûts et chronologie des attaques sont conservées.
+Les limites déjà documentées sur certains halos et transformations 3D des
+composants restent applicables ; aucune identité pixel par pixel n'est promise.
+
+Les tests du plateau complet sont intégrés au script de pause existant :
+`CANVAS_BOARD_ONLY=1 MONSTER_WEBGL=1`. Ils couvrent les quatre biomes, l'absence
+de redessin 2D de la météo, l'échelle des maillages, les transitions de caméra,
+les coffres et objets, la pause/F5, le mobile et le changement de taille du plateau.
+Le banc de charge existant accepte `LOAD_BIOME=prison` (ou un autre biome) pour
+comparer le même combat avec son décor et sa météo.
+
+
+Mesures finales face à `0.97.0-dev`, Chrome 157 avec WebGL matériel AMD Radeon,
+scénario de Grouille-doigts mêlant tirs, mêlée, soins et contrôles, biome prison :
+deux répétitions de 12 secondes par version/effectif, ordre alterné, sans autre
+navigateur de test concurrent. Moyennes des deux essais (moins est mieux) :
+
+| Monstres | Image moyenne avant → après | P95 avant → après |
+| --- | --- | --- |
+| 40 | 27,46 → 26,59 ms | 75,00 → 74,95 ms |
+| 80 | 42,38 → 41,50 ms | 166,60 → 141,65 ms |
+
+Le coût cumulé de mise en page et de recalcul CSS recule de 1 276 à 1 039 ms
+sur les essais à 40, et de 1 121 à 942 ms à 80. Le gain moyen reste faible ;
+le P95 à 80 recule d'environ 15 %, mais des saccades importantes subsistent.
+Ce passage du plateau en canvas ne suffit donc pas à garantir 60 images/s.
+Les boucles des acteurs enregistrent zéro lecture HTML et zéro conversion de
+panneau HTML ; la compilation des thèmes lors des changements reste présente.
+Le profil CPU conserve des coûts de poses/rendu, de contrôles/ciblage, de calcul
+de caractéristiques et de compilation déclenchée par les événements. Aucun
+lissage artificiel ni changement des règles ne masque ces coûts.
+
+Sources figées, captures, mesures et empreintes des fichiers livrés :
+`outputs/canvas-board/delivery-load/` (8 combats, aucune erreur ni relance de
+combattant sain). Les quatre comparaisons exactes du simulateur — 40/80,
+graines 1701/1702, cinq secondes simulées, résultats/phases/journaux identiques —
+sont dans `outputs/canvas-board/paired-final/`. Les derniers ajustements de
+clignotement, de cache de poses et de recherche de panneaux sont uniquement
+visuels ; les fichiers de règles n'ont pas changé. Les validations finales
+sont dans `delivery-validation/`, `board-optimized.log` et `static-delivery.log`,
+sous `outputs/canvas-board/`. Les tests du rendu HTML habituel restent dans
+`html-validated/` au même endroit.

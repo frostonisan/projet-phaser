@@ -386,7 +386,7 @@ function tickSharedGifs() {
     while (frame < state.frames.urls.length - 1 && elapsed >= state.frames.durations[frame])
       elapsed -= state.frames.durations[frame++];
     if (frame !== state.frame) {
-      if (!image.closest('[data-monster-webgl="ready"]')) image.src = state.frames.urls[frame];
+      if (!image.closest('[data-monster-webgl="ready"],[data-canvas-painted]')) image.src = state.frames.urls[frame];
       state.frame = frame;
     }
   }

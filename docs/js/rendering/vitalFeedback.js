@@ -1,5 +1,5 @@
-import { writeCombatVisualStyle, animateCombatVisual } from "./animations.js";
-import { createArmorCounter, createExtraLifeCounter, createFadedLifeCounter } from "./entities.js";
+import { writeCombatVisualStyle, animateCombatVisual, hasCanvasCombatView, renderCombatVisual } from "./animations.js";
+import { createArmorCounter, createExtraLifeCounter, createFadedLifeCounter, hasExternalLifeBars } from "./entities.js";
 // Presentation of resolved vital outcomes; never changes HP, armor, scores or persistence.
 import { PopUpDamages, updateTotalHealCounter } from "./hud.js";
 
@@ -228,6 +228,7 @@ export function updateHPCounters(entityId, currentHP, maxHP) {
   document
     .querySelectorAll(`.HP-counter[data-stat="HP"][data-entity-id="${entityId}"]`)
     .forEach(el => {
+      if (el.closest('[data-monster-webgl="ready"]')) return;
       el.textContent = `HP : ${cur} / ${max}`;
     });
 }
@@ -278,6 +279,14 @@ function ensureArmorBarDom(entityId, initialArmor = 0) {
 }
 
 export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entityId) {
+  const native = hasCanvasCombatView(entityId);
+  if(native){
+    renderCombatVisual(entityId,'vitals',{hp:currentHP,maxHP,armor:currentArmor,maxArmor});
+    // Combat bars already read state. Heads-up, command and inspection panels
+    // still receive HTML projection while their views are attached.
+    if(!hasExternalLifeBars(entityId)&&!document.getElementById(`ScanEntity_${entityId}`)&&!document.getElementById(`CodexLifeBars_${entityId}`))
+      return {currentHP:Math.max(0,Math.min(currentHP,maxHP)),currentArmor:Math.max(0,Number(currentArmor)||0)};
+  }
   ensureHPDom(entityId);
 
   // --- 2) Clamp ---
@@ -317,6 +326,7 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
   document.querySelectorAll(
     `.armor-bar[data-stat="armor-bar"][data-entity-id="${entityId}"]`
   ).forEach(armorBar => {
+    if (native && armorBar.closest('[data-monster-webgl="ready"]')) return;
     const armorFill = armorBar.querySelector(".armor-fill");
     const armorText = armorBar.querySelector(
       `.armor-text[data-stat="armor-text"][data-entity-id="${entityId}"]`
@@ -351,6 +361,7 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
   document.querySelectorAll(
     `.health-bar[data-stat="hp-bar"][data-entity-id="${entityId}"]`
   ).forEach(healthBar => {
+    if (native && healthBar.closest('[data-monster-webgl="ready"]')) return;
     const healthFill = healthBar.querySelector(".health-fill");
     if (healthFill) healthFill.style.transition = "width 0.5s ease, background-color 0.5s ease";
     healthBar.style.setProperty("width", `${hpPercent}%`, "important");
@@ -362,6 +373,7 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
   document.querySelectorAll(
     `.entite-stat[data-stat="HP"][data-entity-id="${entityId}"]:not(.preview):not([data-display="max"])`
   ).forEach(el => {
+    if (native && el.closest('[data-monster-webgl="ready"]')) return;
     if (!el.closest('.item-description-card, .item-stats-block')) el.textContent = `${validHP} / ${maxHP}`;
   });
 
@@ -369,6 +381,7 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
   document.querySelectorAll(
     `.armor-counter[data-entity-id="${entityId}"]`
   ).forEach(el => {
+    if (native && el.closest('[data-monster-webgl="ready"]')) return;
     if (validArmor <= 0) writeCombatVisualStyle(el, { display: "none" });
     else {
       writeCombatVisualStyle(el, { display: "" });
@@ -379,6 +392,7 @@ export function updateHealthBar(currentHP, maxHP, currentArmor, maxArmor, entity
   document.querySelectorAll(
     `.entite-stat[data-stat="armor"][data-entity-id="${entityId}"]:not(.preview):not([data-display="max"])`
   ).forEach(el => {
+    if (native && el.closest('[data-monster-webgl="ready"]')) return;
     if (el.closest('.item-description-card, .item-stats-block')) return;
     const profileRow = el.closest(".codex-profile-battle-stat");
 

@@ -2438,3 +2438,14 @@ filter: drop-shadow(0 0 10px rgba(226, 189, 255));}
 #hexGrid.phaser-dragging .dragged { cursor: grabbing; }
 
 #phaser-projectiles.phaser-combat-surface { position:absolute; inset:auto; left:0; top:0; z-index:5000; }
+
+[data-canvas-painted] { visibility: hidden !important; }
+[data-canvas-painted], [data-canvas-painted] * { animation-play-state: paused !important; }
+
+/* Transparent board/input adapters and the HTML controls sit above the shared canvas. */
+#game-container.canvas-board-active { position: relative; z-index: 6000; }
+
+/* Transparent adapters retain the established hit shapes and event routing. */
+.chest-container[data-canvas-painted],.consommable-container[data-canvas-painted],.ground-loot-remnant[data-canvas-painted] {
+  visibility: visible !important; opacity: 0 !important;
+}

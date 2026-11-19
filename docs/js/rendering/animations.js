@@ -2146,6 +2146,19 @@ let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
 const pendingCombatPresentationUpdates=new Set();
 export function queueCombatPresentationUpdate(update){pendingCombatPresentationUpdates.add(update);wakePhaserMonsters();}
 function flushCombatPresentationUpdates(){const batch=[...pendingCombatPresentationUpdates];pendingCombatPresentationUpdates.clear();for(const update of batch)update();}
+const canvasBoardViews=new Map();
+let pendingCanvasBoards=[];
+registerCombatState('canvasBoard',()=>[...canvasBoardViews.values()].filter(view=>view.connected()).map(view=>view.capture()),saved=>{
+  pendingCanvasBoards=[...(saved||[])];for(const view of canvasBoardViews.values())if(view.connected()&&pendingCanvasBoards.length)view.restore(pendingCanvasBoards.shift());
+});
+export async function attachPhaserBoard(grid,create){
+  if(globalThis.__combatSimulation||canvasBoardViews.has(grid))return;
+  const layer=await ensurePhaserLayer();if(!layer.game.renderer.gl||!grid.isConnected||canvasBoardViews.has(grid))return;
+  const refreshActors=()=>{for(const [box,actor] of phaserMonsterViews)if(box.closest('#hexGrid')===grid)actor.invalidateGeometry?.(true);};
+  const view=await create(layer.scene,refreshActors);if(!grid.isConnected){view.destroy();return;}
+  canvasBoardViews.set(grid,view);grid._canvasBoardView=view;if(pendingCanvasBoards.length)view.restore(pendingCanvasBoards.shift());positionPhaserLayer();refreshActors();layer.host.hidden=false;layer.game.loop.wake();
+}
+export const hasCanvasBoard=()=>canvasBoardViews.size>0;
 const phaserMonsterViews = new Map(), phaserEntityViews = new Map(), pendingPresentation = new Map(),pendingVisualCommands=new Map();
 export function renderCombatVisual(entityId, kind, data = {}) {
   const id=String(entityId),view=phaserEntityViews.get(id);
@@ -2198,19 +2211,19 @@ function refreshMonsterMenus() {
   monsterMenusQueued=true;
   queueMicrotask(()=>{
     monsterMenusQueued=false;
-    monsterMenusOpen=monsterBoardTransition;
+    monsterMenusOpen=monsterBoardTransition&&!hasCanvasBoard();
   });
 }
-// Board perspective remains the existing CSS transition. Hide the WebGL copy
-// during that transition, then compile its final geometry once.
+// The native board shares its camera geometry with every actor. The older
+// monster-only surface retains its CSS-transition fallback.
 for(const name of ['transitionrun','transitionend','transitioncancel'])document.addEventListener(name,event=>{
   if(event.target.id!=='hexGrid'||event.propertyName!=='transform')return;
   monsterBoardTransition=name==='transitionrun';refreshMonsterMenus();
-  if(!monsterBoardTransition){invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);}
+  if(!monsterBoardTransition&&!hasCanvasBoard()){invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);}
 });
 const monsterMenuObserver=new MutationObserver(records=>{
   if(!phaserMonsterViews.size){monsterMenuObserver.disconnect();monsterBoardTransition=false;return;}
-  if(records.some(record=>record.target.id==='hexGrid' && record.type==='attributes')){
+  if(!hasCanvasBoard()&&records.some(record=>record.target.id==='hexGrid' && record.type==='attributes')){
     invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);}
   if(records.some(record=>record.target instanceof Element && (record.target.closest('.Game-UI') ||
     [...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1 && node.matches('.Game-UI,.menu-map-container,.settings-menu,#gameOverMessage')))))refreshMonsterMenus();
@@ -2225,6 +2238,7 @@ function updatePhaserMonsters() {
 }
 for(const name of ['resize','orientationchange','scroll'])window.addEventListener(name,()=>{
   positionPhaserLayer();invalidateBoardScreenGeometry(observedMonsterBoard);
+  for(const view of canvasBoardViews.values())view.invalidate();
   for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
 }, {passive:true});
 
@@ -2375,17 +2389,22 @@ export async function configurePhaserBoardDrag(hooks) {
     draggable: true,
   });
   scene.input.dragDistanceThreshold = 8;
+  // Phaser 3.90 normally discards touch movement above an HTML overlay.
+  // Route only our accepted contact to its existing pointer/drag state machine;
+  // the opaque combat canvas can then remain underneath menus and the pause veil.
+  const manager=scene.input.manager,originalTouchMove=manager.onTouchMove;
+  manager.onTouchMove=function(event){
+    const pointer=(boardDrag||boardDragPending)?.pointer;
+    const touch=pointer?.wasTouch&&!boardDragMultiTouch&&[...event.changedTouches].find(t=>t.identifier===pointer.identifier);
+    if(!touch)return originalTouchMove.call(this,event);
+    pointer.touchmove(touch,event);this.activePointer=pointer;this.updateInputPlugins(layer.touchMoveType,[pointer]);
+  };
   boardDragZone.on('pointerdown', pointer => {
     if (boardDrag || boardDragPending || !pointer.primaryDown) return;
     const view = boardDragHooks.pick(pointer.x, pointer.y);
     if (view) {
       boardDragPending = { view, pointer, rect: view.source.getBoundingClientRect() };
-      // Phaser 3.90 accepts touch movement only above its canvas. Capture the
-      // surface for this contact only; HTML hitboxes still choose the drop below it.
-      if (pointer.wasTouch) {
-        layer.game.canvas.style.pointerEvents = 'auto';
-        hideIdlePhaser(); layer.game.loop.wake();
-      }
+      if (pointer.wasTouch) { hideIdlePhaser(); layer.game.loop.wake(); }
     }
   });
   scene.input.on('dragstart', (pointer, object) => {
@@ -2478,7 +2497,7 @@ function projectileProfile(attacker, data) {
 }
 function hideIdlePhaser() {
   if (!phaserLayer?.game) return;
-  const visible = phaserMonsterViews.size || boardDrag || boardDragPending?.pointer.wasTouch || phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
+  const visible = canvasBoardViews.size || phaserMonsterViews.size || boardDrag || boardDragPending?.pointer.wasTouch || phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
   phaserLayer.host.hidden = !visible;
   if (!visible && !phaserPlacements.size) phaserLayer.game.loop.sleep();
 }
@@ -2665,7 +2684,7 @@ function drawProjectile(entry, scene) {
 
 export function positionPhaserLayer(){
   const host=phaserLayer?.host,root=document.getElementById('game-windows');
-  if(!host||!root||!phaserMonsterViews.size)return;
+  if(!host||!root||!phaserMonsterViews.size&&!canvasBoardViews.size)return;
   if(host.parentElement!==root)root.append(host);
   const r=root.getBoundingClientRect(),sx=r.width/(root.offsetWidth||1),sy=r.height/(root.offsetHeight||1);
   host.classList.add('phaser-combat-surface');
@@ -2680,7 +2699,7 @@ async function ensurePhaserLayer() {
     const host = document.createElement('div');
     host.id = 'phaser-projectiles'; host.setAttribute('aria-hidden', 'true'); host.hidden = true;
     document.body.append(host);
-    const layer = phaserLayer = { host, game: null, scene: null };
+    const layer = phaserLayer = { host, game: null, scene: null, touchMoveType: Phaser.Input.TOUCH_MOVE };
     await new Promise((resolve, reject) => {
       const timeout = globalThis.setTimeout(() => reject(new Error('Initialisation Phaser trop longue.')), 10000);
       try {
@@ -2702,6 +2721,7 @@ async function ensurePhaserLayer() {
             update() {
               const { width, height } = viewport();
               if (this.scale.width !== width || this.scale.height !== height) this.scale.resize(width, height);
+              for(const [grid,view] of canvasBoardViews){if(!grid.isConnected||!view.connected()){view.destroy();canvasBoardViews.delete(grid);delete grid._canvasBoardView;}else view.update();}
               updatePhaserPlacements();
               updatePhaserMonsters();
               updatePhaserBoardDrag();
@@ -2721,7 +2741,7 @@ async function ensurePhaserLayer() {
                 for (const entry of phaserEffects.values()) drawProjectile(entry, this);
               } finally { phaserFrameRects = null; }
               hideIdlePhaser();
-              if (isCombatPaused() && !boardDrag && !phaserMonsterViews.size) this.game.loop.sleep();
+              if (isCombatPaused() && !boardDrag && !phaserMonsterViews.size && !canvasBoardViews.size) this.game.loop.sleep();
             },
           },
         });

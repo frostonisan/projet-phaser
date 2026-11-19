@@ -746,7 +746,7 @@ export function presentMovementRefill(entite, before) {
 }
 
 // Roles et cibles affiches : badges, choix confirme et listes de priorite.
-const selectedTargetDisplays = new WeakMap();
+const selectedTargetDisplays = new WeakMap(), renderedTargetDisplays = new WeakMap();
 
 export function updateRoleInDOM(entite) {
     if (!isNonLordCombatant(entite)) {
@@ -762,7 +762,7 @@ export function updateRoleInDOM(entite) {
 
     if (roleImg) {
         roleImg.alt = `${entite.name} est un ${entite.role}`;
-        roleImg.className = `role-img role-${entite.role}`;
+        setTimerClass(roleImg,`role-img role-${entite.role}`);
     }
 
     if (roleTitle) {
@@ -783,14 +783,14 @@ export function updateRoleInDOM(entite) {
 
     if (entiteBox) {
         for (const name of [...entiteBox.classList]) {
-            if (name.startsWith('side-') || name.startsWith('role-')) entiteBox.classList.remove(name);
+            if ((name.startsWith('side-')&&name!==`side-${entite.side}`)||(name.startsWith('role-')&&name!==`role-${entite.role}`)) entiteBox.classList.remove(name);
         }
         entiteBox.classList.add('entite-box', `side-${entite.side}`, `role-${entite.role}`);
     }
 }
 
 export function clearBattleTargetDisplays(entities = entites) {
-    for (const entity of entities || []) selectedTargetDisplays.delete(entity);
+    for (const entity of entities || []) { selectedTargetDisplays.delete(entity); renderedTargetDisplays.delete(entity); }
 }
 
 export function getBattleTargetAttack(entity) {
@@ -807,6 +807,7 @@ export function getBattleTargetAttack(entity) {
 }
 
 function displayNeutralAttackTarget(entity) {
+    renderedTargetDisplays.delete(entity);
     entity.targetZone = 'none';
     const element = getBattleEntityElement(entity);
     if (element) {
@@ -840,7 +841,7 @@ function displayNeutralAttackTarget(entity) {
         listing.querySelectorAll('.target-zone').forEach(node => node.classList.remove('target-zone'));
     }
 
-    const zone = document.querySelector(`#ScanEntity_${entity.id} .target-zone-role-display`);
+    const zone = document.getElementById(`ScanEntity_${entity.id}`)?.querySelector('.target-zone-role-display');
     if (zone) zone.textContent = 'Aucune attaque sélectionnée.';
 }
 
@@ -872,13 +873,19 @@ export function updateEntityAttackTargetDisplay(entity, selectedAttack = null, s
     entity.targetZone = isHex ? 'hexa' : role;
     const element = getBattleEntityElement(entity);
     if (element) {
-        element.dataset.targetzone = entity.targetZone;
-        element.dataset.attackFunction = functionName;
-        element.dataset.attackDomain = isHex ? 'invocateur' : isNecro ? 'necro' : 'combattant';
+        if (element.dataset.targetzone !== entity.targetZone) element.dataset.targetzone = entity.targetZone;
+        if (element.dataset.attackFunction !== functionName) element.dataset.attackFunction = functionName;
+        const domain = isHex ? 'invocateur' : isNecro ? 'necro' : 'combattant';
+        if (element.dataset.attackDomain !== domain) element.dataset.attackDomain = domain;
     }
     const container = document.getElementById(`TargetroleContainer_${entity.id}`);
+    const listingNode=document.getElementById(`listing_${entity.id}`),zoneNode=document.getElementById(`ScanEntity_${entity.id}`)?.querySelector('.target-zone-role-display');
+    const signature=[entity.side,role,classes,attack.attackKey||attack.functionName,entity.role,attack.attackTarget.join(',')].join('|');
+    const previous=renderedTargetDisplays.get(entity);
+    if(!isHex&&previous?.signature===signature&&previous.container===container&&previous.listing===listingNode&&previous.zone===zoneNode)return;
+    renderedTargetDisplays.set(entity,{signature,container,listing:listingNode,zone:zoneNode});
     if (container) {
-        container.className = `target-role-img-container sbire ${entity.side} ${classes}`;
+        setTimerClass(container,`target-role-img-container sbire ${entity.side} ${classes}`);
         container.dataset.attackKey = attack.attackKey || attack.functionName;
         const picto = container.querySelector('.target-picto-hud');
         if (picto) picto.className = `target-picto-hud ${functionName} ${isNecro ? 'Necro' : ''}`;
@@ -890,6 +897,7 @@ export function updateEntityAttackTargetDisplay(entity, selectedAttack = null, s
     const targetInfo = document.getElementById(`TargetInfos_${entity.id}`);
     if (targetInfo) {
         targetInfo.classList.remove('Attaquant', 'Support', 'Arbitre', 'Invocateur', 'Necro');
+        targetInfo.classList.remove('no-target');
         targetInfo.classList.add(functionName);
         if (isHex) targetInfo.classList.add('Invocateur');
         if (isNecro) targetInfo.classList.add('Necro');
@@ -906,7 +914,7 @@ export function updateEntityAttackTargetDisplay(entity, selectedAttack = null, s
             else listing.querySelector(`.role-${role}`)?.classList.add('target-zone');
         }
     }
-    const zone = document.querySelector(`#ScanEntity_${entity.id} .target-zone-role-display`);
+    const zone = document.getElementById(`ScanEntity_${entity.id}`)?.querySelector('.target-zone-role-display');
     if (zone) zone.textContent = isHex ? 'Ciblage des cases du terrain.' : `Cibles : ${isNecro ? 'cadavres' : 'entités'} ${attack.attackTarget.includes('enemy') ? 'ennemis' : 'alliés'} (${role}).`;
 }
 
