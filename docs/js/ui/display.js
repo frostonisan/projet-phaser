@@ -1,5 +1,6 @@
+import { renderCombatVisual, hasCanvasCombatView } from '../rendering/animations.js';
 import { removeCombatVisualAfter } from "../combat/clock.js";
-import { showEffectPopup, formatEffectPopup } from "../rendering/popups.js";
+import { showEffectPopup, formatEffectPopup, canvasEffectPopup, effectPopupContent } from "../rendering/popups.js";
 import { HelpText, HELPER_PICTOGRAM_NAMES } from "../data/helpers.js";
 import { getDisplayStatKey, normalizeStatKey } from "../entities/rules.js";
 import { calculateStatSources } from "../entities/statSystem.js";
@@ -10,7 +11,7 @@ import { renderCurrentBattleLog } from "../combat/journal.js";
 import { getVisibleHexes, setVisibleHexes } from "../storage/gameStorage.js";
 import { hideCombatAttackControlPanel, isCombatAttackControlPanelOpenFor, showCombatAttackControlPanel } from "./attacks.js";
 
-const GAME_VERSION = "0.96.2-dev";
+const GAME_VERSION = "0.97.0-dev";
 
 export function formatGameIdentity(gameId) {
     return `The Dark Pit v${GAME_VERSION} — ID de la partie : ${gameId}`;
@@ -1552,6 +1553,11 @@ export function showHealingFeedback(target, restoredHP) {
     const amount = Math.max(0, Math.round(Number(restoredHP) || 0));
     if (!target?.id || amount <= 0) return false;
 
+    if(hasCanvasCombatView(target.id)) {
+      renderCombatVisual(target.id,'gif',{className:'effect-vfx heal healing-feedback-vfx',src:'./media/assets/effects/heal-green.gif',lifetime:HEALING_FEEDBACK_DURATION});
+      canvasEffectPopup(target.id,{tag:'div',classes:'BattleText heal healing-feedback',children:[{tag:'div',classes:'healing-feedback-line',children:[
+        {tag:'span',classes:'healing-feedback-icon'},{tag:'span',classes:'healing-feedback-value',children:[{text:`+${amount} HP`}]}]}]});return true;
+    }
     const effectsContainer = document.getElementById(`effectsContainer_${target.id}`)
         || document.getElementById(`codex-entity-sprite-container_${target.id}`);
     if (effectsContainer) {
@@ -1601,6 +1607,7 @@ export function EffectMessage(target, customText = "MISS", messageType = "normal
         return;
     }
 
+    if(!container&&!isContentNode&&hasCanvasCombatView(target.id))return canvasEffectPopup(target.id,effectPopupContent(customText,messageType,options));
     const id = CSS.escape(String(target.id));
     const battleHost = document.getElementById(`PopDow_${target.id}`);
     const directHost = container || (battleHost?.classList.contains('combat-popup-status') && battleHost);

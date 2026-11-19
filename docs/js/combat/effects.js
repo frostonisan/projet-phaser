@@ -1,3 +1,4 @@
+import { renderCombatVisual } from '../rendering/animations.js';
 import { updateHealthBar } from "../rendering/vitalFeedback.js";
 import {
   syncEntityFootprints, pullEntityToward, moveEntityRandomly, entitySizeInCells, setEntitySizeInCells,
@@ -137,7 +138,7 @@ function removeControlEffect(key, { preserveBoost = false, preserveVisual = fals
   if (remaining) current.target.controlStates[current.state.kind] = remaining;
   else {
     delete current.target.controlStates[current.state.kind];
-    if (!preserveVisual) current.vfx?.remove();
+    if (!preserveVisual) {current.vfx?.remove();renderCombatVisual(current.target.id,'removeGif',{key:`control:${current.state.kind}`});}
     current.onEnd?.();
     toggleEffectClass(current.target, current.state.kind, 'remove');
   }
@@ -242,7 +243,8 @@ function applyTimedControl(target, effect, attacker, onEnd, saved = null) {
   }
   const container = document.getElementById(`effectsContainer_${target.id}`);
   let vfx = container?.querySelector(`[data-control-visual="${effect.effectName}"]`) || null;
-  if (effect.effectVisual && container && !vfx) {
+  const nativeControl=effect.effectVisual&&renderCombatVisual(target.id,'gif',{key:`control:${effect.effectName}`,keepExisting:true,className:`effect-vfx ${effect.effectName}`,src:effect.effectVisual,lifetime:Number.MAX_SAFE_INTEGER});
+  if (!nativeControl && effect.effectVisual && container && !vfx) {
     vfx = document.createElement('img');
     vfx.id = `${effect.effectName}VFX_${target.id}`;
     vfx.className = `effect-vfx ${effect.effectName}`;
@@ -622,6 +624,7 @@ function removeDotEffect(key) {
   const target = runtime?.target;
   if (!target) return;
   if (![...activeAlterations.values()].some(other => other.target === state.target && other.kind === state.kind)) {
+    renderCombatVisual(target.id,'removeGif',{key:`dot:${state.kind}`});
     document.getElementById(`${state.kind}VFX_${target.id}`)?.remove();
     toggleEffectClass(target, state.kind, 'remove');
     if (state.kind === 'brulure') target.brulureStacks = 0;
@@ -644,7 +647,9 @@ function runDot(key, target, state, attacker, onEnd) {
   toggleEffectClass(target, state.kind, 'add');
   state.runtimeKey = key;
   const container = document.getElementById(`effectsContainer_${target.id}`);
-  if (container && !document.getElementById(`${state.kind}VFX_${target.id}`)) {
+  const visualName=state.kind==='brulure'?'burn':'poison';
+  const nativeDot=renderCombatVisual(target.id,'gif',{key:`dot:${state.kind}`,keepExisting:true,className:`effect-vfx ${visualName}`,src:`./media/assets/effects/${visualName}.gif`,lifetime:Number.MAX_SAFE_INTEGER});
+  if (!nativeDot && container && !document.getElementById(`${state.kind}VFX_${target.id}`)) {
     const vfx = document.createElement('img'); vfx.id = `${state.kind}VFX_${target.id}`;
     vfx.className = `effect-vfx ${state.kind === 'brulure' ? 'burn' : 'poison'}`;
     vfx.alt = ''; vfx.src = cachedResourceUrl(`./media/assets/effects/${state.kind === 'brulure' ? 'burn' : 'poison'}.gif`);

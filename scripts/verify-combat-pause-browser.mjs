@@ -19,10 +19,12 @@ const server = createServer(async (req, res) => {
       data = source.replace(marker, 'attack: {\n  launchContextId: attackDetail?.launchContextId,\n  functionName: attackDetail');
     }
     if (file === resolve(root, 'js/rendering/entities.js')) {
-      data=data.toString().replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,
+      data=data.toString().replace('return {command,update,capture,restore,destroy};',`return {command,update,capture,restore,destroy,
+        inspect:()=>records.map(r=>({kind:r.kind,packed:r.asset?.packed,texture:r.asset?.name,frame:r.image?.frame?.name,type:r.image?.type,visible:r.image?.visible}))};`)
+        .replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,
         inspectFX:()=>[...layers.values()].filter(l=>l.kind==='panel'||l.asset?.packed).map(l=>({kind:l.kind,
           packed:l.asset?.packed,texture:l.asset?.name,frame:l.image?.frame?.name,parts:l.image?.list?.length,roleIcons:l.image?.list?.filter(p=>p.updateMonsterIntro).length,
-          type:l.image?.type,visible:l.image?.visible})),
+          type:l.image?.type,visible:l.image?.visible})).concat(presentation.inspect()),
         inspect:()=>[...layers.values()].filter(l=>l.kind==='body'||l.kind==='bar'||l.kind==='text').map(l=>({
           kind:l.kind,bar:l.bar,text:l.text,x:l.image?.x,y:l.image?.y,alpha:l.image?.alpha,
           width:l.image?.displayWidth,height:l.image?.displayHeight,visible:l.image?.visible}))}`);
@@ -65,7 +67,8 @@ async function fixture(config = {}) {
     const E = await import("/js/entities/runtime.js");
     const C = await import("/js/rendering/entities.js");
     const S = await import("/js/storage/gameStorage.js");
-    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
+    const templates=(await import("/js/data/entityTemplates.js")).entitesNest;
+    const template = templates.find(e => e.serial === 900013);
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
     const store = await import("/js/storage/sessionStorage.js");
@@ -81,7 +84,7 @@ async function fixture(config = {}) {
       hex.style.cssText = `position:absolute;left:${i * 400}px;top:50px;width:180px;height:200px`; grid.append(hex);
       const own = config[side] || {};
       const magic = own.magic || false;
-      const entity = E.enrichEntityStats({ ...structuredClone(template), id: 999820 + i, name: `Simultané ${side}`, side,
+      const entity = E.enrichEntityStats({ ...structuredClone(config.serials?templates.find(e=>e.serial===config.serials[i]):template), id: 999820 + i, name: `Simultané ${side}`, side,
         type: 'sbire', role: 'gueux', position: String(i+1), level: 1, awakening: 1, stuff: {}, stats: {}, modifierStats: {},
         baseStats: { HP: 1000, strength: 0, intelligence: 0, agility: 0, physicalDamage: 40, magicalDamage: 40,
           speed: config.speed ?? 100, ambidextry: config.double ? 100000 : 0, extraLife: own.extraLife || 0 },
@@ -116,7 +119,38 @@ async function fixture(config = {}) {
 }
 
 try {
+  {
+    const page=await fixture({speed:20000});
+    const result=await page.evaluate(async()=>{
+      const wait=()=>new Promise(resolve=>globalThis.requestAnimationFrame(resolve));
+      const calls=[];Clock.freezeCombatClock();
+      let second;
+      Clock.requestAnimationFrame(()=>{
+        calls.push('first');Clock.cancelAnimationFrame(second);
+        Clock.requestAnimationFrame(()=>calls.push('next'));
+        Clock.freezeCombatClock();
+      });
+      second=Clock.requestAnimationFrame(()=>calls.push('cancelled'));
+      Clock.requestAnimationFrame(()=>calls.push('remaining'));
+      await wait();const frozen=[...calls];Clock.resumeCombatClock();
+      await wait();const interrupted=[...calls];
+      await wait();const stillFrozen=[...calls];Clock.resumeCombatClock();
+      await wait();const resumed=[...calls];
+      Clock.requestAnimationFrame(()=>calls.push('cleared'));Clock.clearCombatClock();
+      await wait();return {frozen,interrupted,stillFrozen,resumed,final:calls};
+    });
+    assert.deepEqual(result,{frozen:[],interrupted:['first'],stillFrozen:['first'],
+      resumed:['first','remaining','next'],final:['first','remaining','next']});
+    await page.close();console.log('PASS shared animation frame: cancellation, pause within a batch, resume and cleanup');
+  }
   if(process.env.MONSTER_WEBGL==='1') {
+    for(const serials of [[1,2],[9,10],[12,666],[4568773,20]]){
+      const mixed=await fixture({speed:20000,serials});
+      await mixed.waitForFunction(()=>document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
+      assert.ok(await mixed.evaluate(()=>[...document.querySelectorAll('[data-monster-webgl="ready"]')].every(n=>n._monsterView.inspect().some(l=>l.kind==='body'&&l.width>0&&l.height>0&&l.visible))));
+      await mixed.close();
+    }
+    console.log('PASS eight monster species on the shared canvas');
     const page=await fixture({speed:20000});
     await page.waitForFunction(()=>document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
     await page.evaluate(async()=>{
@@ -139,6 +173,27 @@ try {
     assert.equal(await page.evaluate(()=>readPacked().length),2,'Pause freezes effect lifetime, as with the original looping GIF');
     await page.evaluate(()=>Clock.resumeCombatClock());
     await page.waitForFunction(()=>readPacked().length===0);
+    await page.evaluate(async()=>{
+      const {PopUpDamages}=await import('/js/rendering/hud.js');
+      for(let i=0;i<30;i++)PopUpDamages(E.entites[0],123+i,'hit',null,{physical:123},'critical');
+      const state=Clock.captureCombatState().phaserPresentation.find(v=>v.id===String(E.entites[0].id));
+      if(state.state.presentation.records.filter(r=>r.channel==='damage').length!==8)throw Error('Unbounded damage feed');
+      if(document.querySelectorAll('.combat-popup-card,.effect-vfx.ambidextry').length)throw Error('Canvas feedback created live HTML');
+      const menu=document.createElement('div');menu.className='menu-map-container';menu.innerHTML='<div style="background:#233344;width:300px;height:200px">Canvas overlay test</div>';document.querySelector('.Game-UI').append(menu);
+    });
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('[data-monster-webgl="ready"]').count(),2,'Menus keep the native battlefield alive');
+    assert.equal(await page.evaluate(()=>document.getElementById('phaser-projectiles').parentElement.id),'game-windows');
+    await page.screenshot({path:resolve(output,'canvas-menu-and-feedback.png')});
+    const readPose=()=>page.evaluate(()=>Clock.captureCombatState().phaserPresentation.find(v=>v.id===String(E.entites[0].id)).state.bindings
+      .filter(b=>b.overrides?.transform?.includes('23px')).map(b=>({overrides:b.overrides,values:b.values})));
+    await page.evaluate(async()=>{
+      Clock.freezeCombatClock();(await import('/js/rendering/animations.js')).writeCombatVisualStyle(
+        document.getElementById(`DragSprite_${E.entites[0].id}`),{transform:'translateX(23px) scale(1.07)',opacity:'.7'});
+    });
+    const poseBefore=await readPose();assert.equal(poseBefore.length,1);
+    await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);
+    assert.deepEqual(await readPose(),poseBefore,'Viewport calibration retains the paused native pose');
     await page.close();console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
   }
   if (!process.env.PAUSE_EXTRA_ONLY) {
@@ -298,14 +353,17 @@ try {
     await page.evaluate(()=>P.pauseCombat());
     const read=()=>page.evaluate(async()=>{
       const {entites}=await import("/js/entities/runtime.js");
+      const nativeState=(await import('/js/combat/clock.js')).captureCombatState().phaserPresentation;
       return entites.map(e=>({hp:e.stats.HP.current,speed:e.speedTimer,prep:e.preparationTime,recovery:e.recoveryTime,turn:e.turnCount,
         action:e._combatAction,boosts:Object.values(e.battleBoosts||{}).flat().map(b=>({id:b.id,value:b.value,expiresAt:b.expiresAt})),
         filter:document.getElementById(`spriteCanvas_${e.id}`).style.filter,
-        popup:document.getElementById(`PopUp_${e.id}`).textContent}));
+        popup:document.getElementById(`PopUp_${e.id}`).textContent,
+        native:nativeState?.find(v=>v.id===String(e.id))?.state.presentation.records.map(r=>({kind:r.kind,key:r.key,channel:r.channel,content:r.content,start:r.start,duration:r.duration,motion:r.motion}))}));
     });
     const before=await read();await page.waitForTimeout(1400);assert.deepEqual(await read(),before);
     await page.reload();
     await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
+    if(process.env.MONSTER_WEBGL==='1')await page.waitForFunction(()=>document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
     assert.deepEqual(await read(),before,phase+' restore');
     await page.keyboard.press('Space');
     await page.waitForTimeout(2300);
@@ -321,6 +379,7 @@ try {
     await page.waitForTimeout(200); await page.evaluate(()=>P.pauseCombat());
     const read=()=>page.evaluate(async()=>{
       const {entites}=await import("/js/entities/runtime.js");
+      const nativeState=(await import('/js/combat/clock.js')).captureCombatState().phaserPresentation;
       return entites.map(e=>({id:e.id,phase:e.orderPhase,timer:e._phaseTimer,hp:e.stats.HP.current,stats:e.combatStats}));
     });
     const before=await read();await page.reload();

@@ -8,6 +8,7 @@ const nativeCancelFrame = globalThis.cancelAnimationFrame?.bind(globalThis);
 let offset = 0, pausedAt = null, nextId = -1;
 const timers = new Map(), frames = new Map(), sections = new Map();
 const resumeWaiters = new Set();
+let nativeFrameBatch=null;
 // Permissions are separate from time: tactical actions can run on a frozen clock.
 let interactionBlocked = false;
 export const isCombatInteractionBlocked = () => interactionBlocked;
@@ -58,36 +59,41 @@ export function clearTimeout(id) {
 }
 export const clearInterval = clearTimeout;
 
-function armFrame(frame) {
-  if (isCombatPaused() || !nativeFrame) return;
-  frame.native = nativeFrame(() => {
-    frame.native = null;
-    if (isCombatPaused() || !frames.has(frame.id)) return;
-    frames.delete(frame.id);
-    frame.callback(clockNow());
+// Presentation callbacks share one browser frame. This avoids a style/layout
+// flush between every actor while retaining insertion order and cancellation.
+function armFrame() {
+  if(isCombatPaused()||!nativeFrame||nativeFrameBatch!==null||!frames.size)return;
+  nativeFrameBatch=nativeFrame(()=>{
+    nativeFrameBatch=null;const batch=[...frames.values()];
+    for(const frame of batch){
+      if(isCombatPaused())break;
+      if(frames.get(frame.id)!==frame)continue;
+      frames.delete(frame.id);
+      try{frame.callback(clockNow());}
+      catch(error){if(globalThis.reportError)globalThis.reportError(error);else nativeTimeout(()=>{throw error;},0);}
+    }
+    armFrame();
   });
 }
+function cancelFrameBatch(){if(nativeFrameBatch!==null)nativeCancelFrame?.(nativeFrameBatch);nativeFrameBatch=null;}
 export function requestAnimationFrame(callback) {
-  const frame = { id: nextId--, callback, native: null };
-  frames.set(frame.id, frame); armFrame(frame);
-  return frame.id;
+  const frame={id:nextId--,callback};frames.set(frame.id,frame);armFrame();return frame.id;
 }
 export function cancelAnimationFrame(id) {
-  const frame = frames.get(id);
-  if (frame) { nativeCancelFrame?.(frame.native); frames.delete(id); }
-  else if (id >= 0) nativeCancelFrame?.(id);
+  if(frames.delete(id)){if(!frames.size)cancelFrameBatch();}
+  else if(id>=0)nativeCancelFrame?.(id);
 }
 export function freezeCombatClock(at = clockNow()) {
   if (isCombatPaused()) return;
   pausedAt = at;
   for (const timer of timers.values()) { nativeClear(timer.native); timer.native = null; }
-  for (const frame of frames.values()) { nativeCancelFrame?.(frame.native); frame.native = null; }
+  cancelFrameBatch();
 }
 export function resumeCombatClock() {
   if (!isCombatPaused()) return;
   offset = Date.now() - pausedAt; pausedAt = null;
   for (const timer of timers.values()) arm(timer);
-  for (const frame of frames.values()) armFrame(frame);
+  armFrame();
   for (const resolve of resumeWaiters) resolve();
   resumeWaiters.clear();
 }
@@ -95,7 +101,7 @@ export const combatClockSequence = () => nextId;
 export function restoreCombatClock(at, sequence = -1) {
   nextId = sequence;
   for (const timer of timers.values()) nativeClear(timer.native);
-  for (const frame of frames.values()) nativeCancelFrame?.(frame.native);
+  cancelFrameBatch();
   timers.clear(); frames.clear();
   pausedAt = at; offset = Date.now() - at;
 }
@@ -114,7 +120,7 @@ export async function restoreCombatState(snapshot, context) {
 
 export function clearCombatClock() {
   for (const timer of timers.values()) nativeClear(timer.native);
-  for (const frame of frames.values()) nativeCancelFrame?.(frame.native);
+  cancelFrameBatch();
   timers.clear(); frames.clear();
   resumeCombatClock();
 }

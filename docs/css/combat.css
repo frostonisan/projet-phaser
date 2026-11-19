@@ -2436,3 +2436,5 @@ filter: drop-shadow(0 0 10px rgba(226, 189, 255));}
 #hexGrid .drag-box { touch-action: none; }
 #hexGrid.phaser-dragging .sprite { opacity: .4; pointer-events: none; }
 #hexGrid.phaser-dragging .dragged { cursor: grabbing; }
+
+#phaser-projectiles.phaser-combat-surface { position:absolute; inset:auto; left:0; top:0; z-index:5000; }

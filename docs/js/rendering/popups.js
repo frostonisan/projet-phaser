@@ -1,4 +1,4 @@
-import { writeCombatVisualStyle, animateCombatVisual } from "./animations.js";
+import { writeCombatVisualStyle, animateCombatVisual, renderCombatVisual, clearCanvasCombatPopups } from "./animations.js";
 import { clockNow, removeCombatVisualAfter } from "../combat/clock.js";
 import { EFFECT_VISUALS } from "../data/effectVisuals.js";
 
@@ -74,7 +74,7 @@ function animateCard(node, body, frames, duration) {
   expire(node, duration);
 }
 
-function fountainFrames(path, priority) {
+export function fountainFrames(path, priority) {
   const key = `${path}:${priority}`;
   if (trajectories.has(key)) return trajectories.get(key);
   const direction = path === 'left' ? -1 : path === 'right' ? 1 : 0;
@@ -101,7 +101,48 @@ function makeCard(content, className) {
   return { node, body };
 }
 
+// Serializable presentation data; no node is attached when the canvas owns it.
+export function describeCombatPopup(node) {
+  if(node.nodeType===3)return {text:node.textContent};
+  return {tag:node.tagName.toLowerCase(),classes:node.className,style:node.getAttribute('style')||'',
+    ...(node.tagName==='IMG'?{src:node.getAttribute('src')}:{}),children:[...node.childNodes].map(describeCombatPopup)};
+}
+export function canvasDamagePopup(id,{nature,value,priority=0,effectClass='generic-pop-up',armor=false}) {
+  const critical=priority===1||priority===3;
+  return renderCombatVisual(id,'popup',{channel:'damage',priority,content:{tag:'div',
+    classes:`damage-popup total-damage damage-popup--nature ${effectClass} ${critical?'popup-critical':'popup-normal'}${armor?' damage-popup--armor-hit':''}${priority===3?' damage-popup--execution-critical':''}`,
+    children:[{tag:'span',classes:`picto-stat ${critical?'damage-popup-critical-icon':'damage-popup-nature-icon'} ${priority===3?'execution-critical':critical?'criticalPower':nature}`},
+      {tag:'span',classes:`damage-popup-value ${nature}`,children:[{text:`−${value}`}]},
+      ...(critical?[{tag:'span',classes:'combat-popup-critical-suffix',children:[{text:'!!!'}]}]:[])]}});
+}
+export function effectPopupContent(text,type,options={}) {
+  const visual=EFFECT_VISUALS[options.effectKey];
+  const span=(classes,text)=>({tag:'span',classes,children:[{text}]});
+  const root={tag:'div',classes:'BattleText',children:[]};
+  if(visual){
+    const seconds=Number.isFinite(options.durationSeconds)&&options.durationSeconds>=0?Math.round(options.durationSeconds*10)/10:null;
+    const value=seconds!==null?` ${String(seconds).replace('.',',')} scd`:Number.isFinite(options.effectValue)?` ${options.effectValue}${options.effectUnit||''}`:'';
+    root.classes+=' combat-effect-text';root.style=`color:${visual.color}`;
+    root.children=[{tag:'img',classes:'combat-popup-status-icon',src:visual.src},span('',`${visual.label}${value} !`)];return root;
+  }
+  const labels={'MISS':['miss'], 'Raté !':['miss','miss-shot'], 'Esquive !':['dodge','dodge'],'Esquive partielle !':['dodge','dodge'],
+    'Éxecution !':['bloodFury'],'Indestructible !':['indestructibility'],'Ambidextrie !':['ambidextry'],'Ésotérisme !':['esoterism'],
+    'Astralité !':['astrality'],'Transe mystique !':['mysticism','mysticism'],'Fragilité !':['fragility','fragility'],
+    'Perseption équilibrée !':['balance-view','balance-view'],'Déplacement !':['move','move'],
+    'Déplacement impossible !':['nomove','nomove'],'Marathon !':['marathon','marathon'],'OVERKILL !':['overkill','overkill']};
+  let [classes,icon]=labels[text]||['generic'],label=text,labelClass='';
+  if(!labels[text]&&type==='execution-critical'){classes=type;icon='execution-critical big-exec-critical';label=` ${String(text).match(/\d+/)?.[0]||'0'} !!!`;labelClass='critical-exec-dmg';}
+  if(!labels[text]&&type==='blood-glutony'){classes=type;icon='bloodGlutony';label=`${String(text).split('|')[1]||''} !`;labelClass='blood-glutony-heal-text heal';}
+  root.classes+=` ${classes}`;
+  if(icon)root.children.push({tag:'span',classes:`picto-stat ${icon}`});
+  if(text!=='OVERKILL !')root.children.push(span(labelClass,label));
+  return root;
+}
+export function canvasEffectPopup(id,content) {
+  return renderCombatVisual(id,'popup',{channel:'status',content});
+}
 export function showDamagePopup(host, content, priority = 0) {
+  if(renderCombatVisual(host.id.replace('PopUp_',''),'popup',{channel:'damage',priority,content:describeCombatPopup(content)}))return content;
   host.classList.add('combat-popup-damages');
   if (!host.children.length) host.dataset.flightCursor = '0';
   const cursor = Number(host.dataset.flightCursor) || 0;
@@ -147,6 +188,7 @@ function addHistory(host, content) {
 }
 
 export function showEffectPopup(host, content) {
+  if(canvasEffectPopup(host.id.replace('PopDow_',''),describeCombatPopup(content)))return content;
   ensureStatusLanes(host);
   // Only text is duplicated in the compact history; no VFX enters this renderer.
   addHistory(host, content);
@@ -195,6 +237,7 @@ export function formatEffectPopup(node, { effectKey, durationSeconds, effectValu
 }
 
 export function clearCombatPopups() {
+  clearCanvasCombatPopups();
   document.querySelectorAll('.combat-popup-card').forEach(removeCard);
   document.querySelectorAll('.combat-popup-damages, .combat-popup-status').forEach(node => {
     delete node.dataset.flightCursor; delete node.dataset.laneCursor;

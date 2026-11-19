@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.95.2-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.97.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -539,3 +539,80 @@ de sérialisation dans `outputs/phaser-panels/conversion-check/` ; les huit
 mesures de performance ci-dessus restent celles de `final/`.
 Sur ce contrôle dédié à 40 monstres : 82 sérialisations de panneaux HTML avant,
 zéro après, avec une activité de combat effective des deux côtés.
+
+
+## Acteurs et effets sur le canvas commun - v0.97.0-dev
+
+Le mode `?monsters=webgl` utilise maintenant le même rendu pour toutes les
+espèces, au lieu de limiter le prototype au Grouille-doigt. Huit autres espèces
+sont couvertes par le test navigateur. Il reste expérimental et s'active avec
+[l'URL de test](https://frostonisan.github.io/projet-phaser/?monsters=webgl&v=0.97.0).
+Les menus, le Codex et l'inventaire restent en HTML au-dessus du canvas.
+
+Les impacts, soins, messages, altérations, préparations et récupérations
+transmettent des données au rendu Phaser. Ils ne construisent plus un panneau
+HTML par occurrence. Les objets visuels et les textures de texte sont réutilisés,
+avec des limites pour les messages et les objets inutilisés. L'ambidextrie continue
+d'utiliser le PNG/JSON fourni ; les autres médias existants restent disponibles.
+
+Les oscillations de préparation/récupération et le halo d'armure sont pilotés
+par la boucle commune. Les autres callbacks d'animation partagent une seule
+requête d'image navigateur, avec annulation, ordre et pause conservés. Les
+délais des attaques, les calculs de dégâts, le ciblage et les coûts ne changent
+pas. La géométrie du plateau est partagée entre acteurs ; les transformations
+des parents sont calculées une seule fois par image. Les changements de style
+et de structure sont regroupés, et les animations CSS cachées sont suspendues.
+
+La sauvegarde inclut les commandes, poses et effets natifs dans la section
+`phaserPresentation`, puis les recrée après F5. Le canvas WebGL lui-même n'est
+ni copié en PNG ni dupliqué dans le HTML sauvegardé. La rotation d'écran en
+pause conserve les poses natives. Le canvas reste sous les menus et l'interface
+de pause. Aucun fichier de jeu, média ou dépendance supplémentaire n'est ajouté.
+
+**Ce n'est pas encore un plateau entièrement sans HTML.** Les cases, décors,
+météo, hitboxes et une partie de l'initialisation/restauration en dépendent.
+Certains effets secondaires utilisent encore l'adaptateur des composants HTML.
+Les styles sont lus aux changements de présentation, pas dans la boucle d'image
+des monstres. Les limites du prototype concernant la perspective 3D et certains
+halos restent applicables : aucune identité pixel par pixel n'est annoncée.
+
+La cible reste un plateau Phaser autonome, alimenté par les données du combat,
+avec le HTML réservé aux interfaces. Les prochains postes à supprimer sont les
+reconstructions de composants et les lectures de mise en page lors des changements
+d'état, puis l'adaptateur des cases/décors et la copie HTML de la scène en pause.
+Transformer uniquement le fond du plateau en canvas ne supprime pas ces coûts.
+
+Les contrôles souris/tactile, swaps, grabs, déplacements forcés, taille,
+pause/F5, rotation d'écran, annulation et nettoyage sont conservés. Les tests
+vérifient aussi la file d'animation commune, les effets natifs sauvegardés, les
+limites de messages, le partage de l'atlas et la superposition des menus.
+Le rendu habituel passe ses contrôles de projectiles et de ressources FX.
+
+Comparaison finale avec v0.96.2-dev : Chrome 157, WebGL matériel AMD,
+1920 x 1080, ressources préparées, deux combats de 12 secondes par taille et
+version, ordre alterné, sans autre navigateur de test concurrent. Moyennes :
+
+| Monstres | Image moyenne avant / après (ms) | P95 avant / après (ms) | Impacts avant / après |
+| --- | --- | --- | --- |
+| 40 | 54,4 / 33,3 | 191,6 / 116,5 | 89 / 145 |
+| 80 | 116,3 / 56,5 | 399,8 / 233,2 | 64,5 / 150,5 |
+
+Le délai moyen baisse de 39 % à 40 monstres et de 51 % à 80. Le P95 baisse
+respectivement de 39 % et 42 %. L'activité de combat augmente dans la même fenêtre ;
+aucune erreur ni reprise forcée d'un acteur sain n'est relevée. Ce sont des
+mesures sur un scénario et une machine, pas une garantie pour tous les combats.
+**L'objectif de fluidité à 80 monstres reste ouvert** : 56,5 ms correspond à
+18 images/s environ, avec encore des pointes importantes. Le mode reste donc
+expérimental. Le compteur de lectures HTML dans la boucle des monstres reste
+nul, mais les compilations de composants hors de cette boucle en font encore.
+
+Les sources figées et les huit mesures finales sont dans
+`outputs/canvas-combat/paired-final/` et correspondent aux fichiers livrés.
+Quatre comparaisons déterministes (40/80 monstres, graines 1701/1702, cinq
+secondes simulées) conservent exactement les résultats, les phases et les
+journaux complets : `outputs/canvas-combat/final/`. La correction finale du
+redimensionnement concerne exclusivement le rendu WebGL, inactif dans le
+simulateur. Les contrôles de pause/interactions après cette correction sont
+dans `functional-resize-final/`, ceux du rendu habituel dans `html-final/`,
+et les contrôles de syntaxe, imports, assets et règles dans `static-final.log`,
+sous `outputs/canvas-combat/`.

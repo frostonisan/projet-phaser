@@ -1,4 +1,4 @@
-import { writeCombatVisualStyle } from "./animations.js";
+import { writeCombatVisualStyle, renderCombatVisual } from "./animations.js";
 import { registerCombatState } from "../combat/clock.js";
 import { removeCombatVisualAfter } from "../combat/clock.js";
 import { setTimeout, clearTimeout, requestAnimationFrame, cancelAnimationFrame, clockNow } from "../combat/clock.js";
@@ -1714,6 +1714,11 @@ if (entite?.id == null) {
     animationState
   );
 
+  const handOff=()=>{
+    if(!renderCombatVisual(entityId,'armorPulse',{start:animationState.startedAt}))return false;
+    animationState.stopped=true;activeArmorTintAnimations.delete(entityId);releaseEntityTint(canvas,'armorActive');return true;
+  };
+  if(handOff())return;
   const minimumOpacity = 0.08;
   const maximumOpacity = 0.42;
 
@@ -1724,6 +1729,7 @@ if (entite?.id == null) {
   const cycleDuration = 1800;
 
   function animateArmorTint(now) {
+    if(handOff())return;
     if (animationState.stopped) {
       return;
     }

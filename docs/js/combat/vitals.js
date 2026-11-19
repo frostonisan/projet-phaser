@@ -1,3 +1,4 @@
+import { hasCanvasCombatView, writeCombatVisualStyle } from '../rendering/animations.js';
 import { isHexTarget } from "../board/targets.js";
 import {
   updateBonusLifeCounters, updateHealthBar, updateHPCounters, presentEntityVitals,
@@ -576,6 +577,7 @@ function resetAttackBar(attacker) {
   const bar = document.getElementById(`currentAttackBar_${attacker.id}`);
   if (!bar) return;
 
+  if(hasCanvasCombatView(attacker.id)){writeCombatVisualStyle(bar,{width:"0%"});return;}
   bar.style.transition = "none";
   bar.style.width = "0%";
   void bar.offsetWidth; // paint 0%
@@ -593,7 +595,7 @@ function updateAttackBarFromRemaining(attacker, phase, duration) {
   const dur = Math.max(1, Number(duration) || 1);
   const pct = Math.max(0, Math.min(1, 1 - remaining / dur));
 
-  bar.style.width = `${(pct * 100).toFixed(2)}%`;
+  writeCombatVisualStyle(bar,{width:`${(pct * 100).toFixed(2)}%`});
 }
 
 export async function runPhaseTimer(attacker, phase, duration, { canContinue = null } = {}) {

@@ -97,6 +97,7 @@ function captureCombatVisuals() {
   }
   const canvases = [];
   for (const canvas of document.querySelectorAll(`${ROOTS.replaceAll(', ', ' canvas, ')} canvas`)) {
+    if(canvas.closest('#phaser-projectiles'))continue;
     try { canvases.push({ key: keyFor(canvas), image: canvas.toDataURL() }); }
     catch { /* A cross-origin decoration cannot affect the combat snapshot. */ }
   }
@@ -107,13 +108,14 @@ function captureCombatVisuals() {
     time: node.currentTime, volume: node.volume, muted: node.muted, rate: node.playbackRate, playing: audioHeld.has(node) }));
   return { animations, canvases, styles, media, sequence: visualId, html: roots.map(node => {
     const scene = node.cloneNode(true);
-    scene.querySelector('#combat-pause-fx')?.remove();
+    scene.querySelector('#combat-pause-fx')?.remove();scene.querySelector('#phaser-projectiles')?.remove();
     return persistentMediaMarkup(scene.outerHTML);
   }) };
 }
 
 async function restoreCombatVisuals(snapshot) {
   visualId = snapshot.sequence;
+  const phaserHost=document.getElementById('phaser-projectiles');if(phaserHost)document.body.append(phaserHost);
   for (const node of document.querySelectorAll(ROOTS)) node.remove();
   for (const html of snapshot.html) document.body.insertAdjacentHTML('beforeend', html);
   const gifJobs = [];

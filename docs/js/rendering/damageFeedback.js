@@ -2,7 +2,7 @@
 import { removeCombatVisualAfter, setTimeout, requestAnimationFrame } from "../combat/clock.js";
 import { playCachedGif } from '../data/loaderList.js';
 import { EffectMessage } from "../combat/effects.js";
-import { animateDodge, animateIndestructibility, animateEsoterism, animateAmbidextry, damageImpact } from "./animations.js";
+import { renderCombatVisual, animateDodge, animateIndestructibility, animateEsoterism, animateAmbidextry, damageImpact } from "./animations.js";
 const round1 = value => Math.round((Number(value) || 0) * 10) / 10;
 
 export function AmbidextryVFX(target) {
@@ -10,6 +10,7 @@ export function AmbidextryVFX(target) {
 		if (typeof EffectMessage === "function") EffectMessage(target, "Ambidextrie !");
 		if (typeof animateAmbidextry === "function") animateAmbidextry(target.id);
 
+		if(renderCombatVisual(target.id,'gif',{className:'effect-vfx ambidextry',src:'./media/assets/effects/ambidextry.gif',lifetime:2000,fade:200,style:{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%, -50%)',opacity:'1'}}))return;
 		const effectsContainer = document.getElementById(`effectsContainer_${target.id}`);
 		if (!effectsContainer) return;
 

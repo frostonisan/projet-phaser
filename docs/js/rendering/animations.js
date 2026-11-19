@@ -1,3 +1,4 @@
+import { invalidateBoardScreenGeometry } from './boardAdapter.js';
 import { applyMovementDestabilisation, wakeFromMovement } from "../combat/effects.js";
 import {
   setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
@@ -12,11 +13,23 @@ import { buildStatGraphHelper } from "../data/helpers.js";
 const playCachedGif = (image, source) => playGif(image, source, { shared: true });
 // Publish presentation commands to HTML and WebGL using the same values.
 export function writeCombatVisualStyle(node, values) {
-  Object.assign(node.style, values);
-  node._monsterStyleChanged?.(values, clockNow());
+  if(node._monsterStyleChanged?.(values,clockNow())===true)return;
+  Object.assign(node.style,values);
+}
+const combatAnimations = new WeakMap();
+export function readCombatAnimations(node, css) {
+  const known = [...(combatAnimations.get(node) || [])].filter(animation => animation.playState !== 'idle');
+  if (css.animationName === 'none' && !node.dataset.combatVisualKey) return known;
+  return [...new Set([...known, ...node.getAnimations()])];
 }
 export function animateCombatVisual(node, ...args) {
   const animation = node.animate(...args);
+  let known = combatAnimations.get(node);
+  if (!known) combatAnimations.set(node, known = new Set());
+  known.add(animation);
+  const forget = () => known.delete(animation);
+  animation.addEventListener('cancel', forget, {once:true});
+  animation.addEventListener('finish', forget, {once:true});
   node._monsterAnimationStarted?.(animation);
   return animation;
 }
@@ -108,7 +121,7 @@ export function pulseTargetSearchAtb(entite, mode = 'search') {
   }, 460));
 }
 
-const ENTITY_TINTS = {
+export const ENTITY_TINTS = {
 	
   indestructibility: {
     color: "255, 120, 0",
@@ -1102,6 +1115,8 @@ if (spriteContainer) {
 // Helper (inchangé sauf qu’on ne l’appelle plus à chaque frame)
 function spawnEffectGif(container, { className, src, lifetime = 800, offsetY = null }) {
   if (!container) return;
+  const entityId=container.closest('.entite-box')?.id.replace('Box_Entite_','');
+  if(entityId&&renderCombatVisual(entityId,'gif',{key:className,className,src,lifetime:lifetime+50}))return;
   const selector = className.trim().split(/\s+/).map(name => `.${CSS.escape(name)}`).join('');
   let img = container.querySelector(selector);
   if (!img) {
@@ -1771,6 +1786,20 @@ export function animatePreparation(entity, attack, forcedDuration = null) {
   entity.stopPreparationAnimation?.();
   const saved = entity._preparationVisual;
 
+  if(hasCanvasCombatView(entity.id)||saved?.renderer==='phaser'){
+    const sprite=document.getElementById(`DragSprite_${entity.id}`),visual=getAttackCastingVisual(attack);
+    if(!sprite)return null;
+    const state=entity._preparationVisual=saved||{renderer:'phaser',previousTransform:sprite.style.transform,previousWillChange:sprite.style.willChange};
+    removeIddle(sprite);
+    renderCombatVisual(entity.id,'gif',{key:'preparation',anchor:'cast',className:`cast ${attack.functionName} ${visual.className}`,
+      parentClass:`cast-preparation-container ${attack.functionName} side-${entity.side}`,src:visual.asset,lifetime:Number.MAX_SAFE_INTEGER,motion:'preparation'});
+    let stopped=false;
+    const stop=()=>{if(stopped)return;stopped=true;renderCombatVisual(entity.id,'removeGif',{key:'preparation'});
+      writeCombatVisualStyle(sprite,{transform:state.previousTransform||''});delete entity._preparationVisual;addIddle(sprite);
+      if(entity.stopPreparationAnimation===stop)entity.stopPreparationAnimation=null;
+    };entity.stopPreparationAnimation=stop;return stop;
+  }
+
   const castContainer = document.getElementById(`Cast_Animation_${entity.id}`);
 
   if (!castContainer) {
@@ -2000,6 +2029,19 @@ export function animateRecuperation(entity, attack) {
         sprite.parentNode.appendChild(effectsContainer);
     }
 
+    if(hasCanvasCombatView(entity.id)||entity._recoveryVisual?.renderer==='phaser'){
+      const state=entity._recoveryVisual ||= {renderer:'phaser',startTime:clockNow(),duration:entity.recoveryTime,previousTransform:sprite.style.transform,previousScale:sprite.style.scale};
+      renderCombatVisual(entity.id,'gif',{key:'recovery',className:'recoveryGif',src:'./media/assets/effects/recovery.gif',
+        start:state.startTime,lifetime:state.duration+300,motion:'recovery',motionDuration:state.duration,fade:300});
+      let stopped=false;
+      const stop=()=>{if(stopped)return;stopped=true;delete entity._recoveryVisual;
+        renderCombatVisual(entity.id,'endRecovery');
+        writeCombatVisualStyle(sprite,{transform:state.previousTransform||'',scale:state.previousScale||''});
+        if(!hasMeleeOriginalVisibilityLock(String(entity.id))&&!meleeOriginalRecoveryAnimations.has(String(entity.id))&&!activeMeleeAnimations.get(String(entity.id))?.size)addIddle(sprite);
+        if(entity.stopRecoveryAnimation===stop)entity.stopRecoveryAnimation=null;
+      };entity.stopRecoveryAnimation=stop;return stop;
+    }
+
     const saved = entity._recoveryVisual;
     const entityTrackingId = String(entity.id);
     const previousTransform = saved?.previousTransform ?? sprite.style.transform;
@@ -2101,7 +2143,33 @@ export function animateRecuperation(entity, attack) {
 const phaserFlights = new Map(), phaserEffects = new Map(), phaserMelees = new Map();
 let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
 // The opt-in monster prototype uses the same WebGL context as attacks.
-const phaserMonsterViews = new Map();
+const pendingCombatPresentationUpdates=new Set();
+export function queueCombatPresentationUpdate(update){pendingCombatPresentationUpdates.add(update);wakePhaserMonsters();}
+function flushCombatPresentationUpdates(){const batch=[...pendingCombatPresentationUpdates];pendingCombatPresentationUpdates.clear();for(const update of batch)update();}
+const phaserMonsterViews = new Map(), phaserEntityViews = new Map(), pendingPresentation = new Map(),pendingVisualCommands=new Map();
+export function renderCombatVisual(entityId, kind, data = {}) {
+  const id=String(entityId),view=phaserEntityViews.get(id);
+  if(view?.connected())return view.command(kind,data);
+  if(!globalThis.__combatSimulation&&document.getElementById(`Box_Entite_${id}`)?.dataset.monsterWebgl){
+    if(!pendingVisualCommands.has(id))pendingVisualCommands.set(id,[]);pendingVisualCommands.get(id).push({kind,data});return true;
+  }return false;
+}
+export function getCombatVisualBounds(element){
+  if(!element)return null;const id=element.closest?.('.entite-box')?.id.replace('Box_Entite_','');
+  return id&&phaserEntityViews.get(id)?.bounds?.(element)||null;
+}
+export function clearCanvasCombatPopups(){for(const view of phaserEntityViews.values())view.command('clearPopups',{});}
+for(const name of ['battleStopped','battleResolved','stageInterfaceClosing'])window.addEventListener(name,()=>{
+  pendingVisualCommands.clear();pendingPresentation.clear();for(const view of phaserEntityViews.values())view.command('clear',{});
+});
+export const hasCanvasCombatView = entityId => phaserEntityViews.get(String(entityId))?.accepts?.()||false;
+registerCombatState('phaserPresentation', () => {flushCombatPresentationUpdates();return [...phaserEntityViews].map(([id,view]) => ({id,state:view.capture?.()}));}, saved => {
+  pendingPresentation.clear();
+  for (const entry of saved || []) {
+    const view=phaserEntityViews.get(entry.id);
+    if(view?.restore&&view.connected())view.restore(entry.state);else pendingPresentation.set(entry.id,entry.state);
+  }
+});
 export async function attachPhaserMonster(box, create) {
   if (globalThis.__combatSimulation || phaserMonsterViews.has(box)) return;
   const layer = await ensurePhaserLayer();
@@ -2109,20 +2177,28 @@ export async function attachPhaserMonster(box, create) {
   const view = await create(layer.scene);
   if (!box.isConnected) { view.destroy(); return; }
   phaserMonsterViews.set(box, view);
+  const grid=box.closest('#hexGrid');if(grid!==observedMonsterBoard){monsterBoardResize.disconnect();observedMonsterBoard=grid;if(grid)monsterBoardResize.observe(grid);}
+  const id=box.id.replace('Box_Entite_', '');phaserEntityViews.set(id,view);
+  if(pendingPresentation.has(id)){view.restore?.(pendingPresentation.get(id));pendingPresentation.delete(id);}
+  for(const {kind,data} of pendingVisualCommands.get(id)||[])view.command(kind,data);pendingVisualCommands.delete(id);
+  positionPhaserLayer();
   monsterMenuObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["class","style"]}); refreshMonsterMenus();
   layer.host.hidden = false; layer.game.loop.wake();
 }
 export function wakePhaserMonsters() {
   if (phaserMonsterViews.size) phaserLayer?.game?.loop.wake();
 }
+let observedMonsterBoard=null;
+const monsterBoardResize=new ResizeObserver(()=>{
+  invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
+});
 let monsterMenusOpen = false, monsterMenusQueued = false, monsterBoardTransition = false;
 function refreshMonsterMenus() {
   if(monsterMenusQueued || !phaserMonsterViews.size)return;
   monsterMenusQueued=true;
   queueMicrotask(()=>{
     monsterMenusQueued=false;
-    monsterMenusOpen=monsterBoardTransition || [...document.querySelectorAll('.menu-map-container > *, .settings-menu, #gameOverMessage')]
-      .some(node=>node.getClientRects().length>0 && getComputedStyle(node).visibility!=='hidden');
+    monsterMenusOpen=monsterBoardTransition;
   });
 }
 // Board perspective remains the existing CSS transition. Hide the WebGL copy
@@ -2130,23 +2206,25 @@ function refreshMonsterMenus() {
 for(const name of ['transitionrun','transitionend','transitioncancel'])document.addEventListener(name,event=>{
   if(event.target.id!=='hexGrid'||event.propertyName!=='transform')return;
   monsterBoardTransition=name==='transitionrun';refreshMonsterMenus();
-  if(!monsterBoardTransition)for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
+  if(!monsterBoardTransition){invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);}
 });
 const monsterMenuObserver=new MutationObserver(records=>{
   if(!phaserMonsterViews.size){monsterMenuObserver.disconnect();monsterBoardTransition=false;return;}
-  if(records.some(record=>record.target.id==='hexGrid' && record.type==='attributes'))
-    for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
+  if(records.some(record=>record.target.id==='hexGrid' && record.type==='attributes')){
+    invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);}
   if(records.some(record=>record.target instanceof Element && (record.target.closest('.Game-UI') ||
     [...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1 && node.matches('.Game-UI,.menu-map-container,.settings-menu,#gameOverMessage')))))refreshMonsterMenus();
 });
 function updatePhaserMonsters() {
+  flushCombatPresentationUpdates();
   const now=clockNow();
   for (const [box,view] of phaserMonsterViews) {
-    if(!box.isConnected || !view.active()){view.destroy();phaserMonsterViews.delete(box);}
+    if(!box.isConnected || !view.active()){view.destroy();phaserMonsterViews.delete(box);if(phaserEntityViews.get(box.id.replace('Box_Entite_',''))===view)phaserEntityViews.delete(box.id.replace('Box_Entite_',''));}
     else view.update(now,monsterMenusOpen);
   }
 }
 for(const name of ['resize','orientationchange','scroll'])window.addEventListener(name,()=>{
+  positionPhaserLayer();invalidateBoardScreenGeometry(observedMonsterBoard);
   for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
 }, {passive:true});
 
@@ -2368,6 +2446,7 @@ document.addEventListener('click', event => {
 let phaserFrameRects = null;
 function phaserViewRect(element) {
   if (!element) return null;
+  const native=getCombatVisualBounds(element);if(native)return native;
   if (!phaserFrameRects) return element.getBoundingClientRect();
   let rect = phaserFrameRects.get(element);
   if (!rect) { rect = element.getBoundingClientRect(); phaserFrameRects.set(element, rect); }
@@ -2584,6 +2663,15 @@ function drawProjectile(entry, scene) {
   else if (asset?.impact) requestProjectileTexture(scene, asset.impact);
 }
 
+export function positionPhaserLayer(){
+  const host=phaserLayer?.host,root=document.getElementById('game-windows');
+  if(!host||!root||!phaserMonsterViews.size)return;
+  if(host.parentElement!==root)root.append(host);
+  const r=root.getBoundingClientRect(),sx=r.width/(root.offsetWidth||1),sy=r.height/(root.offsetHeight||1);
+  host.classList.add('phaser-combat-surface');
+  Object.assign(host.style,{width:`${innerWidth}px`,height:`${innerHeight}px`,transformOrigin:'0 0',transform:`matrix(${1/(sx||1)},0,0,${1/(sy||1)},${-r.left/(sx||1)},${-r.top/(sy||1)})`});
+}
+window.addEventListener('combatPauseRestored',positionPhaserLayer);
 async function ensurePhaserLayer() {
   if (phaserReady) return phaserReady;
   phaserReady = (async () => {

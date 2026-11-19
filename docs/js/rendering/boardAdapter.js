@@ -1,7 +1,19 @@
 // The current HTML board is one adapter for the logical grid and its coordinates.
 import { createBoardGeometry, footprintCells, footprintCenter } from '../board/model.js';
 const geometryCache = new WeakMap(), cellGeometry = new WeakMap();
+let boardScreenGeometry=new WeakMap();
+export function invalidateBoardScreenGeometry(grid) {
+  if(grid)boardScreenGeometry.delete(grid);else boardScreenGeometry=new WeakMap();
+}
+// One layout sample per board change, shared by every actor and input adapter.
+export function readBoardScreenGeometry(grid) {
+  let screen=boardScreenGeometry.get(grid);if(screen)return screen;
+  screen=new Map(getBoardGeometry(grid).cells.map(cell=>{
+    const rect=cell.getBoundingClientRect();return [cell.dataset.position,{x:rect.left,y:rect.top,w:rect.width,h:rect.height,localW:cell.offsetWidth||1,localH:cell.offsetHeight||1}];
+  }));boardScreenGeometry.set(grid,screen);return screen;
+}
 function cacheGeometry(grid, data) {
+  invalidateBoardScreenGeometry(grid);
   geometryCache.set(grid, data);
   for (const hex of data.cells) cellGeometry.set(hex, { grid, data });
   return data;

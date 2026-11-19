@@ -1,7 +1,7 @@
-import { writeCombatVisualStyle } from "./animations.js";
+import { writeCombatVisualStyle, hasCanvasCombatView } from "./animations.js";
 import { getStatSystemResult } from "../entities/statSystem.js";
 import { getEquipmentResourceCurrent } from "../items/resourceStocks.js";
-import { showDamagePopup } from "./popups.js";
+import { showDamagePopup, canvasDamagePopup } from "./popups.js";
 import { setTimeout } from "../combat/clock.js";
 import { entites } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
@@ -256,7 +256,8 @@ setTimerStyle(el, "animationDuration", `${duration}s`);
     // === 🟨 AFFICHAGE DES TIMERS ===
   // Preserve the state updates above and in the attack bar. An isolated
   // simulation does not need text, HTML or attack-name resolution every tick.
-  if (window.__combatSimulation === true) {
+  const canvasView = hasCanvasCombatView(entite.id);
+  if (window.__combatSimulation === true || canvasView && !hudNode(`preparationTimer_${entite.id}`) && !hudNode(`executionTimer_${entite.id}`)) {
     updateCurrentAttackBar();
     return;
   }
@@ -271,7 +272,7 @@ const attackDisplayName = resolveEntityAttackDisplayName(
 );
 
 const battlePrepEl = hudNode(`battlePreparation_${entite.id}`);
-if (battlePrepEl) {
+if (battlePrepEl && !canvasView) {
   let view = attackTimerViews.get(battlePrepEl);
   if (!view || view.name.parentNode !== battlePrepEl || view.preparation.parentNode !== battlePrepEl || view.execution.parentNode !== battlePrepEl) {
     battlePrepEl.innerHTML = `
@@ -312,7 +313,7 @@ updateCurrentAttackBar();
 const prepSpan = hudNode(`attackPrep_${entite.id}`);
 const execSpan = hudNode(`attackExec_${entite.id}`);
 
-if (prepSpan && execSpan) {
+if (prepSpan && execSpan && !canvasView) {
   if (entite.preparationTime > 0) {
     setTimerStyle(prepSpan, "display", 'inline');
     setTimerStyle(execSpan, "display", 'none');
@@ -532,6 +533,8 @@ export function PopUpDamages(
   const natureKeys = ['physicalDamage', 'magicalDamage', 'hybridalDamage', 'piercingDamage',
     'transpiercingDamage', 'physicalPiercingDamage', 'magicalPiercingDamage', 'hybridalPiercingDamage', 'inerte'];
   const nature = natureKeys.includes(natureClass) ? natureClass : inferredNature;
+  if (!canvasDamagePopup(target.id,{nature,value:hpLoss+armorLoss,armor:armorLoss>0,effectClass,
+    priority:isExecutionCritical?3:isCritical?1:popupType==='execution'?2:0})) {
   const totalElement = document.createElement('div');
   totalElement.className = `damage-popup total-damage damage-popup--nature ${effectClass} ${popupClass}`;
   if (armorLoss > 0) totalElement.classList.add('damage-popup--armor-hit');
@@ -550,6 +553,7 @@ export function PopUpDamages(
     const suffix = document.createElement('span'); suffix.className = 'combat-popup-critical-suffix'; suffix.textContent = '!!!'; totalElement.append(suffix);
   }
   showDamagePopup(entityContainer, totalElement, isExecutionCritical ? 3 : isCritical ? 1 : popupType === 'execution' ? 2 : 0);
+  }
 
   if (armorLoss > 0 && (Number(target.stats?.armor?.current) || 0) <= 0) {
       const destroyed = document.createElement("div");

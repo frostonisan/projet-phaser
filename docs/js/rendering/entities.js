@@ -1,12 +1,13 @@
+import { readBoardScreenGeometry } from './boardAdapter.js';
 import {
   updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
   IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
-import { attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset } from "./animations.js";
+import { attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, ENTITY_TINTS } from "./animations.js";
 import { persistentMediaMarkup, loadResource, loadSpriteAtlas, getAnimatedImageState, loadEffectAtlas } from "../data/loaderList.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
-import { calibrateEntityVisuals } from "./popups.js";
+import { calibrateEntityVisuals, fountainFrames, POPUP_LIMITS } from "./popups.js";
 import { setTimeout, requestAnimationFrame, clockNow } from "../combat/clock.js";
 import { cachedResourceImage, cachedResourceUrl, playCachedGif } from "../data/loaderList.js";
 import { determineClasse } from "../board/deployment.js";
@@ -16,7 +17,7 @@ import { createEntityAttackDisplay } from "../ui/attacks.js";
 import { createStuffDom } from "../ui/codex/profile.js";
 import { entites } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
-import { resolveAttackDefinitionForEntity } from "../combat/attackResolution.js";
+import { resolveAttackDefinitionForEntity, resolveEntityAttackDisplayName } from "../combat/attackResolution.js";
 import { adjustFontSize } from "../ui/display.js";
 import { syncEntityAuras, cleanupEntityAuras, getAuraPoolCurrent } from "./auras.js";
 import {
@@ -1471,10 +1472,11 @@ export function CreateATBEntity(entite, { mirror = false } = {}) {
     return SpeedInterface; // On retourne l'élément DOM complet
 }
 
-// One species uses a compiled presentation: layout is sampled on creation/resize,
+// Combat actors use a compiled presentation: layout is sampled on creation/resize,
 // while frames consume combat data and timed presentation commands. The existing
 // HTML remains the input and paused-scene adapter.
 const monsterViews = new WeakSet(), monsterImages = new Map(), monsterResources = new Map();
+const monsterClassStyles=new Map(),monsterClassAnimations=new Map();
 let monsterTextureId = 0, activeMonsterViews = 0, monsterCacheEpoch = 0;
 const monsterStyle = node => getComputedStyle(node);
 // Only creation, presentation commands and layout events sample the HTML.
@@ -1539,6 +1541,9 @@ function monsterAnimatedValues(binding, now) {
     values[key]=monsterLerp(tween.from,tween.to,monsterEase(t,tween.easing));
     if(t===1)binding.tweens.delete(key);
   }
+  for(let index=binding.animations.length-1;index>=0;index--){const a=binding.animations[index];
+    if(a.cancelled||now>=a.start+a.delay+a.duration*a.iterations/a.rate&&!['forwards','both'].includes(a.fill))binding.animations.splice(index,1);
+  }
   for(const animation of binding.animations) {
     if(animation.cancelled)continue;
     const elapsed=(now-animation.start)*animation.rate-animation.delay;
@@ -1559,7 +1564,13 @@ function monsterAnimatedValues(binding, now) {
 }
 const monsterPanels = new Map(), monsterTextTextures = new Map();
 function releaseMonsterText(entry, scene) {
-  if (entry && --entry.users === 0) { scene.textures.remove(entry.texture); monsterTextTextures.delete(entry.key); }
+  if (!entry || --entry.users !== 0) return;
+  if (monsterTextTextures.size > 512) {
+    for (const [key, cached] of monsterTextTextures) {
+      if (cached.users === 0) { scene.textures.remove(cached.texture); monsterTextTextures.delete(key); }
+      if (monsterTextTextures.size <= 512) break;
+    }
+  }
 }
 function updateMonsterText(layer, scene, css, text) {
   if (layer.text === text && layer.color === css.color) return;
@@ -1893,29 +1904,258 @@ function disposeMonsterLayer(layer, scene) {
     if (layer.node.isConnected) renderEntityTint(layer.node);
   }
 }
+
+// Native transient presentation. CSS is sampled once per theme, then hits carry
+// only data. Lifetimes use the combat clock; GIF frames retain their own epoch.
+const combatPopupThemes=new Map(), combatGifThemes=new Map();
+function popupThemeKey(content) {
+  if('text' in content)return '#text';
+  return [content.tag,content.classes,content.style,content.src,(content.children||[]).map(popupThemeKey)].join('|');
+}
+function buildPopupTemplate(content) {
+  if('text' in content)return document.createTextNode(content.text);
+  const node=document.createElement(content.tag||'span');node.className=content.classes||'';
+  if(content.style)node.setAttribute('style',content.style);
+  if(content.src)node.setAttribute('src',content.src);
+  for(const child of content.children||[])node.append(buildPopupTemplate(child));
+  return node;
+}
+const popupStrings=content=>'text' in content?[content.text]:(content.children||[]).flatMap(popupStrings);
+async function combatPopupTheme(scene,host,data,history=false) {
+  const key=`${data.channel}|${data.priority||0}|${history}|${popupThemeKey(data.content)}`;
+  if(!combatPopupThemes.has(key))combatPopupThemes.set(key,(async()=>{
+    const card=document.createElement('div');card.dataset.phaserTheme='';
+    card.className=`combat-popup-card ${data.channel==='damage'?'combat-popup-flight':history?'combat-popup-history-row':'combat-popup-front'}`;
+    card.dataset.priority=String(data.priority||0);card.style.visibility='hidden';
+    const body=document.createElement('div');body.className='combat-popup-life';body.append(buildPopupTemplate(data.content));card.append(body);host.append(card);
+    const parts=[],jobs=[];let textIndex=0;
+    const visit=node=>{
+      if(node.nodeType===3){
+        if(node.textContent.trim())parts.push({textIndex,css:monsterPaintStyle(getComputedStyle(node.parentElement))});
+        textIndex++;return;
+      }
+      const css=monsterPaintStyle(getComputedStyle(node));
+      if(css.display==='none')return;
+      const source=node.tagName==='IMG'?node.getAttribute('src'):'';
+      if(source||css.backgroundImage!=='none'){
+        const part={width:node.offsetWidth,height:node.offsetHeight};parts.push(part);
+        jobs.push(monsterDecoration(scene,css,part.width,part.height,source).then(texture=>part.decoration=texture));
+      }
+      for(const child of node.childNodes)visit(child);
+    };
+    try {visit(body);}finally{card.remove();}
+    await Promise.all(jobs);return {parts};
+  })());
+  return combatPopupThemes.get(key);
+}
+const statusFrontFrames=[
+  {transform:'translateY(3px) scale(.9)',opacity:0,offset:0,easing:'cubic-bezier(.16,1,.3,1)'},
+  {transform:'translateY(0px) scale(1.06)',opacity:1,offset:.05,easing:'ease-out'},
+  {transform:'translateY(-2px) scale(1)',opacity:1,offset:.13,easing:'ease-out'},
+  {transform:'translateY(-5px) scale(1)',opacity:1,offset:.21},
+  {transform:'translateY(-13.44px) scale(1)',opacity:1,offset:.38},
+  {transform:'translateY(-30.24px) scale(1)',opacity:1,offset:.72},
+  {transform:'translateY(-42px) scale(.96)',opacity:0,offset:1}
+];
+const statusHistoryFrames=[
+  {transform:'translateY(3px) scale(.86)',opacity:0,offset:0,easing:'cubic-bezier(.16,1,.3,1)'},
+  {transform:'translateY(0px) scale(1.14)',opacity:1,offset:.06,easing:'ease-out'},
+  {transform:'translateY(-1px) scale(.94)',opacity:1,offset:.2},
+  {transform:'translateY(-4px) scale(.6)',opacity:1,offset:.55},
+  {transform:'translateY(-6px) scale(.35)',opacity:.65,offset:.8},
+  {transform:'translateY(-8px) scale(.16)',opacity:0,offset:1}
+];
+function popupAnimation(record) {
+  const frames=record.channel==='damage'?fountainFrames(record.lane,record.priority):record.history?statusHistoryFrames:statusFrontFrames;
+  const animation=monsterAnimation({effect:{getTiming:()=>({duration:record.duration,iterations:1,fill:'forwards',easing:'linear'}),getKeyframes:()=>frames},
+    currentTime:0,addEventListener(){}},{width:1,height:1});animation.start=record.start;
+  return {values:{transform:[1,0,0,1,0,0],opacity:[1]},tweens:new Map(),animations:[animation]};
+}
+function createCombatPresentation(scene,box,entity,anchors,setPose) {
+  const records=[],pool=[];
+  let sequence=0,damageCursor=0,laneCursor=0,disposed=false;
+  const takeImage=texture=>{
+    const image=pool.pop()||scene.add.image(0,0,texture);
+    return image.setTexture(texture).setOrigin(.5).setVisible(false).setAlpha(1).setRotation(0).setScale(1).setTint(0xffffff).setFlip(false,false).setBlendMode(0);
+  };
+  const release=record=>{
+    record.cancelled=true;
+    for(const part of record.parts||[]){releaseMonsterText(part.textEntry,scene);part.image.setVisible(false);if(pool.length<32)pool.push(part.image);else part.image.destroy();}
+    if(record.extra){record.extra.setVisible(false);if(pool.length<32)pool.push(record.extra);else record.extra.destroy();}
+    if(record.image){record.image.preFX?.clear();record.image.setVisible(false);if(pool.length<32)pool.push(record.image);else record.image.destroy();}
+    const i=records.indexOf(record);if(i>=0)records.splice(i,1);
+  };
+  const preparePopup=async record=>{
+    const theme=await combatPopupTheme(scene,anchors[record.channel].node,record,record.history);
+    if(disposed||record.cancelled)return;
+    const strings=popupStrings(record.content);record.parts=[];let width=0,height=0;
+    for(const definition of theme.parts){
+      const part={};
+      if(definition.textIndex!==undefined){
+        part.image=takeImage('monster-bar-base');updateMonsterText(part,scene,definition.css,strings[definition.textIndex]||'');
+        const text=part.textEntry;Object.assign(part,{width:text.width,height:text.height,padding:text.padding});
+      }else{
+        const d=definition.decoration;if(!d)continue;
+        part.image=takeImage(d.texture);Object.assign(part,{width:definition.width,height:definition.height,padding:d.padding});
+      }
+      part.left=width;width+=part.width+3;height=Math.max(height,part.height);record.parts.push(part);
+    }
+    record.width=Math.max(0,width-3);record.height=height;
+  };
+  const prepareGif=async record=>{
+    const host=anchors[record.anchor||'effects'].node,key=`${record.parentClass||''}|${record.className}|${record.src}|${box.dataset.spriteWidth}|${box.dataset.spriteHeight}|${JSON.stringify(record.style||{})}`;
+    record.asset=await monsterAsset(scene,record.src);
+    if(disposed||record.cancelled)return;
+    let theme=combatGifThemes.get(key);
+    if(!theme){
+      // A dimension-only probe preserves CSS auto sizing without decoding a GIF
+      // for each effect. Its image has the original aspect ratio.
+      const node=document.createElement('img');node.className=record.className;node.dataset.phaserTheme='';
+      node.src=`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${record.asset.contentWidth}" height="${record.asset.contentHeight}"/>`)}`;
+      await node.decode();if(disposed||record.cancelled)return;
+      Object.assign(node.style,record.style||{});
+      let root=node;
+      if(record.parentClass){root=document.createElement('div');root.className=record.parentClass;root.dataset.phaserTheme='';root.append(node);}
+      root.style.animation='none';node.style.animation='none';host.append(root);
+      const css=getComputedStyle(node),rect=node.getBoundingClientRect(),hr=host.getBoundingClientRect();
+      const sx=hr.width/(host.offsetWidth||1)||anchors[record.anchor||'effects'].scale.x,sy=hr.height/(host.offsetHeight||1)||anchors[record.anchor||'effects'].scale.y;
+      theme={w:parseFloat(css.width)||1,h:parseFloat(css.height)||1,x:(rect.left-hr.left)/sx,y:(rect.top-hr.top)/sy,
+        filter:css.filter,opacity:Number(css.opacity)};
+      root.remove();combatGifThemes.set(key,theme);
+    }
+    record.theme=theme;
+    if(theme.filter&&theme.filter!=='none')record.asset=await monsterAsset(scene,record.src,theme.filter);
+    if(disposed||record.cancelled)return;
+    record.image=takeImage(record.asset.name);
+    if(record.asset.packed){record.image.preFX.addGlow(0xebedff,.3,0);record.image.preFX.setPadding(12);}
+  };
+  const add=saved=>{
+    const record={...saved,id:++sequence};records.push(record);
+    if(record.kind==='popup'){record.animation=popupAnimation(record);void preparePopup(record).catch(error=>{release(record);console.warn('[CanvasPopup]',error);});}
+    else void prepareGif(record).catch(error=>{release(record);console.warn('[CanvasEffect]',error);});
+    return record;
+  };
+  const command=(kind,data)=>{
+    if(disposed)return false;
+    const now=clockNow();
+    if(kind==='clear'){for(const r of [...records])release(r);damageCursor=laneCursor=0;return true;}
+    if(kind==='clearPopups'){for(const record of [...records])if(record.kind==='popup')release(record);damageCursor=laneCursor=0;return true;}
+    if(kind==='endRecovery'){for(const r of records)if(r.key==='recovery'){r.motion=null;r.duration=Math.min(r.duration,now-r.start+300);}return true;}
+    if(kind==='removeGif'){for(const record of [...records])if(record.key===data.key)release(record);return true;}
+    if(kind==='gif'){
+      if(data.keepExisting&&records.some(record=>record.key===data.key))return true;
+      if(data.key)for(const record of [...records])if(record.key===data.key)release(record);
+      add({...data,kind,start:data.start??now,duration:data.lifetime??800,gifEpoch:performance.now()});return true;
+    }
+    if(kind!=='popup')return false;
+    if(data.channel==='damage'){
+      const alive=records.filter(r=>r.channel==='damage');if(!alive.length)damageCursor=0;
+      if(alive.length>=POPUP_LIMITS.damage)release(alive[0]);
+      add({...data,kind,start:now,lane:['center','left','right'][damageCursor++%3],duration:data.priority===3?1750:data.priority===1?1550:1350});
+    }else{
+      const history=records.filter(r=>r.history);if(history.length>=POPUP_LIMITS.history)release(history.shift());
+      for(let i=history.length-1,rank=1;i>=0;i--,rank++){
+        const r=history[i];r.previousDepth=r.depth||0;r.depth=Math.max(r.depth||0,rank);r.depthAt=now;
+      }
+      add({...data,kind,start:now,duration:1700,history:true,depth:0});
+      const central=records.find(r=>r.channel==='status'&&!r.history&&!r.outgoing&&r.lane==='center');
+      const lane=!central||now-central.start>=240?'center':['left','right'][laneCursor++%2];if(lane==='center')laneCursor=0;
+      for(const r of [...records])if(r.channel==='status'&&!r.history&&r.lane===lane){if(r.outgoing)release(r);else r.outgoing=now;}
+      add({...data,kind,start:now,duration:1350,lane});
+    }
+    return true;
+  };
+  const update=(now,resolve,hidden)=>{
+    for(const record of [...records]){
+      if(now>=record.start+record.duration||record.outgoing&&now>=record.outgoing+280){release(record);continue;}
+      if(record.motion==='preparation'&&now>=(record.nextMotionAt||0)){
+        const progress=monsterClamp(Number(entity.preparationProgressRatio)||0);record.nextMotionAt=now+1000/30;
+        if(progress>=.85&&record.finalStart===undefined)record.finalStart=now;
+        if(progress>=1){setPose({transform:entity._preparationVisual?.previousTransform||''});record.completeAt??=now;
+          if(now>=record.completeAt+2000){entity.stopPreparationAnimation?.();continue;}}
+        else {
+          const phase=record.phase||0,backward=record.backward??-6,direction=record.direction??1;
+          const x=direction*Math.sin(progress*Math.PI)*(.3+progress*1.5)+backward*progress**1.8;
+          if(progress>(phase+1)/5){record.phase=phase+1;record.backward=backward*1.4;}
+          record.direction=-direction;setPose({transform:`translateX(${x}px)`});
+        }
+      }else if(record.motion==='recovery'&&now>=(record.nextMotionAt||0)){
+        const elapsed=now-record.start;record.nextMotionAt=now+1000/30;
+        if(elapsed>=record.motionDuration){entity.stopRecoveryAnimation?.();}
+        else setPose({transform:`translate(${(Math.sin(elapsed*.002*Math.PI)*1.5).toFixed(2)}px, ${(Math.sin(elapsed*.002*Math.PI*2)*3).toFixed(2)}px)`,scale:(.8+(Math.cos(elapsed*.002*Math.PI*2)+1)*.1).toFixed(3)});
+      }
+      const anchor=resolve(record.kind==='gif'?record.anchor||'effects':record.channel),sx=anchor.sx,sy=anchor.sy;
+      if(record.kind==='gif'){
+        if(!record.image)continue;
+        const {image,asset:a,theme:t}=record;
+        let time=(performance.now()-record.gifEpoch)%a.total,index=0;
+        while(index<a.count-1&&time>=a.nativeDurations[index])time-=a.nativeDurations[index++];
+        let fade=record.fade?Math.min(monsterClamp((now-record.start)/record.fade),monsterClamp((record.start+record.duration-now)/record.fade)):1;
+        let scale=1,brightness=1;
+        if(record.parentClass?.includes('boulassefeu')&&now-record.start<500){const t=(now-record.start)/500;scale=t<.5?t*2*1.2:1.2-(t-.5)*.4;}
+        if(record.finalStart!==undefined){const elapsed=now-record.finalStart;
+          if(elapsed<1000){scale=1+elapsed/1000*.2;brightness=1+elapsed/1000;}
+          else if(elapsed<1350){const p=monsterEase(monsterClamp((elapsed-1000)/300),'ease-in-out');scale=1+.5*p;fade*=1-p;}
+        }
+        image.setFrame(a.frameNames?.[index]??index).setPosition(anchor.x+(t.x+t.w/2)*sx,anchor.y+(t.y+t.h/2)*sy)
+          .setDisplaySize(t.w*a.width/a.contentWidth*sx*scale,t.h*a.height/a.contentHeight*sy*scale)
+          .setAlpha(fade*t.opacity*anchor.alpha).setDepth(-97).setVisible(!hidden&&anchor.visible);
+        if(brightness>1&&!record.extra)record.extra=takeImage(a.name).setBlendMode('ADD');
+        if(record.extra)record.extra.setFrame(a.frameNames?.[index]??index).setPosition(image.x,image.y).setDisplaySize(image.displayWidth,image.displayHeight)
+          .setAlpha(image.alpha*Math.min(1,brightness-1)).setDepth(-96.999).setVisible(image.visible&&brightness>1);
+        continue;
+      }
+      const value=monsterAnimatedValues(record.animation,now),m=value.transform;let scale=m[0],x=m[4],y=m[5],alpha=value.opacity[0];
+      if(record.history){
+        const t=monsterEase(monsterClamp((now-(record.depthAt||now))/300),'cubic-bezier(.22,.61,.36,1)'),d=(record.previousDepth??record.depth)+(record.depth-(record.previousDepth??record.depth))*t;
+        const step=[0,16,28,37,44,49],lo=Math.floor(d),hi=Math.min(5,Math.ceil(d));
+        y-=24+step[lo]+(step[hi]-step[lo])*(d-lo);scale*=Math.max(.2,.78**d);alpha*=Math.max(.24,.96-d*.09);
+      }else if(record.lane==='left'){if(record.channel==='status'){x-=18;y-=23;}}
+      else if(record.lane==='right'&&record.channel==='status'){x+=18;y-=46;}
+      if(record.outgoing){const t=monsterEase(monsterClamp((now-record.outgoing)/280),'ease-out');alpha*=1-t;y-=14*t;scale*=1-.04*t;}
+      for(const part of record.parts||[]){
+        const cx=part.left+part.width/2-(record.channel==='damage'?record.width/2:0),cy=-record.height/2;
+        part.image.setPosition(anchor.x+(x+cx*scale)*sx,anchor.y+(y+cy*scale)*sy)
+          .setDisplaySize((part.width+part.padding*2)*scale*sx,(part.height+part.padding*2)*scale*sy)
+          .setAlpha(alpha*anchor.alpha).setDepth(-90+(record.history?0:record.outgoing?1:record.channel==='damage'?4:3)+record.id*.000001).setVisible(!hidden&&anchor.visible);
+      }
+    }
+  };
+  const capture=()=>({damageCursor,laneCursor,records:records.map(({parts,image,extra,asset,theme,animation,cancelled,id,...data})=>({...data,gifElapsed:data.gifEpoch?performance.now()-data.gifEpoch:undefined,gifEpoch:undefined}))});
+  const restore=state=>{for(const r of [...records])release(r);damageCursor=state?.damageCursor||0;laneCursor=state?.laneCursor||0;
+    for(const r of state?.records||[])add({...r,gifEpoch:performance.now()-(r.gifElapsed||0)});};
+  const destroy=()=>{disposed=true;for(const r of [...records])release(r);for(const image of pool)image.destroy();pool.length=0;};
+  return {command,update,capture,restore,destroy};
+}
+
 function mountWebGLMonster(entity, box) {
-  if (!monsterWebGLRequested() || entity.class !== 'grouille-doigt' || !box.isConnected || !box.closest('#hexGrid') || monsterViews.has(box)) return;
+  if (!monsterWebGLRequested() || !box.isConnected || !box.closest('#hexGrid') || monsterViews.has(box)) return;
   monsterViews.add(box);
   void attachPhaserMonster(box, async scene => {
     activeMonsterViews++;
-    const layers=new Map(), bindings=new Map();
+    const layers=new Map(), bindings=new Map(), presentationAnchors={};
+    let presentation,armorPulseStart=null;
     const grid=box.closest('#hexGrid');
     let cells=new Map(), originCell, originPosition, boardScale={x:1,y:1}, destroyed=false, suspended=false, queued=false, geometryQueued=false;
-    const cssCopy=css=>Object.fromEntries(['opacity','display','transform','scale','left','top','right','fontStyle','fontWeight','fontSize','fontFamily','textShadow','textAlign','color','backgroundColor','backgroundImage','transitionProperty','transitionDuration','transitionTimingFunction','transformOrigin','filter'].map(key=>[key,css[key]]));
+    const cssCopy=css=>Object.fromEntries(['opacity','display','transform','scale','left','top','right','fontStyle','fontWeight','fontSize','fontFamily','textShadow','textAlign','color','backgroundColor','backgroundImage','transitionProperty','transitionDuration','transitionTimingFunction','transformOrigin','filter','animationName','animationDuration','animationDelay'].map(key=>[key,css[key]]));
+    const layoutOffset=()=>{const cell=cells.get(String(entity.position))||originCell,move=getMonsterPlacementOffset(entity);
+      return {x:cell.x-originCell.x+move.x*boardScale.x,y:cell.y-originCell.y+move.y*boardScale.y};};
     const bind = node => {
       if(bindings.has(node))return bindings.get(node);
       const css=cssCopy(getComputedStyle(node)), rect=node.getBoundingClientRect();
       const width=node.offsetWidth||rect.width/boardScale.x||1, height=node.offsetHeight||rect.height/boardScale.y||1;
-      const origin=css.transformOrigin.split(' ').map(parseFloat), values={};
+      const origin=css.transformOrigin.split(' ').map(parseFloat), values={},offset=layoutOffset();
       for(const key of ['transform','scale','opacity','left','top','right','filter'])values[key]=monsterValue(key,css[key],{width,height});
-      const b={node,css,rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height},width,height,
-        origin:{x:rect.left+(origin[0]||0)*boardScale.x,y:rect.top+(origin[1]||0)*boardScale.y},
+      const b={node,css,rect:{x:rect.left-offset.x,y:rect.top-offset.y,w:rect.width,h:rect.height},width,height,
+        origin:{x:rect.left-offset.x+(origin[0]||0)*boardScale.x,y:rect.top-offset.y+(origin[1]||0)*boardScale.y},
         values,base:{...values},tweens:new Map(),animations:[]};
-      b.animations=node.getAnimations().map(animation=>monsterAnimation(animation,b));
+      b.animations=readCombatAnimations(node,css).map(animation=>monsterAnimation(animation,b));
       bindings.set(node,b);
       node._monsterStyleChanged=(changes,now)=>{
         try {
-        b.commanded=true;
+        const direct=node.matches('canvas,.sprite,.health-bar,.armor-bar,.health-fill,.armor-fill,.atb-fill,.attack-bar-fill,.timer-activeattack')
+          &&Object.keys(changes).every(key=>['transform','scale','opacity','left','top','right','display','filter','width','animationDuration'].includes(key));
+        b.commanded=!direct;if(direct)Object.assign(b.overrides||={},changes);
         for(const [key,value] of Object.entries(changes)) {
           if(['transform','scale','opacity','left','top','right','filter'].includes(key)) {
             const to=monsterValue(key,value,b), from=monsterAnimatedValues(b,now)[key];
@@ -1927,11 +2167,12 @@ function mountWebGLMonster(entity, box) {
               if(changed){for(const layer of layers.values())if(layer.asset&&layer.chain.includes(b))layer.dirty=true;schedule();}
             }
             if(duration>0 && (props.includes(key)||props.includes('all')))b.tweens.set(key,{from,to,start:now,duration,easing:b.css.transitionTimingFunction});
-          } else if(key==='display'){if(b.css.display==='none'&&value!=='none')invalidateGeometry();b.css.display=value;}
+          } else if(key==='display'){if(b.css.display==='none'&&value!=='none')invalidateGeometry(false,node);b.css.display=value;}
           else if(key==='width')b.fill=monsterClamp(parseFloat(value)/100);
-          else if(key==='animation')b.animations=node.getAnimations().map(animation=>monsterAnimation(animation,b));
+          else if(key==='animation') { b.css=cssCopy(getComputedStyle(node));b.animations=readCombatAnimations(node,b.css).map(animation=>monsterAnimation(animation,b)); }
           else if(key==='animationDuration')for(const animation of b.animations)animation.duration=parseFloat(value)*(String(value).endsWith('ms')?1:1000);
         }
+        return direct;
       } catch(error){fail(error);}
       };
       node._monsterAnimationStarted=animation=>{try{b.animations.push(monsterAnimation(animation,b));}catch(error){fail(error);}};
@@ -1939,9 +2180,7 @@ function mountWebGLMonster(entity, box) {
     };
     const chainFor=node=>{const chain=[];for(let n=node;n&&n!==grid;n=n.parentElement)chain.push(bind(n));return chain;};
     const calibrateBoard=()=>{
-      cells=new Map([...grid.querySelectorAll('.hex[data-position]')].map(cell=>{
-        const rect=cell.getBoundingClientRect();return [cell.dataset.position,{x:rect.left,y:rect.top,w:rect.width,h:rect.height,localW:cell.offsetWidth||1,localH:cell.offsetHeight||1}];
-      }));
+      cells=readBoardScreenGeometry(grid);
       originPosition=String(entity.position);originCell=cells.get(originPosition)||{x:0,y:0,w:1,h:1,localW:1,localH:1};
       boardScale={x:originCell.w/originCell.localW,y:originCell.h/originCell.localH};
     };
@@ -1950,6 +2189,12 @@ function mountWebGLMonster(entity, box) {
       if(layers.has(node))return layers.get(node);
       const css=cssCopy(getComputedStyle(node)), rect=node.getBoundingClientRect();
       const layer={node,kind,css,rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height},chain:chainFor(node),dirty:true,startedAt:performance.now(),fallbackText:node.textContent,textScaleX:rect.width/(node.offsetWidth||1),textScaleY:rect.height/(node.offsetHeight||1)};
+      if(kind==='text'&&(node.classList.contains('preparation')||node.classList.contains('execution'))){
+        const parent=node.parentElement,r=parent.getBoundingClientRect(),css=getComputedStyle(parent);
+        const x=r.width/(parent.offsetWidth||1)||boardScale.x,y=r.height/(parent.offsetHeight||1)||boardScale.y;
+        layer.rect={x:r.left,y:r.top+r.height/2,w:Math.max(1,r.width),h:(parseFloat(css.fontSize)||12)*1.3*y};
+        layer.textScaleX=x;layer.textScaleY=y;
+      }
       if(kind==='bar') {
         const parent=node.parentElement, r=parent.getBoundingClientRect();
         layer.rect={x:r.left+parent.clientLeft*boardScale.x,y:r.top+parent.clientTop*boardScale.y,w:parent.clientWidth*boardScale.x,h:parent.clientHeight*boardScale.y};
@@ -1962,10 +2207,21 @@ function mountWebGLMonster(entity, box) {
         const fill=node.querySelector('.health-fill,.armor-fill');if(fill)layer.chain.unshift(bind(fill));
       }
       layer.maxShift=node.classList.contains('max');
-      if(kind==='text')layer.textRole=node.classList.contains('HP-counter')?'hp':node.classList.contains('armor-text')?'armor':node.classList.contains('current-shift')?'shift':node.classList.contains('preparation')?'prep':node.classList.contains('execution')?'exec':'label';
+      if(kind==='text')layer.textRole=node.classList.contains('HP-counter')?'hp':node.classList.contains('armor-text')?'armor':node.classList.contains('current-shift')?'shift':node.classList.contains('preparation')?'prep':node.classList.contains('execution')?'exec':node.classList.contains('attackname')?'attackName':'label';
       layer.flipX=layer.chain.reduce((flip,b)=>b.values.transform[0]<0?!flip:flip,false);
-      const moving=getMonsterPlacementOffset(entity);layer.rect.x-=moving.x*boardScale.x;layer.rect.y-=moving.y*boardScale.y;
+      const offset=layoutOffset();layer.rect.x-=offset.x;layer.rect.y-=offset.y;
       layers.set(node,layer);return layer;
+    };
+    const calibratePresentation=()=>{
+      for(const [key,id] of [['damage','PopUp_'],['status','PopDow_'],['effects','effectsContainer_'],['cast','Cast_Animation_']]){
+        const node=box.querySelector(`[id="${id}${entity.id}"]`);if(!node)continue;
+        const chain=chainFor(node),r=node.getBoundingClientRect(),offset=layoutOffset();
+        const probe=document.createElement('span');probe.dataset.phaserTheme='';
+        probe.style.cssText='position:absolute;left:0;top:0;width:100px;height:100px;visibility:hidden;pointer-events:none;transform:none;';
+        node.append(probe);const measured=probe.getBoundingClientRect();probe.remove();
+        const scale={x:measured.width/100||boardScale.x,y:measured.height/100||boardScale.y};
+        presentationAnchors[key]={node,chain,rect:{x:r.left-offset.x,y:r.top-offset.y,w:0,h:0},scale};
+      }
     };
     const refreshList=()=>{
       for(const node of box.querySelectorAll('canvas'))install(node,'body');
@@ -1974,7 +2230,7 @@ function mountWebGLMonster(entity, box) {
       for(const node of box.querySelectorAll(monsterBars))install(node,'bar');
       for(const node of box.querySelectorAll(monsterTexts))install(node,'text');
       for(const [node,layer] of layers)if(!box.contains(node)){disposeMonsterLayer(layer,scene);layers.delete(node);}
-      const used=new Set([...layers.values()].flatMap(layer=>layer.chain));
+      const used=new Set([...layers.values(),...Object.values(presentationAnchors)].flatMap(layer=>layer.chain));
       for(const [node,b] of bindings)if(!used.has(b)){
         delete node._monsterStyleChanged;delete node._monsterAnimationStarted;bindings.delete(node);
       }
@@ -2020,11 +2276,14 @@ function mountWebGLMonster(entity, box) {
         }
       } catch(error){fail(error);} finally{layer.busy=false;if(layer.dirty&&!destroyed)schedule();}
     };
-    const schedule=()=>{
+    let structureDirty=false;
+    const schedule=(structureChanged=false)=>{
+      structureDirty ||= structureChanged;
       if(queued||destroyed)return;queued=true;
       globalThis.requestAnimationFrame(()=>{
         queued=false;if(destroyed)return;
-        refreshList();for(const layer of layers.values())if(layer.dirty)void prepare(layer);
+        if(structureDirty){structureDirty=false;refreshList();}
+        for(const layer of layers.values())if(layer.dirty)void prepare(layer);
         wakePhaserMonsters();
       });
     };
@@ -2035,22 +2294,37 @@ function mountWebGLMonster(entity, box) {
         node._monsterStyleChanged(changes,clockNow());return;
       }
       const previousDisplay=b.css.display, previousFilter=monsterColorFilter(b.css.filter);
-      b.css=cssCopy(getComputedStyle(node));
+      const previousAnimation=[b.css.animationName,b.css.animationDuration,b.css.animationDelay].join('|');
+      const classes=[];for(let parent=node;parent&&parent!==grid;parent=parent.parentElement)classes.push(parent.className);
+      const key=[...classes,node.style.cssText,entity.class,entity.side,entity.sizeInCells,box.dataset.spriteWidth,box.dataset.spriteHeight,
+        entity.preparationTime>0,entity.executionTime>0,entity.recoveryTime>0,entity.currentPhase,entity.orderPhase,
+        ...[...layers.values()].filter(l=>l.bar==='attack').map(l=>l.node.className)].join('|');
+      let css=monsterClassStyles.get(key);
+      if(!css){css=cssCopy(getComputedStyle(node));monsterClassStyles.set(key,css);if(monsterClassStyles.size>1024)monsterClassStyles.delete(monsterClassStyles.keys().next().value);}
+      b.css={...css};
       const layer=layers.get(node);if(layer)layer.css=b.css;
       if(previousFilter!==monsterColorFilter(b.css.filter)){
         for(const candidate of layers.values())if(candidate.asset&&candidate.chain.includes(b))candidate.dirty=true;
         schedule();
       }
-      if(previousDisplay==='none'&&b.css.display!=='none')invalidateGeometry();
-      for(const key of ['transform','scale','opacity','left','top','right','filter'])b.values[key]=monsterValue(key,b.css[key],b);
-      b.animations=node.getAnimations().map(animation=>monsterAnimation(animation,b));
+      if(previousDisplay==='none'&&b.css.display!=='none')invalidateGeometry(false,node);
+      for(const key of ['transform','scale','opacity','left','top','right','filter'])b.values[key]=monsterValue(key,b.overrides?.[key]??b.css[key],b);
+      if(previousAnimation!==[b.css.animationName,b.css.animationDuration,b.css.animationDelay].join('|')){
+        let templates=monsterClassAnimations.get(key);
+        if(!templates){
+          b.animations=readCombatAnimations(node,b.css).map(animation=>monsterAnimation(animation,b));
+          templates=b.animations.map(({start,cancelled,...animation})=>animation);monsterClassAnimations.set(key,templates);
+          if(monsterClassAnimations.size>1024)monsterClassAnimations.delete(monsterClassAnimations.keys().next().value);
+        }else b.animations=templates.map(animation=>({...animation,start:clockNow(),cancelled:false}));
+      }
     };
-    const observer=new MutationObserver(records=>{
+    const consumeMutations=records=>{
+      if(destroyed)return;
       const commanded=new Set([...bindings.values()].filter(b=>b.commanded).map(b=>b.node));
       const changed=new Map();
       for(const record of records) {
         const node=record.target.nodeType===1?record.target:record.target.parentElement;
-        if(record.type==='childList' && [...record.addedNodes,...record.removedNodes].some(n=>n.nodeType===1)){schedule();continue;}
+        if(record.type==='childList' && [...record.addedNodes,...record.removedNodes].some(n=>n.nodeType===1&&!n.dataset?.phaserTheme)){schedule(true);continue;}
         if(record.type==='attributes') {
           if(record.attributeName==='style'&&(commanded.has(node)||node===box||node.matches(monsterBars)))continue;
           const b=bindings.get(node), signature=node.getAttribute(record.attributeName);
@@ -2072,32 +2346,49 @@ function mountWebGLMonster(entity, box) {
         if(panel&&layers.has(panel)&&!node.closest(monsterBars+','+monsterTexts)){layers.get(panel).dirty=true;schedule();}
       }
       for(const node of commanded)if(bindings.has(node))bindings.get(node).commanded=false;
-    });
-    const invalidateGeometry=(refreshBoard=false)=>{
-      if(destroyed||geometryQueued)return;geometryQueued=true;
+    };
+    const pendingMutations=[];
+    const flushMutations=()=>consumeMutations(pendingMutations.splice(0));
+    const observer=new MutationObserver(records=>{pendingMutations.push(...records);queueCombatPresentationUpdate(flushMutations);});
+    const geometryRoots=new Set();let boardGeometryDirty=false;
+    const invalidateGeometry=(refreshBoard=false,changedNode=null)=>{
+      if(destroyed)return;boardGeometryDirty ||= refreshBoard;geometryRoots.add(refreshBoard?null:changedNode);
+      if(geometryQueued)return;geometryQueued=true;
       // Geometry is only rebuilt for viewport/board sizing, never for a frame.
       queueMicrotask(()=>{
         geometryQueued=false;if(destroyed||!box.isConnected)return;
-        if(refreshBoard)calibrateBoard();
-        else {originCell=cells.get(String(entity.position))||originCell;boardScale={x:originCell.w/originCell.localW,y:originCell.h/originCell.localH};}
-        for(const node of bindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;}
-        bindings.clear();
-        for(const [node,layer] of [...layers]) {
+        if(boardGeometryDirty)calibrateBoard();
+        const whole=geometryRoots.has(null),affected=node=>whole||[...geometryRoots].some(root=>root.contains(node));
+        const previousBindings=new Map([...bindings].filter(([node])=>affected(node)));
+        for(const node of previousBindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;bindings.delete(node);}
+        for(const [node,layer] of [...layers]) { if(!affected(node))continue;
           layers.delete(node);const fresh=install(node,layer.kind);
           Object.assign(layer,{rect:fresh.rect,chain:fresh.chain,css:fresh.css,barBinding:fresh.barBinding,flipX:fresh.flipX,textScaleX:fresh.textScaleX,textScaleY:fresh.textScaleY});layers.set(node,layer);
           if(!layer.image)layer.dirty=true;
         }
-        schedule();
+        calibratePresentation();
+        // Recalibrate coordinates without discarding poses that now live only
+        // in Phaser, especially when rotating a phone during tactical pause.
+        for(const [node,previous] of previousBindings){
+          const current=bindings.get(node);if(!current)continue;
+          current.overrides={...previous.overrides};current.tweens=new Map(previous.tweens);
+          if(current.css.animationName===previous.css.animationName)current.animations=previous.animations;
+          for(const [key,value] of Object.entries(current.overrides)){
+            if(key in current.values)current.values[key]=monsterValue(key,value,current);
+            else if(key==='width')current.fill=previous.fill;
+            else if(key==='display')current.css.display=value;
+          }
+        }
+        geometryRoots.clear();boardGeometryDirty=false;schedule();
       });
     };
     const destroy=()=>{
-      if(destroyed)return;destroyed=true;observer.disconnect();resize.disconnect();box.removeAttribute('data-monster-webgl');delete box._monsterView;
+      if(destroyed)return;destroyed=true;observer.disconnect();box.removeAttribute('data-monster-webgl');delete box._monsterView;
       for(const node of bindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;}bindings.clear();
-      for(const layer of layers.values())disposeMonsterLayer(layer,scene);layers.clear();
-      if(--activeMonsterViews===0){monsterCacheEpoch++;for(const key of Object.keys(scene.textures.list))if(key.startsWith('monster-'))scene.textures.remove(key);monsterPanels.clear();monsterImages.clear();monsterResources.clear();monsterTextTextures.clear();monsterDecorations.clear();}
+      presentation?.destroy();for(const layer of layers.values())disposeMonsterLayer(layer,scene);layers.clear();
+      if(--activeMonsterViews===0){monsterCacheEpoch++;for(const key of Object.keys(scene.textures.list))if(key.startsWith('monster-'))scene.textures.remove(key);monsterPanels.clear();monsterImages.clear();monsterResources.clear();monsterTextTextures.clear();monsterDecorations.clear();combatPopupThemes.clear();combatGifThemes.clear();monsterClassStyles.clear();monsterClassAnimations.clear();}
     };
     const fail=error=>{if(!destroyed){destroy();console.warn('[MonsterWebGL] HTML restored:',error);}};
-    const resize=new ResizeObserver(()=>invalidateGeometry(true));resize.observe(grid);
     const barTexture=(kind)=>{
       const key=`monster-bar-${kind}`;if(scene.textures.exists(key))return key;
       const canvas=document.createElement('canvas');canvas.width=256;canvas.height=16;const ctx=canvas.getContext('2d');
@@ -2108,46 +2399,67 @@ function mountWebGLMonster(entity, box) {
     };
     barTexture('base');barTexture('overlay');
     const pose=(rect,chain,frame)=>{
-      let x=rect.x+rect.w/2,y=rect.y+rect.h/2,w=rect.w,h=rect.h,angle=0,alpha=1,brightness=1,visible=true;
-      for(const binding of chain) {
-        const value=frame.get(binding), base=binding.base, m=value.transform, b=base.transform;
-        alpha*=value.opacity[0];brightness*=value.filter[0];visible&&=binding.css.display!=='none';
-        if(binding.node===box)continue; // placement comes from the logical board
-        const sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
-        const sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
-        const a=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
-        const dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
-        const dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
-        const ox=binding.origin.x,oy=binding.origin.y,px=(x-ox)*sx,py=(y-oy)*sy;
-        x=ox+px*Math.cos(a)-py*Math.sin(a)+dx;y=oy+px*Math.sin(a)+py*Math.cos(a)+dy;w*=sx;h*=sy;angle+=a;
+      // Sibling layers share their ancestors. Compose each ancestor once per
+      // frame instead of repeating trigonometry for every icon, bar and glyph.
+      const cache=frame.poses ||= new Map();
+      let parent={a:1,b:0,c:0,d:1,tx:0,ty:0,sx:1,sy:1,angle:0,alpha:1,brightness:1,visible:true};
+      for(let i=chain.length-1;i>=0;i--){
+        const binding=chain[i];
+        if(cache.has(binding)){parent=cache.get(binding);continue;}
+        const value=frame.get(binding),base=binding.base,m=value.transform,b=base.transform;
+        let sx=1,sy=1,angle=0,dx=0,dy=0;
+        if(binding.node!==box){
+          sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
+          sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
+          angle=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
+          dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
+          dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
+        }
+        const cos=Math.cos(angle),sin=Math.sin(angle),a=cos*sx,bv=sin*sx,c=-sin*sy,d=cos*sy;
+        const ox=binding.origin.x,oy=binding.origin.y,tx=ox-a*ox-c*oy+dx,ty=oy-bv*ox-d*oy+dy;
+        parent={a:parent.a*a+parent.c*bv,b:parent.b*a+parent.d*bv,c:parent.a*c+parent.c*d,d:parent.b*c+parent.d*d,
+          tx:parent.a*tx+parent.c*ty+parent.tx,ty:parent.b*tx+parent.d*ty+parent.ty,
+          sx:parent.sx*sx,sy:parent.sy*sy,angle:parent.angle+angle,alpha:parent.alpha*value.opacity[0],
+          brightness:parent.brightness*value.filter[0],visible:parent.visible&&binding.css.display!=='none'};
+        cache.set(binding,parent);
       }
-      return {x,y,w,h,angle,alpha,brightness,visible};
+      const x=rect.x+rect.w/2,y=rect.y+rect.h/2;
+      return {x:parent.a*x+parent.c*y+parent.tx,y:parent.b*x+parent.d*y+parent.ty,
+        w:rect.w*parent.sx,h:rect.h*parent.sy,angle:parent.angle,alpha:parent.alpha,brightness:parent.brightness,visible:parent.visible};
     };
     const update=(now,showHTML=false)=>{
       if(destroyed)return;
       if(suspended!==showHTML){suspended=showHTML;box.dataset.monsterWebgl=suspended?'suspended':'ready';for(const layer of layers.values())if(layer.tintHandler){if(suspended)delete layer.node._phaserMonsterTint;else layer.node._phaserMonsterTint=layer.tintHandler;renderEntityTint(layer.node);}}
-      if(suspended){for(const layer of layers.values()){layer.image?.setVisible(false);layer.overlay?.setVisible(false);layer.tint?.setVisible(false);layer.brightness?.setVisible(false);}return;}
+      if(suspended){presentation?.update(now,()=>({sx:1,sy:1,x:0,y:0,alpha:0,visible:false}),true);for(const layer of layers.values()){layer.image?.setVisible(false);layer.overlay?.setVisible(false);layer.tint?.setVisible(false);layer.brightness?.setVisible(false);}return;}
       const frame=new Map([...bindings.values()].map(binding=>[binding,monsterAnimatedValues(binding,now)]));
       const cell=cells.get(String(entity.position))||originCell, ratio=cell.w/originCell.w, move=getMonsterPlacementOffset(entity);
+      presentation?.update(now,key=>{
+        const a=presentationAnchors[key],p=pose(a.rect,a.chain,frame);
+        const scale=a.chain.reduce((v,b)=>{const value=frame.get(b),base=b.base;return {x:v.x*Math.hypot(value.transform[0],value.transform[1])/(Math.hypot(base.transform[0],base.transform[1])||1)*value.scale[0]/base.scale[0],y:v.y*Math.hypot(value.transform[2],value.transform[3])/(Math.hypot(base.transform[2],base.transform[3])||1)*value.scale[1]/base.scale[1]};},{...a.scale});
+        return {x:cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y:cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio,sx:scale.x*ratio,sy:scale.y*ratio,alpha:p.alpha,visible:p.visible};
+      },false);
       const hp=Math.max(0,Math.min(entity.stats.HP.current,entity.stats.HP.max)),armor=Math.max(0,entity.stats.armor?.current||0),den=Math.max(entity.stats.HP.max,hp+armor)||1;
+      if(armor>0)armorPulseStart??=now;else armorPulseStart=null;
       let atb=1;
       if(entity.orderPhase==='orderDecision')atb=entity.recoveryTime/Math.max(1,entity.maxRecoveryTime)*(entity.ATBfillBeforeOrder||100)/100;
       else if(entity.orderPhase==='orderExecution')atb=1-entity.orderExecutionTime/Math.max(1,entity.maxOrderExecutionTime);
       else if(entity.recoveryTime>0)atb=entity.recoveryTime/Math.max(1,entity.maxRecoveryTime||entity.recoveryTime);
       else if(entity.speedTimer>0 && !(entity.preparationTime>0||entity.executionTime>0))atb=1-entity.speedTimer/(Number(entity.stats.speed?.current)||1000);
       const prep=Number(entity.preparationTime)||0,exec=Number(entity.executionTime)||0;
+      const attackNameKey=entity.currentAttackId||entity.attacks?.[0];
+      if(attackNameKey!==update.attackNameKey||now>=(update.attackNameAt||0)){update.attackNameKey=attackNameKey;update.attackNameAt=now+100;update.attackName=resolveEntityAttackDisplayName(entity,attackNameKey,attackDetails);}
       for(const layer of layers.values()) {
         let rect={...layer.rect},visible=true,color=0xffffff;
         if(layer.kind==='body'&&getEntitySpriteSource(entity)!==layer.source){layer.dirty=true;schedule();}
         if(layer.kind==='text') {
-          const value=layer.textRole==='hp'?`HP : ${hp} / ${entity.stats.HP.max}`:layer.textRole==='armor'?`🛡️ ${armor}`:layer.textRole==='shift'?String(Math.round(Number(entity.stats.shift?.[layer.maxShift?'max':'current'])||0)):layer.textRole==='prep'?`${(prep/1000).toFixed(1)}s`:layer.textRole==='exec'?`${(exec/1000).toFixed(1)}s`:layer.fallbackText;
+          const value=layer.textRole==='hp'?`HP : ${hp} / ${entity.stats.HP.max}`:layer.textRole==='armor'?`🛡️ ${armor}`:layer.textRole==='shift'?String(Math.round(Number(entity.stats.shift?.[layer.maxShift?'max':'current'])||0)):layer.textRole==='prep'?`${(prep/1000).toFixed(1)}s`:layer.textRole==='exec'?`${(exec/1000).toFixed(1)}s`:layer.textRole==='attackName'?update.attackName:layer.fallbackText;
           updateMonsterText(layer,scene,layer.css,value);
           if(layer.textRole==='prep')visible=prep>0;if(layer.textRole==='exec')visible=prep<=0&&exec>0;
           const entry=layer.textEntry,scaleX=layer.textScaleX,scaleY=layer.textScaleY;
           const align=layer.css.textAlign,offset=align==='center'?(rect.w-entry.width*scaleX)/2:align==='right'?rect.w-entry.width*scaleX:0;
           rect={x:rect.x+offset-entry.padding*scaleX,y:rect.y+(rect.h-entry.height*scaleY)/2-entry.padding*scaleY,w:(entry.width+entry.padding*2)*scaleX,h:(entry.height+entry.padding*2)*scaleY};
         } else if(layer.kind==='bar') {
-          let target=layer.bar==='hp'?hp/den:layer.bar==='armor'?armor/den:layer.bar==='atb'?(layer.barBinding.fill??atb):prep>0?1-prep/Math.max(1,entity.currentAttack?.preparationTime||1):exec>0||entity.recoveryTime>0?1:0;
+          let target=layer.bar==='hp'?hp/den:layer.bar==='armor'?armor/den:layer.bar==='atb'?(layer.barBinding.fill??atb):(layer.barBinding.fill??(prep>0?1-prep/Math.max(1,entity.currentAttack?.preparationTime||1):exec>0||entity.recoveryTime>0?1:0));
           target=monsterClamp(target);
           if(target!==layer.fillTarget){if(layer.fillTarget===-1)layer.fill=target;layer.fillFrom=layer.fill;layer.fillTarget=target;layer.fillAt=now;}
           layer.fill=layer.fillFrom+(target-layer.fillFrom)*monsterEase(monsterClamp((now-layer.fillAt)/(layer.bar==='hp'||layer.bar==='armor'?300:100)),'ease-out');
@@ -2161,6 +2473,7 @@ function mountWebGLMonster(entity, box) {
         }
         if(!layer.image)continue;
         const p=pose(rect,layer.chain,frame),image=layer.image;
+        if(layer.textRole==='prep'||layer.textRole==='exec')p.visible=layer.chain.every(b=>b.node===layer.node||b.css.display!=='none');
         if(image.list)for(const part of image.list)part.updateMonsterIntro?.(now);
         const x=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio;
         let w=p.w*ratio,h=p.h*ratio,px=x,py=y;
@@ -2178,16 +2491,36 @@ function mountWebGLMonster(entity, box) {
             .setFlipX(layer.flipX).setAlpha(p.alpha*Math.min(1,p.brightness-1)).setDepth(depth+.0000001).setVisible(image.visible&&p.brightness>1);
         }
         if(layer.overlay)layer.overlay.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setAlpha(p.alpha).setVisible(image.visible).setDepth(depth+.000001);
-        if(layer.tint){const tone=layer.tone,rgb=tone?.color.split(',').map(Number)||[0,0,0];layer.tint.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setFlipX(layer.flipX).setDepth(depth+.000001).setVisible(image.visible&&Boolean(tone)).setAlpha(p.alpha*(tone?.opacity||0)).setTintFill((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);}
+        if(layer.tint){const tone=armor>0&&(!layer.tone||layer.tone.priority<ENTITY_TINTS.armorActive.priority)?{...ENTITY_TINTS.armorActive,opacity:.08+(Math.sin((now-armorPulseStart)/1800*Math.PI*2)+1)/2*.34}:layer.tone,rgb=tone?.color.split(',').map(Number)||[0,0,0];layer.tint.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setFlipX(layer.flipX).setDepth(depth+.000001).setVisible(image.visible&&Boolean(tone)).setAlpha(p.alpha*(tone?.opacity||0)).setTintFill((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);}
       }
     };
+    calibratePresentation();const spritePoseNode=box.querySelector('.sprite');
+    presentation=createCombatPresentation(scene,box,entity,presentationAnchors,values=>spritePoseNode?._monsterStyleChanged?.(values,clockNow()));
     refreshList();await Promise.all([...layers.values()].map(prepare));
     if(!destroyed){
-      if(!document.getElementById('monster-webgl-style')){const css=document.createElement('style');css.id='monster-webgl-style';css.textContent='[data-monster-webgl="ready"] :is(canvas,img,.hud-ingame,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer){visibility:hidden!important}';document.head.append(css);}
+      if(!document.getElementById('monster-webgl-style')){const css=document.createElement('style');css.id='monster-webgl-style';css.textContent='[data-monster-webgl="ready"] :is(canvas,img,.hud-ingame,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer){visibility:hidden!important}[data-monster-webgl="ready"] *{animation-play-state:paused!important}';document.head.append(css);}
       box.dataset.monsterWebgl='ready';box._monsterView={invalidateGeometry};
       observer.observe(box,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['style','class','src']});update(clockNow());
     }
-    return {update,destroy,invalidateGeometry,active:()=>!destroyed};
+    const bounds=node=>{
+      const binding=bindings.get(node);if(!binding)return null;
+      const chain=[];for(let current=node;current&&current!==grid;current=current.parentElement){const b=bindings.get(current);if(b)chain.push(b);}
+      const frame=new Map(chain.map(b=>[b,monsterAnimatedValues(b,clockNow())])),p=pose(binding.rect,chain,frame);
+      const cell=cells.get(String(entity.position))||originCell,ratio=cell.w/originCell.w,move=getMonsterPlacementOffset(entity);
+      const width=Math.abs(p.w*Math.cos(p.angle))*ratio+Math.abs(p.h*Math.sin(p.angle))*ratio;
+      const height=Math.abs(p.h*Math.cos(p.angle))*ratio+Math.abs(p.w*Math.sin(p.angle))*ratio;
+      const left=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio-width/2,top=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio-height/2;
+      return {x:left,y:top,left,top,width,height,right:left+width,bottom:top+height};
+    };
+    const pathFor=node=>{const path=[];for(let n=node;n&&n!==box;n=n.parentElement)path.unshift([...n.parentElement.children].indexOf(n));return path;};
+    const capture=()=>({presentation:presentation.capture(),armorPulseStart,bindings:[...bindings.values()].filter(b=>box.contains(b.node)).map(b=>({path:pathFor(b.node),overrides:b.overrides,values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations})),tweens:[...b.tweens]}))});
+    const restore=state=>{armorPulseStart=state?.armorPulseStart??null;presentation.restore(state?.presentation);for(const saved of state?.bindings||[]){
+      const node=saved.path.reduce((parent,index)=>parent?.children[index],box),b=bindings.get(node);if(!b)continue;
+      b.overrides={...saved.overrides};b.values={...saved.values};b.base={...saved.base};b.animations=saved.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));b.tweens=new Map(saved.tweens);
+      if(b.overrides.display!==undefined)b.css.display=b.overrides.display;
+      if(b.overrides.width!==undefined)b.fill=monsterClamp(parseFloat(b.overrides.width)/100);
+    }};
+    return {update,destroy,invalidateGeometry,bounds,command:(kind,data)=>{if(kind==='armorPulse'){armorPulseStart??=data.start;return true;}return presentation.command(kind,data);},capture,restore,accepts:()=>!destroyed,active:()=>!destroyed,connected:()=>box.isConnected};
   }).catch(error=>{monsterViews.delete(box);console.warn('[MonsterWebGL]',error);});
 }
 
