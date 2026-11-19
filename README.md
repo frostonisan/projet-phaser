@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.93.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.94.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -173,3 +173,19 @@ l’impact, le retour de l’original et la disparition de la copie à la mort.
 
 L’ancienne animation de mêlée HTML et ses helpers privés ont été retirés.
 Aucun nouveau fichier de jeu, média ou dépendance.
+
+
+## Glisser-déposer Phaser — v0.94.0-dev
+
+Les monstres du plateau se déplacent à la souris ou au doigt avec un aperçu
+Phaser. Le glissement commence après 8 pixels ; un simple clic conserve
+l’inspection. La case et les charges ne changent qu’au dépôt accepté.
+Les coûts, immobilisations, échanges, camps et empreintes utilisent les règles
+existantes. Le glissement fonctionne pendant la pause tactique, sans faire
+avancer le combat ; la pause absolue bloque les déplacements.
+
+Échap, une interruption tactile, un second doigt, la sortie de fenêtre, le
+redimensionnement ou la disparition du monstre annulent l’aperçu sans coût.
+F5 conserve les placements validés. Les hitboxes HTML, menus et dépôts depuis
+l’inventaire/admin restent utilisables. Les fichiers existants sont réutilisés,
+sans nouvelle dépendance ni nouveau fichier de jeu. Le gain de FPS n’est pas mesuré.

@@ -2062,6 +2062,115 @@ export function animateRecuperation(entity, attack) {
 const phaserFlights = new Map(), phaserEffects = new Map(), phaserMelees = new Map();
 let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
 const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
+// Phaser owns the gesture and its temporary preview. The board owns the drop.
+// Its input target is the document, so the transparent canvas never covers HTML
+// buttons, inventory drops or the existing shaped monster hitboxes.
+let boardDragHooks = null, boardDragZone = null, boardDragPending = null, boardDrag = null;
+let boardDragClickUntil = 0, boardDragMultiTouch = false;
+export const isPhaserBoardDragReady = () => Boolean(boardDragZone?.scene && phaserLayer?.host.isConnected);
+function finishPhaserBoardDrag() {
+  const drag = boardDrag;
+  boardDrag = null; boardDragPending = null;
+  if (phaserLayer?.game) phaserLayer.game.canvas.style.pointerEvents = 'none';
+  if (drag) {
+    drag.image.destroy(); phaserLayer?.scene.textures.remove(drag.texture);
+    boardDragClickUntil = performance.now() + 500;
+    boardDragHooks?.end();
+  }
+  hideIdlePhaser();
+}
+export function cancelPhaserBoardDrag() {
+  finishPhaserBoardDrag();
+  const input = boardDragZone?.scene?.input;
+  if (!input) return;
+  input.disable(boardDragZone);
+  boardDragZone.input.enabled = true;
+  for (const pointer of input.manager.pointers) input.setDragState(pointer, 0);
+}
+function updatePhaserBoardDrag() {
+  if (!boardDrag) return;
+  if (!boardDragHooks.valid(boardDrag.view)) { cancelPhaserBoardDrag(); return; }
+  const { pointer, image, offsetX, offsetY } = boardDrag;
+  image.setPosition(pointer.x + offsetX, pointer.y + offsetY);
+}
+export async function configurePhaserBoardDrag(hooks) {
+  if (globalThis.__combatSimulation) return;
+  boardDragHooks = hooks;
+  const layer = await ensurePhaserLayer();
+  if (boardDragZone?.scene) return;
+  const scene = layer.scene;
+  boardDragZone = scene.add.zone(0, 0, 1, 1).setOrigin(0).setName('board-drag-input');
+  boardDragZone.setInteractive({
+    hitArea: {}, hitAreaCallback: (_area, x, y) => !boardDragMultiTouch && Boolean(boardDragHooks.pick(x, y)),
+    draggable: true,
+  });
+  scene.input.dragDistanceThreshold = 8;
+  boardDragZone.on('pointerdown', pointer => {
+    if (boardDrag || boardDragPending || !pointer.primaryDown) return;
+    const view = boardDragHooks.pick(pointer.x, pointer.y);
+    if (view) {
+      boardDragPending = { view, pointer, rect: view.source.getBoundingClientRect() };
+      // Phaser 3.90 accepts touch movement only above its canvas. Capture the
+      // surface for this contact only; HTML hitboxes still choose the drop below it.
+      if (pointer.wasTouch) {
+        layer.game.canvas.style.pointerEvents = 'auto';
+        hideIdlePhaser(); layer.game.loop.wake();
+      }
+    }
+  });
+  scene.input.on('dragstart', (pointer, object) => {
+    const pending = boardDragPending;
+    if (object !== boardDragZone || !pending || pending.pointer !== pointer || !boardDragHooks.valid(pending.view)) return;
+    const canvas = createCanvasSnapshot(pending.view.source);
+    if (!canvas || !boardDragHooks.begin(pending.view)) return;
+    const texture = 'board-drag-preview';
+    scene.textures.addCanvas(texture, canvas);
+    const { rect, view } = pending;
+    const image = scene.add.image(0, 0, texture).setName(texture).setDepth(100000)
+      .setDisplaySize(rect.width, rect.height).setFlipX(String(view.entity.side).toUpperCase() === 'B').setAlpha(.9);
+    boardDrag = { ...pending, image, texture, offsetX: rect.left + rect.width / 2 - pointer.downX,
+      offsetY: rect.top + rect.height / 2 - pointer.downY };
+    updatePhaserBoardDrag(); hideIdlePhaser(); layer.game.loop.wake();
+  });
+  scene.input.on('drag', (pointer, object) => {
+    if (object !== boardDragZone || boardDrag?.pointer !== pointer) return;
+    updatePhaserBoardDrag();
+    if (boardDrag) boardDragHooks.move(boardDrag.view, pointer.x, pointer.y);
+  });
+  scene.input.on('dragend', (pointer, object) => {
+    if (object !== boardDragZone || boardDrag?.pointer !== pointer) return;
+    try {
+      if (pointer.event?.type !== 'touchcancel' && !boardDragMultiTouch)
+        boardDragHooks.drop(boardDrag.view, pointer.x, pointer.y);
+    } finally { finishPhaserBoardDrag(); }
+  });
+  for (const name of ['pointerup', 'pointerupoutside']) scene.input.on(name, pointer => {
+    if (boardDragPending?.pointer === pointer) finishPhaserBoardDrag();
+  });
+  hideIdlePhaser(); layer.game.scale.refresh(); layer.game.loop.wake();
+}
+// Gesture cancellation is UI time, including during tactical pause. A gesture is
+// never persisted; only an accepted placement becomes a combat action.
+window.addEventListener('keydown', event => {
+  if (['Escape', 'F5'].includes(event.key)) cancelPhaserBoardDrag();
+}, true);
+for (const name of ['blur', 'resize', 'pagehide', 'stageInterfaceClosing', 'battleStopped', 'battleResolved', 'combatPaused'])
+  window.addEventListener(name, cancelPhaserBoardDrag);
+document.addEventListener('visibilitychange', () => { if (document.hidden) cancelPhaserBoardDrag(); }, true);
+document.addEventListener('pointercancel', cancelPhaserBoardDrag, true);
+window.addEventListener('mouseout', event => { if (!event.relatedTarget) cancelPhaserBoardDrag(); });
+document.addEventListener('touchstart', event => {
+  if (event.touches.length > 1) { boardDragMultiTouch = true; cancelPhaserBoardDrag(); }
+}, { capture: true, passive: true });
+for (const name of ['touchend', 'touchcancel']) document.addEventListener(name, event => {
+  if (!event.touches.length) boardDragMultiTouch = false;
+}, { passive: true });
+document.addEventListener('click', event => {
+  if (performance.now() < boardDragClickUntil && event.target.closest?.('#hexGrid')) {
+    event.preventDefault(); event.stopImmediatePropagation();
+  }
+}, true);
+
 function viewCenter(element) {
   if (!element?.isConnected) return null;
   const rect = element.getBoundingClientRect(), { width, height } = viewport();
@@ -2088,7 +2197,7 @@ function projectileProfile(attacker, data) {
 }
 function hideIdlePhaser() {
   if (!phaserLayer?.game) return;
-  const visible = phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
+  const visible = boardDrag || boardDragPending?.pointer.wasTouch || phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
   phaserLayer.host.hidden = !visible;
   if (!visible) phaserLayer.game.loop.sleep();
 }
@@ -2114,7 +2223,7 @@ function clearPhaserProjectiles() {
 for (const event of ['projectileVisualsCleared', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearPhaserProjectiles);
 for (const event of ['combatResumed', 'resize']) window.addEventListener(event, () => {
   const wake = () => {
-    if (phaserFlights.size || phaserEffects.size || phaserMelees.size) phaserLayer?.game?.loop.wake();
+    if (boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size) phaserLayer?.game?.loop.wake();
   };
   // Resize handlers also rescale the HTML board. Draw after those handlers,
   // including when the combat clock is paused and the scene draws only once.
@@ -2287,7 +2396,9 @@ async function ensurePhaserLayer() {
       try {
         layer.game = new Phaser.Game({
           type: Phaser.AUTO, parent: host, ...viewport(), transparent: true, banner: false, autoFocus: false,
-          audio: { noAudio: true }, input: { keyboard: false, mouse: false, touch: false, gamepad: false },
+          audio: { noAudio: true }, input: { keyboard: false, gamepad: false, windowEvents: false,
+            mouse: { target: document, preventDefaultDown: false, preventDefaultUp: false, preventDefaultMove: false },
+            touch: { target: document, capture: false } },
           scale: { mode: Phaser.Scale.NONE }, render: { antialias: true },
           seed: ['dark-pit-projectiles'],
           scene: {
@@ -2301,6 +2412,7 @@ async function ensurePhaserLayer() {
             update() {
               const { width, height } = viewport();
               if (this.scale.width !== width || this.scale.height !== height) this.scale.resize(width, height);
+              updatePhaserBoardDrag();
               for (const entry of [...phaserFlights.values()]) {
                 if (!isCombatPaused()) sampleProjectile(entry);
                 if (phaserFlights.get(entry.record.id) === entry) drawProjectile(entry, this);
@@ -2311,7 +2423,7 @@ async function ensurePhaserLayer() {
               }
               for (const entry of phaserEffects.values()) drawProjectile(entry, this);
               hideIdlePhaser();
-              if (isCombatPaused()) this.game.loop.sleep();
+              if (isCombatPaused() && !boardDrag) this.game.loop.sleep();
             },
           },
         });

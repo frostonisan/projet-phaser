@@ -18,7 +18,7 @@ await new Promise(done => server.listen(0, '127.0.0.1', done));
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'chrome', headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
-  const phaserRequests = []; page.on('request', request => { if (request.url().includes('/vendor/phaser-')) phaserRequests.push(request.url()); });
+  const phaserRequests = []; page.on('request', request => { if (request.url().includes('/vendor/phaser-') && request.frame() !== page.mainFrame()) phaserRequests.push(request.url()); });
   // Alter the live view after restoration, not only the saved HTML before it.
   // The injected branch is confined to this regression test's intercepted module.
   await page.route('**/js/debug/simulationRuntime.js', async route => {
@@ -98,7 +98,7 @@ try {
     assert.deepEqual(result.second, result.first, nature + ' remains deterministic in the simulator');
     assert.ok(result.first.journal.some(entry => entry.type === 'damage_resolution'), nature + ' simulation resolves real attacks');
   }
-  assert.deepEqual(phaserRequests, [], 'Simulation never loads the Phaser renderer');
+  assert.deepEqual(phaserRequests, [], 'Simulation frames never load Phaser; the visible board may prepare its drag input');
   const restoredFromData = await page.evaluate(async () => {
     const dirty = structuredClone(snapshot), doc = new DOMParser().parseFromString(dirty.boardHtml, 'text/html');
     const cells = [...doc.querySelectorAll('#hexGrid .hex')];

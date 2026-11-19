@@ -30,6 +30,15 @@ async function fixture(config = {}) {
   page.on('pageerror', error => errors.push(error.message));
   page.testLog=[];page.on('console',message=>page.testLog.push(message.text()));
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
+  if (config.rendererMode) {
+    let release; const gate = new Promise(resolve => { release = resolve; });
+    page.releaseRenderer = release;
+    // Drag input now warms Phaser when the board appears, before combat starts.
+    await page.route('**/vendor/phaser-3.90.0.esm.min.js', async route => {
+      if (config.rendererMode === 'unavailable') return route.abort();
+      await gate; await route.continue();
+    });
+  }
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
     // Ambidextry's base chance caps at 50%; force a successful roll in its fixture.
@@ -475,20 +484,14 @@ try {
     await page.close();console.log('PASS melee '+phase+': frozen copy and blood survive F5 without duplicate damage');
   }
   for (const range of ['range','melee']) for (const mode of ['slow','unavailable']) {
-    const page = await fixture({phaser:range==='range',phaserMelee:range==='melee',A:{range,preparation:100,execution:500},B:{range,preparation:100,execution:500}});
-    let release;
-    const gate = new Promise(resolve => { release = resolve; });
-    await page.route('**/vendor/phaser-3.90.0.esm.min.js', async route => {
-      if (mode === 'unavailable') return route.abort();
-      await gate; await route.continue();
-    });
+    const page = await fixture({rendererMode:mode,phaser:range==='range',phaserMelee:range==='melee',A:{range,preparation:100,execution:500},B:{range,preparation:100,execution:500}});
     await page.evaluate(() => G.startGame());
     await page.waitForFunction(() => E.entites.every(e => e.stats.HP.current < 1000), null, {timeout:5000});
     assert.equal(await page.locator('#phaser-projectiles canvas').count(), 0,
       'Damage completes even when the renderer cannot load');
     assert.ok(await page.evaluate(() => E.entites.every(e => Number(getComputedStyle(document.getElementById(`DragSprite_${e.id}`)).opacity) > 0)), 'Unavailable renderer never hides the original fighters');
     await page.evaluate(() => G.StopGame({preserveScene:true}));
-    release();
+    page.releaseRenderer();
     if (mode === 'slow') {
       await page.waitForSelector('#phaser-projectiles', {state:'attached'});
       assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true,

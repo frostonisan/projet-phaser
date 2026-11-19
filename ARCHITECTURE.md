@@ -846,3 +846,38 @@ Les tests existants couvrent les définitions de mêlée, les dégâts comparés
 rendu, les impacts tardifs, les événements, les cases, la pause/F5, l’ambidextrie
 et les textures après quatre rafales de cent copies. Diagnostics :
 `outputs/phaser-melee-all/`. Aucune promesse de gain de FPS.
+
+
+## Glisser-déposer Phaser — v0.94.0-dev
+
+`board/interaction.js` centralise les dépôts dans `placeDraggedEntity` : validation
+par le modèle du plateau, consommation existante, placement, journal et sauvegarde.
+Le transport de l’entrée ne choisit pas les règles. Les écouteurs HTML par case
+et les rebinding individuels sont remplacés par des écouteurs délégués et un seul
+objet interactif Phaser, lié aux hitboxes HTML courantes. Les dépôts externes
+(inventaire et administration) restent natifs et utilisent la même commande.
+
+`rendering/animations.js` réutilise la scène des attaques. Le module configure
+l’entrée souris/tactile de Phaser 3.90.0 sur le document ; un seuil de 8 pixels
+sépare le drag du clic. Une seule texture d’aperçu est créée par geste, puis
+libérée au dépôt ou à l’annulation. Le pointeur déplace cet aperçu sans changer
+les occupants logiques ni les cibles des attaques. Une entité morte, supprimée
+ou déplacée par un autre effet invalide le geste en cours.
+
+Phaser 3.90.0 ne suit les déplacements tactiles que lorsque le doigt survole
+son canvas : celui-ci capture temporairement le contact tactile. La recherche
+de la case lit le premier élément HTML sous cette couche. Hors du geste,
+le canvas laisse passer toutes les entrées. Lorsqu’il est caché, `visibility`
+conserve ses dimensions pour le calcul des coordonnées ; la boucle dort tant
+qu’aucun effet ni aperçu ne doit être dessiné.
+
+La pause gèle toujours l’horloge du combat. L’aperçu suit le pointeur en temps
+réel et n’entre pas dans les sauvegardes ; la restauration nettoie les classes
+de drag transitoires. Les simulations isolées n’initialisent pas Phaser.
+`ui/display.js` conserve clic, double clic et appui long ; le départ d’un drag
+termine l’inspection et son relâchement n’ouvre pas de panneau involontaire.
+
+Tests étendus dans les suites existantes : gestes souris et tactiles natifs,
+coûts, cases interdites, immobilisation, annulations, second doigt, échange,
+réinitialisation, disparition, pause/F5 et reprise. Diagnostics et captures :
+`outputs/phaser-drag/`, `outputs/tactical-pause/`. Aucun fichier de jeu ajouté.

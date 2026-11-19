@@ -10,7 +10,13 @@ await mkdir(output, { recursive: true });
 const server = createServer(async (req, res) => {
   const file = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
-  try { res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' })[extname(file)] || 'application/octet-stream'); res.end(await readFile(file)); }
+  try { res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' })[extname(file)] || 'application/octet-stream'); let data = await readFile(file);
+    if (file === resolve(root,'js/rendering/animations.js')) data = data.toString() + `
+export const testBoardGesture = () => ({active:!!boardDrag,pending:!!boardDragPending,
+  preview:phaserLayer?.scene.children.list.filter(o=>o.name==='board-drag-preview').length || 0,
+  texture:phaserLayer?.scene.textures.exists('board-drag-preview') || false,
+  x:boardDrag?.image.x,y:boardDrag?.image.y,objects:phaserLayer?.scene.children.list.length || 0});`;
+    res.end(data); }
   catch { res.writeHead(404).end(); }
 });
 await new Promise(done => server.listen(0, '127.0.0.1', done));
@@ -18,7 +24,7 @@ const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL 
 
 const errors = [];
 async function fixture(config = {}) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage({ viewport: { width: config.touch ? 390 : 1280, height: config.touch ? 844 : 800 }, hasTouch: !!config.touch, isMobile: !!config.touch });
   page.on('pageerror', error => errors.push(error.message));
   page.testLog=[];page.on('console',message=>page.testLog.push(message.text()));
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
@@ -36,7 +42,7 @@ async function fixture(config = {}) {
     const E = await import("/js/entities/runtime.js");
     const C = await import("/js/rendering/entities.js");
     const S = await import("/js/storage/gameStorage.js");
-    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === 900013);
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === (config.gesture ? 7 : 900013));
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
     const store = await import("/js/storage/sessionStorage.js");
@@ -98,7 +104,123 @@ async function attach(page) {
       inventory:M.getBattleInventoryState(), ground:Clock.captureCombatState().ground, orders:Clock.captureCombatState().orders });
   });
 }
+async function verifyPhaserGestures() {
+  for (const mode of (process.env.DRAG_TEST_MODE ? [process.env.DRAG_TEST_MODE] : ['mouse','touch'])) {
+    const touch=mode==='touch',page=await fixture({speed:50000,gesture:true,touch});await attach(page);
+    await page.evaluate(async()=>{
+      const B=await import('/js/board/controller.js'),S=await import('/js/storage/gameStorage.js');
+      Math.random=()=>.99;window.B=B;
+      for(const [position,left] of [['3',180],['4',390]]) {
+        const hex=document.createElement('div');hex.className='hex SideA';hex.dataset.position=position;
+        hex.style.cssText=`position:absolute;left:${left}px;top:280px;width:160px;height:180px`;
+        hex.innerHTML='<div class="socle gueux"></div>';document.querySelector('#hexGrid').append(hex);
+      }
+      B.invalidateFootprintGeometry(document.getElementById('hexGrid'));B.syncEntityFootprints();
+      document.querySelector('.entitylootContainer')?.remove();
+      S.setAdminMode(false);window.levelRunning='scripted';
+      S.saveToLocalStorage('GameStages',{stages:[{id:'pause-test',level_type:'scripted'}]});
+      window.Drag=await import('/js/rendering/animations.js');
+      (await import('/js/board/interaction.js')).restoreEntityDragAndDrop();
+      (await import('/js/ui/display.js')).toggleScanEntityListener();
+      G.startGame();(await import('/js/items/resourceStocks.js')).addMovementCharges(E.entites[0],40);
+      window.moveCost=1+E.getMovementWeightMalus(E.entites[0]).shiftCostModifier;
+      await P.pauseCombat();
+    });
+    await ready(page);await page.waitForFunction(()=>Drag.isPhaserBoardDragReady());
+    const cdp=touch?await page.context().newCDPSession(page):null;
+    const source=()=>page.evaluate(()=>{
+      const r=document.getElementById('spriteCanvas_999820').getBoundingClientRect(),points=[];
+      // Use the existing shaped hitbox, away from its subpixel boundary.
+      for(let y=Math.max(1,Math.ceil(r.top+4));y<Math.min(innerHeight-1,r.bottom-4);y+=3)
+        for(let x=Math.max(1,Math.ceil(r.left+4));x<Math.min(innerWidth-1,r.right-4);x+=3)
+          if([[0,0],[2,0],[-2,0],[0,2],[0,-2]].every(([dx,dy])=>document.elementFromPoint(x+dx,y+dy)?.closest('#DragSprite_999820')))
+            points.push({x,y});
+      if(points.length)return points.sort((a,b)=>Math.hypot(a.x-r.left-r.width/2,a.y-r.top-r.height/2)-Math.hypot(b.x-r.left-r.width/2,b.y-r.top-r.height/2))[0];
+      throw Error('Monster hitbox is not reachable');
+    });
+    const target=position=>page.evaluate(position=>{
+      const r=document.querySelector(`.hex[data-position="${position}"]`).getBoundingClientRect();
+      return {x:r.left+r.width/2,y:r.top+r.height*.65};
+    },position);
+    let current;
+    const down=async()=>{current=await source();if(touch)await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...current,id:0}]});
+      else {await page.mouse.move(current.x,current.y);await page.mouse.down();}};
+    const move=async point=>{const start=current;for(let i=1;i<=6;i++) {current={x:start.x+(point.x-start.x)*i/6,y:start.y+(point.y-start.y)*i/6};
+      if(touch)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...current,id:0}]});else await page.mouse.move(current.x,current.y);}};
+    const up=()=>touch?cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]}):page.mouse.up();
+    const state=()=>page.evaluate(()=>({now:Clock.clockNow(),positions:E.entites.map(e=>e.position),charges:E.entites.map(e=>e.stats.shift.current),hp:E.entites.map(e=>e.stats.HP.current)}));
+    const clean=async()=>{await page.waitForFunction(()=>!Drag.testBoardGesture().active);const d=await page.evaluate(()=>Drag.testBoardGesture());
+      assert.equal(d.preview,0);assert.equal(d.texture,false);assert.equal(await page.locator('body.drag-drop-active').count(),0,'Drag helper state is released');assert.equal(await page.locator('#hexGrid.phaser-dragging, #hexGrid .dragged').count(),0);};
+    const gesture=async position=>{await down();await move(await target(position));await up();await clean();};
+    const initial=await state(),cost=await page.evaluate(()=>moveCost);
+    // Clicking and tiny movements are still inspection, never a paid placement.
+    await page.evaluate(()=>{window.gestureClicks=0;document.getElementById('spriteContainer_999820').addEventListener('click',()=>gestureClicks++);});
+    await down();await move({x:current.x+3,y:current.y});await up();await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(()=>gestureClicks),1);assert.deepEqual(await state(),initial);
+    await page.evaluate(async()=>{(await import('/js/ui/attacks.js')).hideCombatAttackControlPanel();});
+    await down();await move(await target('3'));
+    await page.waitForFunction(()=>Drag.testBoardGesture().active);
+    const preview=await page.evaluate(()=>Drag.testBoardGesture());assert.equal(preview.preview,1);assert.equal(preview.texture,true);assert.equal(await page.locator('body.drag-drop-active').count(),1,'Hover helpers remain suppressed during Phaser drag');
+    assert.deepEqual(await state(),initial,'Dragging never moves a logical occupant or spends a charge');
+    await page.waitForTimeout(250);assert.deepEqual(await state(),initial,'UI gesture does not advance combat');
+    await page.screenshot({path:resolve(output,`phaser-drag-${mode}.png`)});
+    await up();await clean();await ready(page);
+    const moved=await state();assert.equal(moved.positions[0],'3');assert.equal(moved.charges[0],initial.charges[0]-cost);assert.equal(moved.now,initial.now);
+    assert.equal(await page.evaluate(()=>gestureClicks),1,'Releasing a drag cannot open the inspection panel');
+    await gesture('3');assert.deepEqual(await state(),moved,'Same-cell drop is free');
+    await gesture('2');assert.deepEqual(await state(),moved,'Enemy cell is rejected');
+    await down();await move({x:5,y:750});await up();await clean();assert.deepEqual(await state(),moved,'Drop outside the board cancels');
+    await down();await move(await target('1'));
+    if(touch)await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});else {await page.keyboard.press('Escape');await up();}
+    await clean();assert.deepEqual(await state(),moved,'Interrupted gesture is free');
+    if(touch) {
+      await down();await move(await target('1'));
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...current,id:0},{x:current.x+30,y:current.y,id:1}]});
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await clean();assert.deepEqual(await state(),moved,'A second finger cancels instead of issuing a second move');
+    }
+    await page.evaluate(()=>{E.entites[0].stats.shift.current=0;});await gesture('1');assert.equal((await state()).positions[0],'3');
+    await page.evaluate(value=>{E.entites[0].stats.shift.current=value;},moved.charges[0]);
+    await page.evaluate(async()=>{const C=await import('/js/combat/control.js');C.addEntityControl(E.entites[0],'immobilisation',Timeline.combatNow(),Timeline.combatNow()+5000);});
+    await gesture('1');assert.deepEqual(await state(),moved,'Immobilisation retains its rule and charge');
+    await page.evaluate(async()=>{(await import('/js/combat/control.js')).endEntityControl(E.entites[0],'immobilisation');});
+    // Repeated reconstruction binds one gesture, with one cost per accepted drop.
+    await page.evaluate(async()=>{const I=await import('/js/board/interaction.js');for(let i=0;i<5;i++)I.restoreEntityDragAndDrop();});
+    await gesture('1');await ready(page);assert.equal((await state()).charges[0],moved.charges[0]-cost);
+    await down();await move(await target('3'));
+    await page.evaluate(()=>{E.entites[0].isDEAD=true;});await page.waitForFunction(()=>!Drag.testBoardGesture().active);
+    await up();await clean();assert.equal((await state()).positions[0],'1');
+    await page.evaluate(()=>{E.entites[0].isDEAD=false;});
+    // A newly created ally participates without its own input listeners.
+    await page.evaluate(async()=>{
+      const template=(await import('/js/data/entityTemplates.js')).entitesNest.find(e=>e.serial===7);
+      const ally=E.enrichEntityStats({...structuredClone(template),id:999822,side:'A',position:'4',type:'sbire',role:'gueux',level:1,awakening:1,stuff:{},stats:{},modifierStats:{},baseStats:{HP:1000,speed:50000},attacks:['shot-p-c']});
+      ally.statut=['alive'];ally.isDEAD=false;E.entites.push(ally);
+      const created=(await import('/js/rendering/entities.js')).createEntiteInDOM(ally);document.querySelector('.hex[data-position="4"]').append(created.element);await created.spriteReady;
+      B.syncEntityFootprints();
+    });
+    const beforeSwap=await state();await gesture('4');await ready(page);
+    const swapped=await state();assert.deepEqual(swapped.positions,['4','2','1']);assert.equal(swapped.charges[0],beforeSwap.charges[0]-cost);
+    assert.equal(swapped.charges[2],beforeSwap.charges[2],'Only the dragged ally spends movement');
+    await page.reload();await ready(page);await attach(page);
+    await page.evaluate(async()=>{window.Drag=await import('/js/rendering/animations.js');});
+    await page.waitForFunction(()=>Drag.isPhaserBoardDragReady());
+    assert.deepEqual(await state(),swapped,'F5 preserves the committed placement and cost, never its drag preview');await clean();
+    await gesture('3');await ready(page);assert.equal((await state()).positions[0],'3','A restored board remains draggable');
+    const beforeBlocked=await state();
+    await page.evaluate(()=>Clock.setCombatInteractionBlocked(true));await gesture('4');assert.deepEqual(await state(),beforeBlocked,'Absolute pause blocks placement');
+    await page.evaluate(()=>Clock.setCombatInteractionBlocked(false));
+    await page.keyboard.press('Space');await page.waitForFunction(()=>!Clock.isCombatPaused());
+    // Let the restored swap's existing HTML animation settle before picking its moving hitbox.
+    await page.waitForTimeout(650);
+    const live=await state();await gesture('4');const afterLive=await state();assert.equal(afterLive.positions[0],'4');assert.equal(afterLive.charges[0],live.charges[0]-cost);
+    await page.evaluate(()=>G.StopGame({preserveScene:true}));await clean();
+    console.log('PASS Phaser '+mode+': real gesture, preview, costs, blocked moves, cancellation, swap, pause/F5, restored and live combat');
+    await page.close();
+  }
+}
+
 try {
+  if (!process.env.DRAG_TEST_ONLY) {
   const page=await fixture({speed:50000}); await attach(page);
   await page.evaluate(async()=>{
     const S=await import("/js/storage/gameStorage.js");
@@ -223,5 +345,8 @@ try {
   assert.equal(await page.evaluate(()=>Clock.captureCombatState().orders.pendingPlayerOrder),null);
   await page.evaluate(()=>G.StopGame({preserveScene:true}));
   console.log('PASS queued flee starts only after resume and survives F5');
-  await page.close();assert.deepEqual(errors,[]);
+  await page.close();
+  }
+  await verifyPhaserGestures();
+  assert.deepEqual(errors,[]);
 } finally {await browser.close();await new Promise(done=>server.close(done));}

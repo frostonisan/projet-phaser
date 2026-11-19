@@ -10,7 +10,7 @@ import { renderCurrentBattleLog } from "../combat/journal.js";
 import { getVisibleHexes, setVisibleHexes } from "../storage/gameStorage.js";
 import { hideCombatAttackControlPanel, isCombatAttackControlPanelOpenFor, showCombatAttackControlPanel } from "./attacks.js";
 
-const GAME_VERSION = "0.93.0-dev";
+const GAME_VERSION = "0.94.0-dev";
 
 export function formatGameIdentity(gameId) {
     return `The Dark Pit v${GAME_VERSION} — ID de la partie : ${gameId}`;
@@ -132,6 +132,7 @@ export function toggleScanEntityListener() {
             element.removeEventListener('pointerup', pointerUpHandler);
             element.removeEventListener('pointercancel', pointerCancelHandler);
             element.removeEventListener('dragstart', dragStartHandler);
+            element.removeEventListener('entityDragStarted', dragStartHandler);
         }
 
         let clickTimeout = null;
@@ -254,6 +255,7 @@ export function toggleScanEntityListener() {
         element.addEventListener('pointerup', pointerUpHandler);
         element.addEventListener('pointercancel', pointerCancelHandler);
         element.addEventListener('dragstart', dragStartHandler);
+        element.addEventListener('entityDragStarted', dragStartHandler);
 
         eventListenersMap.set(element, {
             clickHandler,

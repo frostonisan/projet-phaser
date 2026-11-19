@@ -1059,7 +1059,7 @@ try {
     await sleep(30);
     check(getEntityCombatDetails(lateArrival).roles.tank.durationMs === timeOnRemoval,
       'Removing a summon stops its role duration immediately');
-    await import("/js/board/interaction.js");
+    const { placeDraggedEntity } = await import("/js/board/interaction.js");
     window.levelRunning = 'scripted';
     const destination = document.createElement('div');
     destination.className = 'hex SideA'; destination.dataset.position = 'hex_1903';
@@ -1069,18 +1069,17 @@ try {
     mover.stats.movement = 10; mover.stats.shift = { current: 1, max: 10 };
     mover.stats.weight = 100; mover.stats.agility = 0;
     await sleep(0);
-    const drop = hex => {
-      const transfer = new DataTransfer(); transfer.setData('text', `Box_Entite_${mover.id}`);
-      hex.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
-    };
+    // This combat-only fixture has no visible #hexGrid. Exercise the shared
+    // placement command; native mouse/touch gestures are covered by the tactical suite.
+    const drop = hex => placeDraggedEntity(mover, hex);
     drop(destination);
     check(mover.position === 'hex_1903' && mover.stats.shift.current < 0
       && getEntityCombatDetails(mover).movements === 1 && getEntityCombatDetails(mover).negativeMovements === 1,
-      'A real weighted manual drop records one movement that enters negative reserve');
+      'The shared weighted placement command records one movement that enters negative reserve');
     drop(spawnHex);
     check(mover.position === 'hex_1903' && getEntityCombatDetails(mover).blockedMovements === 1
       && getEntityCombatDetails(mover).movements === 1,
-      'A real drop rejected for exhausted reserve records one failure and no performed movement');
+      'A placement rejected for exhausted reserve records one failure and no performed movement');
     drop(destination);
     check(getEntityCombatDetails(mover).blockedMovements === 1,
       'Dropping back onto the same hex does not create a failed movement');

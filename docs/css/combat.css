@@ -2428,5 +2428,11 @@ filter: drop-shadow(0 0 10px rgba(226, 189, 255));}
 
 /* The shared Phaser projectile layer uses viewport coordinates above the board. */
 #phaser-projectiles { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
-#phaser-projectiles[hidden] { display: none; }
+/* Hidden effects retain geometry for document-based Phaser input. */
+#phaser-projectiles[hidden] { display: block; visibility: hidden; }
 #phaser-projectiles canvas { display: block; pointer-events: none; }
+
+/* Board gestures use Phaser while the HTML hitboxes and panels remain usable. */
+#hexGrid .drag-box { touch-action: none; }
+#hexGrid.phaser-dragging .sprite { opacity: .4; pointer-events: none; }
+#hexGrid.phaser-dragging .dragged { cursor: grabbing; }
