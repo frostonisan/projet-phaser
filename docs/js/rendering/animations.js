@@ -3,13 +3,31 @@ import {
   setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
   clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow, isCombatPaused, combatReference, combatTarget,
 } from "../combat/clock.js";
-import { playCachedGif, cachedResourceUrl, loadSpriteAtlas, PROJECTILE_ASSETS } from "../data/loaderList.js";
+import { playCachedGif as playGif, cachedResourceUrl, loadSpriteAtlas, PROJECTILE_ASSETS } from "../data/loaderList.js";
 import { QuitCurrentLevel } from "../app/stages.js";
 import { getSafe, getBattleEntityDomPrefix, getBattleEntityElement } from "../entities/rules.js";
 import { getAttackResolutionFlags } from "../combat/attackResolution.js";
 import { buildStatGraphHelper } from "../data/helpers.js";
 
+const playCachedGif = (image, source) => playGif(image, source, { shared: true });
 const originalImages = new WeakMap();
+const meleeTextures = new WeakMap();
+let meleeTextureSequence = 0;
+function acquireMeleeTexture(scene, canvas) {
+  let texture = meleeTextures.get(canvas);
+  if (!texture || texture.scene !== scene || !scene.textures.exists(texture.key)) {
+    texture = { key: `melee:shared-${++meleeTextureSequence}`, scene, canvas, users: 0 };
+    scene.textures.addImage(texture.key, canvas);
+    meleeTextures.set(canvas, texture);
+  }
+  texture.users++;
+  return texture;
+}
+function releaseMeleeTexture(texture) {
+  if (!texture || --texture.users > 0) return;
+  texture.scene.textures.remove(texture.key);
+  if (meleeTextures.get(texture.canvas) === texture) meleeTextures.delete(texture.canvas);
+}
 const canvasRuns = new Map();
 let canvasRunSequence = 0;
 function beginCanvasRun(name, entityId, options, saved) {
@@ -2706,7 +2724,7 @@ function removePhaserMelee(entry) {
   returnPhaserMeleeOriginal(entry, dead);
   unregisterActiveMeleeAnimation(entry.attacker.id, entry.controller);
   destroyProjectileDisplay(entry);
-  if (entry.textureKey) entry.scene?.textures.remove(entry.textureKey);
+  releaseMeleeTexture(entry.texture);
   const sprite = document.getElementById(`DragSprite_${entry.attacker.id}`);
   if (sprite && !dead && !hasMeleeOriginalVisibilityLock(entry.attacker.id)
     && !meleeOriginalRecoveryAnimations.has(String(entry.attacker.id))) sprite.classList.add('iddle');
@@ -2831,7 +2849,8 @@ export function animationMelee(attacker, target, isAmbidextry = false, options =
   // Keep the exact neutral pixels for rendering; encode PNG only when saving.
   // A static image texture avoids CanvasTexture's unused CPU pixel readback.
   // The original stays visible until the Phaser texture is actually ready.
-  const neutral = saved ? null : createCanvasSnapshot(getNeutralMeleeCloneSource(source));
+  if (!saved && !activeSnapshotDamageImpacts.has(source)) ensureOriginalCanvasImage(source);
+  const neutral = saved ? null : getNeutralMeleeCloneSource(source);
   if (!saved && !neutral) return null;
   const visual = saved || {
     renderer: 'phaser', phase: 'flight', phaseAt: clockNow(), startedAt: clockNow(), duration,
@@ -2884,8 +2903,8 @@ export function animationMelee(attacker, target, isAmbidextry = false, options =
     }
     if (phaserMelees.get(entry.id) !== entry) return;
     requestProjectileTexture(layer.scene, MELEE_DEATH_ASSET);
-    entry.scene = layer.scene; entry.textureKey = `melee:${entry.id}`;
-    layer.scene.textures.addImage(entry.textureKey, canvas);
+    entry.scene = layer.scene; entry.texture = acquireMeleeTexture(layer.scene, canvas);
+    entry.textureKey = entry.texture.key;
     entry.graphic = layer.scene.add.graphics().setName(entry.id);
     entry.sprite = layer.scene.add.image(0, 0, entry.textureKey).setName(entry.id).setFlipX(visual.flipX);
     if (!visual.released && visual.phase === 'flight' && !attacker.isDEAD) {

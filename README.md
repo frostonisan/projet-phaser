@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.95.1-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.95.2-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -293,3 +293,67 @@ Validation : 57 tests Node et sept suites navigateur réussis. Le scénario de
 pause a été relancé après une attente intermittente ; ses attentes sont désormais
 bornées. Les tests vérifient aussi les vraies animations CSS, le redémarrage des
 compteurs, le contrôle des logs, les ressources, le drag souris/tactile et F5.
+
+
+## Textures des monstres et effets récurrents — v0.95.2-dev
+
+Les copies de corps à corps d'un même monstre partagent les pixels neutres et leur
+texture Phaser pendant leur chevauchement. La dernière copie libère la texture.
+Le monstre touché conserve ses teintes ; les copies gardent leur image neutre,
+leurs trajectoires et leurs durées. Les instantanés PNG restent réservés à la sauvegarde.
+
+Les petits GIF utilisés par `rendering/animations.js` (impacts, récupération, fumée
+et mysticisme) réutilisent des images PNG sans perte, décodées une fois par ressource.
+Ces images sont préparées pendant le chargement du niveau, avant le combat.
+Chaque effet conserve son propre début et peut redémarrer indépendamment. Les
+éléments HTML, tailles, filtres, couches et couleurs CSS restent les mêmes. Les
+images continuent à boucler pendant la pause, comme les GIF natifs précédents ;
+leur durée de présence reste gérée par l'horloge du combat. Les effets HTML ne
+sont donc pas encore tous des sprites Phaser.
+
+Le cache est borné par effet (dimensions maximales 512 × 512, un million de
+pixels cumulés). Les ressources trop grandes ou indisponibles gardent leur
+affichage natif. Le suivi s'arrête au retrait des éléments ; les images partagées
+sont libérées par l'éviction des ressources existante. Le format de sauvegarde
+reste inchangé : les URL temporaires sont remplacées par les chemins des GIF.
+
+Validation : 110 images provenant de dix GIF comparées pixel par pixel au décodeur
+GIF indépendant de Chromium, quatre salves de 100 copies simultanées avec une
+seule texture par salve, 80 effets à démarrages indépendants, redémarrage,
+remplacement pendant le décodage, retrait à froid, éviction et protection du cache
+actif. Aucun fichier de jeu, média ni dépendance ajouté.
+
+Les contrôles statiques et les 57 tests Node passent. Les suites navigateur couvrent
+projectiles, tailles, drag souris/tactile, pause tactique, HUD et ressources.
+La série de pause complète a atteint son délai maximal sur le scénario de double
+attaque ; ce scénario et tous les contrôles supplémentaires de restauration ont
+ensuite passé lors d'une exécution isolée, sans modification des règles du jeu.
+Les diagnostics et journaux sont conservés dans `outputs/monster-rendering/`.
+
+Comparaison avec 0.95.1-dev : Chrome sans interface, 1920 × 1080, deux passages de
+12 secondes par taille et version, ordre avant/après alterné, sans profilage ni
+autre navigateur de test concurrent. Les deux côtés passent par le chargeur de niveau existant
+pour les dix effets mesurés ; la nouvelle version y prépare aussi les images
+partagées. Ce préchargement ajoute environ 9 Mio de pixels décodés partagés.
+
+| Monstres au total | Image moyenne avant / après (ms) | P95 avant / après (ms) | Impacts traités avant / après |
+| --- | --- | --- | --- |
+| 40 | 227 / 209 | 508 / 450 | 187.0 / 205.5 |
+| 80 | 343 / 322 | 974 / 783 | 192.0 / 224.5 |
+
+La moyenne diminue d'environ 8 % à 40 monstres et 6 % à 80 ; le P95 diminue
+respectivement de 11 % et 20 %. Le P95 est le délai sous lequel se trouvent 95 %
+des images, pas le pire délai absolu. Les deux répétitions restent un échantillon
+limité. À 80 monstres, le combat reste fortement saccadé : cette optimisation
+ne suffit pas encore à atteindre l'objectif de fluidité des grands combats.
+
+Les premières mesures à froid montraient moins d'impacts traités, ce qui a motivé
+la préparation des images au chargement. Les chiffres ci-dessus sont ceux du
+parcours avec chargement, conservés dans `outputs/monster-rendering/prepared-final/`.
+Les mesures à froid et quatre comparaisons déterministes (40/80 monstres, graines
+1701/1702, cinq secondes simulées) figurent dans `outputs/monster-rendering/final/` :
+résultats, phases et journaux complets y sont identiques. Les ajustements suivants
+concernent le préchargement du cache et son activation pour la fumée et le
+mysticisme : leur rendu et leur nettoyage sont couverts par les tests de pixels,
+de ressources et de drag/pause/F5 relancés sur la version finale. Les règles
+de combat n'ont pas été modifiées.

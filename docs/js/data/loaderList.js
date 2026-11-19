@@ -129,9 +129,7 @@ export function evictUnusedResources() {
   for (const [image, state] of animatedImages) {
     if (image.isConnected || now - state.createdAt < RESOURCE_IDLE_MS) animatedKeys.add(state.key);
     else {
-      URL.revokeObjectURL(state.url);
-      animatedImages.delete(image);
-      assignments.delete(image);
+      discardAnimatedImage(image, state);
     }
   }
   if (!animatedImages.size) animatedImageObserver?.disconnect();
@@ -142,6 +140,7 @@ export function evictUnusedResources() {
       continue;
     }
     URL.revokeObjectURL(entry.value.url);
+    for (const url of entry.value.frameUrls || []) { URL.revokeObjectURL(url); sharedGifSources.delete(url); }
     resources.delete(key);
     removed++;
   }
@@ -248,11 +247,11 @@ export const PROJECTILE_ASSETS = {
 
 // Decode original GIF frames with the browser's image decoder, then composite
 // disposal/transparency into one small atlas. A canvas texture cannot play a GIF.
-// Only the few projectile assets use this cache; no additional media files.
+// Only projectile atlases stay cached; shared combat GIFs use temporary atlases.
 const spriteAtlases = new Map();
-export function loadSpriteAtlas(source, width, height) {
+export function loadSpriteAtlas(source, width, height, { cache = true, maxPixels = Infinity } = {}) {
   const key = `${resourceKey(source)}:${width}:${height}`;
-  if (spriteAtlases.has(key)) return spriteAtlases.get(key);
+  if (cache && spriteAtlases.has(key)) return spriteAtlases.get(key);
   const promise = (async () => {
     const resource = await loadResource(source);
     const bytes = new Uint8Array(await resource.blob.arrayBuffer());
@@ -260,7 +259,7 @@ export function loadSpriteAtlas(source, width, height) {
     if (String.fromCharCode(...bytes.slice(0, 3)) !== 'GIF') {
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(resource.image, 0, 0, width, height);
-      return { canvas, width, height, count: 1, durations: [1000], total: 1000, columns: 1 };
+      return { canvas, width, height, count: 1, durations: [1000], nativeDurations: [1000], total: 1000, columns: 1 };
     }
     const word = i => bytes[i] | bytes[i + 1] << 8;
     const headerEnd = 13 + ((bytes[10] & 128) ? 3 * (2 << (bytes[10] & 7)) : 0);
@@ -291,12 +290,14 @@ export function loadSpriteAtlas(source, width, height) {
         header[6] = w & 255; header[7] = w >> 8;
         header[8] = h & 255; header[9] = h >> 8;
         frames.push({ left, top, w, h, disposal: control ? (control[3] >> 2) & 7 : 0,
+          nativeDelay: control && (control[4] | control[5] << 8) > 1 ? (control[4] | control[5] << 8) * 10 : 100,
           delay: Math.max(20, control ? (control[4] | control[5] << 8) * 10 : 100),
           blob: new Blob([header, ...(control ? [control] : []), descriptor, new Uint8Array([0x3b])], { type: 'image/gif' }) });
         control = null;
       } else throw new Error('Invalid GIF block');
     }
     if (!frames.length) throw new Error('Empty GIF');
+    if (width * height * frames.length > maxPixels) throw new Error('GIF exceeds decoded frame budget');
     const columns = Math.max(1, Math.min(frames.length, Math.floor(2048 / width)));
     canvas.width = columns * width; canvas.height = Math.ceil(frames.length / columns) * height;
     const context = canvas.getContext('2d'), stage = document.createElement('canvas');
@@ -312,27 +313,100 @@ export function loadSpriteAtlas(source, width, height) {
       else if (previous) composite.putImageData(previous, 0, 0);
     }
     const durations = frames.map(frame => frame.delay);
-    return { canvas, width, height, count: frames.length, columns, durations,
+    return { canvas, width, height, count: frames.length, columns, durations, nativeDurations: frames.map(frame => frame.nativeDelay),
       total: durations.reduce((sum, duration) => sum + duration, 0) };
-  })().catch(error => { spriteAtlases.delete(key); throw error; });
-  spriteAtlases.set(key, promise);
+  })().catch(error => { if (cache) spriteAtlases.delete(key); throw error; });
+  if (cache) spriteAtlases.set(key, promise);
   return promise;
 }
 
-// Independent GIF decoders replay cached bytes without new HTTP requests.
-export function playCachedGif(image, source, { background = false } = {}) {
+// Small combat GIFs share decoded, lossless frames. Keep the original IMG and
+// its CSS (object-fit, filters, hitbox, dimensions); each playback owns its epoch.
+// Large/unsupported assets keep the native decoder rather than reserving huge atlases.
+let sharedGifTick = null;
+const sharedGifSources = new Map();
+function discardAnimatedImage(image, state) {
+  if (state.url) URL.revokeObjectURL(state.url);
+  animatedImages.delete(image);
+  assignments.delete(image);
+}
+function tickSharedGifs() {
+  sharedGifTick = null;
+  let active = false;
+  const now = performance.now();
+  for (const [image, state] of animatedImages) {
+    if (!state.frames) continue;
+    if (!image.isConnected) {
+      if (state.connected) discardAnimatedImage(image, state);
+      continue;
+    }
+    state.connected = true; active = true;
+    let elapsed = Math.max(0, now - state.startedAt) % state.frames.total, frame = 0;
+    while (frame < state.frames.urls.length - 1 && elapsed >= state.frames.durations[frame])
+      elapsed -= state.frames.durations[frame++];
+    if (frame !== state.frame) { image.src = state.frames.urls[frame]; state.frame = frame; }
+  }
+  if (active) sharedGifTick = requestAnimationFrame(tickSharedGifs);
+}
+function wakeSharedGifs() {
+  if (sharedGifTick === null) sharedGifTick = requestAnimationFrame(tickSharedGifs);
+}
+function sharedGifFrames(resource) {
+  if (resource.sharedFrames) return resource.sharedFrames;
+  const { naturalWidth: width, naturalHeight: height } = resource.image;
+  resource.sharedFrames = (async () => {
+    const atlas = await loadSpriteAtlas(resource.key, width, height, { cache: false, maxPixels: 1024 * 1024 });
+    const urls = [], images = [];
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    const context = canvas.getContext('2d');
+    try {
+      for (let frame = 0; frame < atlas.count; frame++) {
+        context.clearRect(0, 0, width, height);
+        context.drawImage(atlas.canvas, frame % atlas.columns * width, Math.floor(frame / atlas.columns) * height,
+          width, height, 0, 0, width, height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve));
+        if (!blob) throw new Error('GIF frame encoding unavailable');
+        const url = URL.createObjectURL(blob); urls.push(url);
+        const image = new Image(); image.src = url; await image.decode(); images.push(image);
+      }
+      for (const url of urls) sharedGifSources.set(url, resource.key);
+      resource.frameUrls = urls;
+      atlas.canvas.width = atlas.canvas.height = 0;
+      return resource.decodedFrames = { urls, images, durations: atlas.nativeDurations,
+        total: atlas.nativeDurations.reduce((sum, duration) => sum + duration, 0) };
+    } catch (error) { urls.forEach(url => URL.revokeObjectURL(url)); throw error; }
+  })();
+  return resource.sharedFrames;
+}
+
+// Native fallback restarts cached bytes independently; shared combat frames are opt-in.
+export function playCachedGif(image, source, { background = false, shared = false } = {}) {
   const assignment = {};
   assignments.set(image, assignment);
   const apply = resource => {
     if (assignments.get(image) !== assignment) return;
     const previous = animatedImages.get(image);
-    if (previous) URL.revokeObjectURL(previous.url);
-    const url = URL.createObjectURL(resource.blob.slice(0, resource.blob.size, resource.blob.type));
-    animatedImages.set(image, { url, key: resource.key, connected: image.isConnected, createdAt: Date.now() });
+    if (previous?.url) URL.revokeObjectURL(previous.url);
+    const shareFrames = shared && !background && /\.gif(?:[?#]|$)/i.test(resource.key)
+      && resource.image?.naturalWidth <= 512 && resource.image?.naturalHeight <= 512;
+    const frames = shareFrames && resource.decodedFrames;
+    const url = frames ? null : URL.createObjectURL(resource.blob.slice(0, resource.blob.size, resource.blob.type));
+    const state = { url, key: resource.key, connected: image.isConnected, createdAt: Date.now(), startedAt: performance.now() };
+    animatedImages.set(image, state);
     animatedImageObserver?.observe(document.documentElement, { childList: true, subtree: true });
     image.dataset.effectAsset = new URL(source, document.baseURI).pathname.split('/').pop();
     if (background) image.style.backgroundImage = `url("${url}")`;
-    else image.src = url;
+    else image.src = frames ? frames.urls[0] : url;
+    if (frames) {
+      state.frames = frames; state.frame = 0; wakeSharedGifs();
+    } else if (shareFrames) {
+      void sharedGifFrames(resource).then(frames => {
+        if (assignments.get(image) !== assignment || animatedImages.get(image) !== state) return;
+        URL.revokeObjectURL(state.url); state.url = null;
+        state.frames = frames; state.frame = -1;
+        wakeSharedGifs();
+      }).catch(() => { /* Keep the native image if frame decoding is unavailable. */ });
+    }
   };
   const ready = touchResource(source)?.value;
   if (ready) { apply(ready); return Promise.resolve(); }
@@ -347,12 +421,13 @@ const animatedImageObserver = typeof MutationObserver === 'undefined' ? null : n
     for (const [image, state] of animatedImages) {
       if (image.isConnected) state.connected = true;
       else if (state.connected) {
-        URL.revokeObjectURL(state.url);
-        animatedImages.delete(image);
-        assignments.delete(image);
+        discardAnimatedImage(image, state);
       }
     }
-    if (!animatedImages.size) animatedImageObserver.disconnect();
+    if (!animatedImages.size) {
+      animatedImageObserver.disconnect();
+      cancelAnimationFrame(sharedGifTick); sharedGifTick = null;
+    } else if ([...animatedImages.values()].some(state => state.frames)) wakeSharedGifs();
   });
 
 const commonEffects = [
@@ -479,6 +554,18 @@ export async function prepareLevelResources(sources, options = {}) {
   // Pin the full manifest, including later summons, until this level is closed.
   for (const source of sources) levelResources.add(resourceKey(source));
   const errors = await preloadResources(sources, { concurrency: 12, ...options });
+  // Prepare repeated combat frames while the level loader is still visible,
+  // not in the first burst of hits. Optional decoding never blocks asset fallback.
+  const repeated = new Set(['blood-impact-1.gif', 'blood-impact-2.gif', 'blood-impact-3.gif', 'blood-impact-4.gif',
+    'armor-impact.gif', 'recovery.gif', 'death-blood.gif', 'dodge-smoke.gif', 'mysticism.gif', 'mysticism-attack.gif']);
+  const pending = [...sources].map(source => touchResource(source)?.value)
+    .filter(resource => resource && repeated.has(new URL(resource.key).pathname.split('/').pop()));
+  let frameCursor = 0;
+  await Promise.all(Array.from({ length: Math.min(2, pending.length) }, async () => {
+    while (frameCursor < pending.length) {
+      try { await sharedGifFrames(pending[frameCursor++]); } catch { /* Native GIF remains available. */ }
+    }
+  }));
   for (const { style, property, value, base } of styles) {
     style.setProperty(property, value.replace(/url\(\s*["']?([^"')]+)["']?\s*\)/g,
       (original, source) => /^(?:data:|blob:|#)/.test(source) ? original : `url("${cachedResourceUrl(resourceKey(source, base))}")`), style.getPropertyPriority(property));
@@ -501,6 +588,7 @@ export async function prepareLevelResources(sources, options = {}) {
 export function persistentMediaMarkup(markup) {
   let result = markup;
   for (const [key, entry] of resources) if (entry.value?.url) result = result.split(entry.value.url).join(key);
-  for (const state of animatedImages.values()) result = result.split(state.url).join(state.key);
+  for (const state of animatedImages.values()) if (state.url) result = result.split(state.url).join(state.key);
+  for (const [url, key] of sharedGifSources) result = result.split(url).join(key);
   return result;
 }
