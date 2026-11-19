@@ -2124,7 +2124,7 @@ export async function configurePhaserBoardDrag(hooks) {
     const canvas = createCanvasSnapshot(pending.view.source);
     if (!canvas || !boardDragHooks.begin(pending.view)) return;
     const texture = 'board-drag-preview';
-    scene.textures.addCanvas(texture, canvas);
+    scene.textures.addImage(texture, canvas);
     const { rect, view } = pending;
     const image = scene.add.image(0, 0, texture).setName(texture).setDepth(100000)
       .setDisplaySize(rect.width, rect.height).setFlipX(String(view.entity.side).toUpperCase() === 'B').setAlpha(.9);
@@ -2171,9 +2171,19 @@ document.addEventListener('click', event => {
   }
 }, true);
 
+// Geometry is shared only inside one synchronous Phaser update, never across
+// frames: moving targets, board scaling and tactical placement stay live.
+let phaserFrameRects = null;
+function phaserViewRect(element) {
+  if (!element) return null;
+  if (!phaserFrameRects) return element.getBoundingClientRect();
+  let rect = phaserFrameRects.get(element);
+  if (!rect) { rect = element.getBoundingClientRect(); phaserFrameRects.set(element, rect); }
+  return rect;
+}
 function viewCenter(element) {
   if (!element?.isConnected) return null;
-  const rect = element.getBoundingClientRect(), { width, height } = viewport();
+  const rect = phaserViewRect(element), { width, height } = viewport();
   return { x: (rect.left + rect.width / 2) / width, y: (rect.top + rect.height / 2) / height };
 }
 function projectileProfile(attacker, data) {
@@ -2318,7 +2328,7 @@ function requestProjectileTexture(scene, asset) {
     projectileTextures.set(key, state);
     void loadSpriteAtlas(`./media/assets/projectiles/${asset.file}`, asset.width, asset.height).then(atlas => {
       if (!scene.sys.isActive()) return;
-      const texture = scene.textures.addCanvas(key, atlas.canvas);
+      const texture = scene.textures.addImage(key, atlas.canvas);
       for (let i = 0; i < atlas.count; i++) texture.add(i, 0,
         (i % atlas.columns) * atlas.width, Math.floor(i / atlas.columns) * atlas.height, atlas.width, atlas.height);
       state.atlas = atlas;
@@ -2413,15 +2423,21 @@ async function ensurePhaserLayer() {
               const { width, height } = viewport();
               if (this.scale.width !== width || this.scale.height !== height) this.scale.resize(width, height);
               updatePhaserBoardDrag();
-              for (const entry of [...phaserFlights.values()]) {
-                if (!isCombatPaused()) sampleProjectile(entry);
-                if (phaserFlights.get(entry.record.id) === entry) drawProjectile(entry, this);
-              }
-              for (const entry of [...phaserMelees.values()]) {
-                if (!isCombatPaused()) samplePhaserMelee(entry);
-                if (phaserMelees.get(entry.id) === entry) drawPhaserMelee(entry);
-              }
-              for (const entry of phaserEffects.values()) drawProjectile(entry, this);
+              phaserFrameRects = new Map();
+              try {
+                const flights = [...phaserFlights.values()], melees = [...phaserMelees.values()];
+                if (!isCombatPaused()) {
+                  for (const entry of flights) sampleProjectile(entry);
+                  for (const entry of melees) samplePhaserMelee(entry);
+                }
+                for (const entry of flights) {
+                  if (phaserFlights.get(entry.record.id) === entry) drawProjectile(entry, this);
+                }
+                for (const entry of melees) {
+                  if (phaserMelees.get(entry.id) === entry) drawPhaserMelee(entry);
+                }
+                for (const entry of phaserEffects.values()) drawProjectile(entry, this);
+              } finally { phaserFrameRects = null; }
               hideIdlePhaser();
               if (isCombatPaused() && !boardDrag) this.game.loop.sleep();
             },
@@ -2558,7 +2574,7 @@ const MELEE_DEATH_ASSET = { file: '../effects/death-blood.gif', width: 110, heig
 // Use the board's rendered frame, with one scale for both axes. The UI can
 // scale inside a tall mobile viewport; viewport height must not stretch the copy.
 function meleeViewFrame(root) {
-  const rect = root?.getBoundingClientRect();
+  const rect = phaserViewRect(root);
   return rect?.width > 0 ? rect : { left: 0, top: 0, width: viewport().width };
 }
 function meleeTargetView(target) {
@@ -2567,7 +2583,7 @@ function meleeTargetView(target) {
 }
 function meleeViewCenter(element, frame) {
   if (!element?.isConnected) return null;
-  const rect = element.getBoundingClientRect();
+  const rect = phaserViewRect(element);
   return { x: (rect.left + rect.width / 2 - frame.left) / frame.width,
     y: (rect.top + rect.height / 2 - frame.top) / frame.width };
 }
@@ -2713,7 +2729,8 @@ export function animationMelee(attacker, target, isAmbidextry = false, options =
   const attack = options.flight?.attack || options.attack || attacker.currentAttack || {};
   const profile = projectileProfile(attacker, { ...attack, effectProjectileClasses: options.effectClasses,
     aura: isAmbidextry ? 'ambidextry' : null });
-  // Capture the neutral pixels once, including their exact appearance for F5.
+  // Keep the exact neutral pixels for rendering; encode PNG only when saving.
+  // A static image texture avoids CanvasTexture's unused CPU pixel readback.
   // The original stays visible until the Phaser texture is actually ready.
   const neutral = saved ? null : createCanvasSnapshot(getNeutralMeleeCloneSource(source));
   if (!saved && !neutral) return null;
@@ -2724,7 +2741,7 @@ export function animationMelee(attacker, target, isAmbidextry = false, options =
     isAmbidextry, profile, impactOutcome: null,
     longTravel: Math.min(1, Math.max(0, (distance - 220) / 520)),
     closeRange: distance <= Math.min(64, Math.max(28, rect.width * .42)),
-    flipX: String(attacker.side).toUpperCase() === 'B', pixels: neutral.toDataURL(),
+    flipX: String(attacker.side).toUpperCase() === 'B',
     previousOpacity: meleeOriginalVisibilityLocks.get(String(attacker.id))?.originalOpacity ?? body.style.getPropertyValue('opacity'),
     previousPriority: body.style.getPropertyPriority('opacity'),
     released: false, color: isAmbidextry ? 0xedff00 : profile.mysticism ? 0xd2ebff : profile.glow,
@@ -2738,8 +2755,11 @@ export function animationMelee(attacker, target, isAmbidextry = false, options =
   const controller = entry.controller = {
     flightId: entry.id, renderer: 'phaser', get ready() { return Boolean(entry.sprite); },
     bindFlight(flight) { entry.flight = flight; },
-    snapshot: () => ({ renderer: 'phaser', attacker: attacker.id, target: combatReference(target), isAmbidextry,
-      options: { duration: visual.duration, flightId: entry.id }, resume: visual }),
+    snapshot: () => {
+      visual.pixels ??= neutral.toDataURL();
+      return { renderer: 'phaser', attacker: attacker.id, target: combatReference(target), isAmbidextry,
+        options: { duration: visual.duration, flightId: entry.id }, resume: visual };
+    },
     cancel: () => removePhaserMelee(entry), abortOnDeath: () => abortPhaserMelee(entry),
     showOriginalForImpact() { returnPhaserMeleeOriginal(entry); return true; },
     resolveImpact(didHit) {
@@ -2766,7 +2786,7 @@ export function animationMelee(attacker, target, isAmbidextry = false, options =
     if (phaserMelees.get(entry.id) !== entry) return;
     requestProjectileTexture(layer.scene, MELEE_DEATH_ASSET);
     entry.scene = layer.scene; entry.textureKey = `melee:${entry.id}`;
-    layer.scene.textures.addCanvas(entry.textureKey, canvas);
+    layer.scene.textures.addImage(entry.textureKey, canvas);
     entry.graphic = layer.scene.add.graphics().setName(entry.id);
     entry.sprite = layer.scene.add.image(0, 0, entry.textureKey).setName(entry.id).setFlipX(visual.flipX);
     if (!visual.released && visual.phase === 'flight' && !attacker.isDEAD) {

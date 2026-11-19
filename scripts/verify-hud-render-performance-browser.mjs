@@ -44,7 +44,7 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
     await dismissStarterForFixture(page);
-    results[before ? 'before' : 'after'] = await page.evaluate(async () => {
+    results[before ? 'before' : 'after'] = await page.evaluate(async before => {
       await Promise.all([import("/js/ui/application.js"), import("/js/ui/navigation.js"), import("/js/ui/attacks.js"), import("/js/ui/statistics/helpers.js"), import("/js/ui/statistics/components.js"), import("/js/ui/codex/profile.js"), import("/js/ui/codex/stats.js"), import("/js/ui/codex/index.js"), import("/js/ui/inventory.js"), import("/js/ui/essences.js"), import("/js/data/helpers.js")]).then(parts => Object.assign({}, ...parts));
       const D = await import("/js/rendering/hud.js"), A = await import("/js/combat/attackResolution.js");
       const V = await import("/js/rendering/animations.js"), T = await import("/js/storage/entityStorage.js");
@@ -103,6 +103,24 @@ try {
       V.pulseTargetSearchAtb(entity); V.pulseTargetSearchAtb(entity, 'cooldown');
       Object.defineProperty(HTMLElement.prototype, 'offsetWidth', descriptor);
       const pulses = ['atbFill_', 'HUATBfill_', 'scanATBFill_'].map(prefix => originalGet(prefix + entity.id).className);
+      if (!before) {
+        // Unchanged movement counters must preserve their live animation nodes.
+        const movementNode = document.createElement('div'); movementNode.className = 'movement-counter'; host.append(movementNode);
+        const movementState = { current: 2, max: 3, delta: 0, extra: 0 };
+        const initialCounter = D.renderMovementCounter(movementNode, entity, movementState);
+        const movementObserver = new MutationObserver(() => {});
+        movementObserver.observe(movementNode, { attributes: true, childList: true, characterData: true, subtree: true });
+        for (let i = 0; i < 100; i++) D.renderMovementCounter(movementNode, entity, movementState);
+        if (movementObserver.takeRecords().length) throw Error('Unchanged movement counters mutate the DOM');
+        initialCounter.classList.add('bounce-shift');
+        const updatedCounter = D.renderMovementCounter(movementNode, entity, { current: -1, max: 3, delta: -2, extra: 0 });
+        if (updatedCounter !== initialCounter || updatedCounter.textContent !== '-1' || updatedCounter.classList.contains('bounce-shift')
+          || !updatedCounter.classList.contains('movement-reduced') || !movementNode.classList.contains('empty')) throw Error('Movement update lost its node or colors');
+        movementNode.textContent = '';
+        const rebuiltCounter = D.renderMovementCounter(movementNode, entity, movementState);
+        if (!movementNode.contains(rebuiltCounter) || rebuiltCounter.textContent !== '2') throw Error('Rebuilt movement counter stayed stale');
+        movementObserver.disconnect();
+      }
       // Same object can occur in multiple army pools. Copies must remain independent
       // and the synchronous event must see all copies already updated.
       entity.totalDamage = 12;
@@ -117,7 +135,7 @@ try {
       window.structuredClone = originalClone; window.removeEventListener('entityCombatStatsChanged', listener);
       copy.combatDetails.procs.test = 1;
       return { views, micro: { elapsedMs, mutations, lookups }, layoutReads, pulses, copies: { clones, notifications, isolated: !second.combatDetails.procs.test && !entity.combatDetails?.procs?.test } };
-    });
+    }, before);
     const render = await page.evaluate(async fixture => {
       const Sim = await import("/js/debug/simulation.js");
       const started = performance.now();

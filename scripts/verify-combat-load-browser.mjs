@@ -8,18 +8,19 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs'), output = resolve(process.env.LOAD_OUTPUT || 'outputs/combat-load');
 await mkdir(output, { recursive: true });
-const counts = (process.env.LOAD_COUNTS || '40,80').split(',').map(Number);
+const counts = (process.env.LOAD_COUNTS || '20,40,80').split(',').map(Number);
 const liveMs = Number(process.env.LOAD_LIVE_MS || 12000);
 const simMs = Number(process.env.LOAD_SIM_MS || 5000);
 const repeats = Number(process.env.LOAD_REPEATS || 2);
 const baselineDirectory = process.env.LOAD_BASELINE && resolve(process.env.LOAD_BASELINE);
 const profile = process.env.LOAD_PROFILE === '1';
+const tracing = profile && process.env.LOAD_TRACE === '1';
 const scenario = process.env.LOAD_SCENARIO || 'mixed';
 const poolPrototype = process.env.LOAD_POOL === '1';
 const diagnosticFiltersOff = process.env.LOAD_FILTERS_OFF === '1';
 // Freeze code for the whole run: concurrent workspace edits must not mix two
 // versions inside a trial. Only the selected optimization modules vary by side.
-const comparedModules = (process.env.LOAD_MODULES || 'fight.js,entites.js,dom.js').split(',');
+const comparedModules = (process.env.LOAD_MODULES || 'rendering/animations.js,rendering/hud.js').split(',');
 const sourceFiles = new Map(), baselineFiles = new Map();
 async function captureSources(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -40,7 +41,10 @@ for (const name of comparedModules) {
   if (baselineDirectory) baselineFiles.set(resolve(root, 'js', name), await readFile(resolve(baselineDirectory, 'js', name)));
 }
 let checksOn = true;
+const sides = baselineDirectory || process.env.LOAD_RECOVERY_COMPARISON === '1' ? [false, true] : [true];
 const fingerprints = {};
+const baselineFingerprints = Object.fromEntries([...baselineFiles].map(([file, data]) =>
+  [relative(resolve(root, 'js'), file).split(sep).join('/'), createHash('sha256').update(data).digest('hex')]));
 for (const name of new Set(["combat/loop.js", "combat/vitals.js", "combat/control.js", "combat/attackResolution.js", "combat/timeline.js", "entities/runtime.js", "rendering/hud.js", 'combat/attacks.js', 'combat/attackExecution.js', 'combat/attackFlight.js', 'combat/flightRules.js', 'combat/targeting.js', 'combat/snapshot.js', 'board/targets.js', 'rendering/attackTransport.js', ...comparedModules])) {
   fingerprints[name] = createHash('sha256').update(sourceFiles.get(resolve(root, 'js', name))).digest('hex');
 }
@@ -57,12 +61,13 @@ const server = createServer(async (req, res) => {
       data = baselineFiles.get(file);
     }
     data ??= sourceFiles.get(file) ?? await readFile(file);
+    if (extname(file) === '.js') data = data.toString().replace(/\r\n/g, '\n');
     // Experimental response only: the production file stays untouched.
-    if (poolPrototype && checksOn && file.endsWith(`${sep}entitesAnimation.js`)) {
+    if (poolPrototype && checksOn && file.endsWith(`${sep}rendering${sep}animations.js`)) {
       data = require('./combat-fx-pool-prototype.cjs')(data.toString());
     }
     const recoveryEnabled = Boolean(baselineDirectory) || checksOn;
-    if (file.endsWith(`${sep}fight.js`)) {
+    if (file.endsWith(`${sep}combat${sep}loop.js`)) {
       data = data.toString();
       data = replace(data, 'function requestCombatContinuityCheck(entity, trigger) {', `
 function requestCombatContinuityCheck(entity, trigger) {
@@ -86,11 +91,11 @@ window.addEventListener('entityCombatInteraction', ({ detail }) => globalThis.__
           stunned: isEntityActionPaused(entity), silenced: isEntitySilenced(entity),
           progress: combatProgressSignature(entity), owner: activeTurns.has(entity) });`);
     }
-    if (file.endsWith(`${sep}attackEffectMecanics.js`)) {
+    if (file.endsWith(`${sep}combat${sep}effects.js`)) {
       data = replace(data.toString(), 'controlEffects.set(key, current);', "controlEffects.set(key, current); globalThis.__loadEffect(state.kind);");
       data = replace(data, 'activeAlterations.set(key, state);', 'activeAlterations.set(key, state); globalThis.__loadEffect(state.kind);');
     }
-    if (file.endsWith(`${sep}combatSimulationRuntime.js`)) {
+    if (file.endsWith(`${sep}debug${sep}simulationRuntime.js`)) {
       if (process.env.LOAD_RANDOM_TRACE === '1') data = replace(data.toString(), '  Math.random = random;', `
   globalThis.__loadProbe.random = [];
   Math.random = () => { const value = random();
@@ -122,6 +127,9 @@ window.addEventListener('entityCombatInteraction', ({ detail }) => globalThis.__
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const errors = [], live = [], simulations = [];
+const systemSession = await browser.newBrowserCDPSession();
+const gpu = (await systemSession.send('SystemInfo.getInfo')).gpu;
+await systemSession.detach();
 let passed = false, failure = null, saveReady = process.env.LOAD_RESUME !== '1';
 const workspaceChanges = [];
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -159,7 +167,7 @@ function installProbe(options) {
     probe.errors.push(args.map(value => value?.stack || String(value)).join(' ')); error(...args);
   };
   if (options?.profile) {
-    for (const [owner, name] of [[Element.prototype, 'getBoundingClientRect'], [Element.prototype, 'getAnimations'],
+    for (const [owner, name] of [[CanvasRenderingContext2D.prototype, 'getImageData'], [HTMLCanvasElement.prototype, 'toDataURL'], [Element.prototype, 'getBoundingClientRect'], [Element.prototype, 'getAnimations'],
       [Document.prototype, 'createElement'], [Element.prototype, 'animate'], [Element.prototype, 'remove'],
       [CanvasRenderingContext2D.prototype, 'drawImage']]) {
       const original = owner[name];
@@ -283,7 +291,7 @@ function validateLive(entry) {
   }
 }
 async function save() { await writeFile(resolve(output, 'results.json'), JSON.stringify({ passed, failure, workspaceChanges, scenario, poolPrototype, diagnosticFiltersOff,
-  profiled: profile, browser: browser.version(), comparison: baselineDirectory ? 'source-before-after' : 'recovery-off-on', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
+  profiled: profile, tracing, browser: browser.version(), gpu, baselineFingerprints, comparison: baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
 try {
   if (process.env.LOAD_RESUME === '1') {
     const previous = JSON.parse(await readFile(resolve(output, 'results.json'), 'utf8'));
@@ -294,7 +302,7 @@ try {
     live.forEach(validateLive);
   }
   for (const count of counts) {
-    for (let repeat = 0; repeat < repeats; repeat++) for (const enabled of (repeat % 2 ? [true, false] : [false, true])) {
+    for (let repeat = 0; repeat < repeats; repeat++) for (const enabled of (repeat % 2 ? [...sides].reverse() : sides)) {
       if (live.some(entry => entry.count === count && entry.repeat === repeat && entry.enabled === enabled)) continue;
       checksOn = enabled;
       console.log(`LIVE ${count} entities, ${baselineDirectory ? (enabled ? 'AFTER' : 'BEFORE') : `checks ${enabled ? 'ON' : 'OFF'}`}, repeat ${repeat + 1}`);
@@ -303,7 +311,7 @@ try {
       if (profile) {
         await cdp.send('Profiler.enable');
         await cdp.send('Profiler.start');
-        await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline,blink,cc', transferMode: 'ReturnAsStream' });
+        if (tracing) await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline,blink,cc', transferMode: 'ReturnAsStream' });
       }
       const before = metricMap(await cdp.send('Performance.getMetrics'));
       await page.evaluate(seed => {
@@ -318,18 +326,20 @@ try {
       const result = await page.evaluate(() => {
         const result = { elapsedMs: performance.now() - liveStart, probe: structuredClone(__loadProbe), frameGaps, longTasks,
           entities: E.entites.map(e => ({ id: e.id, turns: e.turnCount || 0, phase: e.currentPhase, hp: e.stats.HP.current })) };
-        sampling = false; longObserver.disconnect(); __loadProbe.active = false; G.StopGame({ preserveScene: true }); return result;
+        sampling = false; longObserver.disconnect(); __loadProbe.active = false; Clock.freezeCombatClock(); return result;
       });
       if (profile) {
         const prefix = `profile-${count}-${enabled ? 'on' : 'off'}-${repeat}`;
         await writeFile(resolve(output, `${prefix}.cpuprofile`), JSON.stringify(cpuProfile));
-        const traceDone = new Promise(done => cdp.once('Tracing.tracingComplete', done));
-        await cdp.send('Tracing.end');
-        const { stream } = await traceDone;
-        let trace = '';
-        for (;;) { const part = await cdp.send('IO.read', { handle: stream }); trace += part.data; if (part.eof) break; }
-        await cdp.send('IO.close', { handle: stream });
-        await writeFile(resolve(output, `${prefix}.trace.json`), trace);
+        if (tracing) {
+          const traceDone = new Promise(done => cdp.once('Tracing.tracingComplete', done));
+          await cdp.send('Tracing.end');
+          const { stream } = await traceDone;
+          let trace = '';
+          for (;;) { const part = await cdp.send('IO.read', { handle: stream }); trace += part.data; if (part.eof) break; }
+          await cdp.send('IO.close', { handle: stream });
+          await writeFile(resolve(output, `${prefix}.trace.json`), trace);
+        }
       }
       const entry = { count, enabled, repeat, elapsedMs: result.elapsedMs,
         cpuMs: (after.TaskDuration - before.TaskDuration) * 1000,
@@ -347,28 +357,30 @@ try {
         controlMs: entry.probe.workMs, impacts: entry.probe.impacts, recovery: entry.probe.recoveries.length, errors: entry.probe.errors.length }));
       validateLive(entry);
       await page.screenshot({ path: resolve(output, `live-${count}-${enabled ? 'on' : 'off'}-${repeat}.png`) });
+      await page.evaluate(() => G.StopGame({ preserveScene: true }));
       await page.close();
     }
-    if (process.env.LOAD_SKIP_SIM === '1' || [1701, 1702].every(seed => simulations.some(entry => entry.count === count && entry.seed === seed))) continue;
+    if (process.env.LOAD_SKIP_SIM === '1' || (process.env.LOAD_SEEDS || '1701,1702').split(',').map(Number).every(seed => simulations.some(entry => entry.count === count && entry.seed === seed))) continue;
     checksOn = true;
     const simulation = await fixture(count);
     for (const seed of (process.env.LOAD_SEEDS || '1701,1702').split(',').map(Number)) {
       if (simulations.some(entry => entry.count === count && entry.seed === seed)) continue;
       const trials = {};
-      for (const enabled of (seed % 2 ? [false, true] : [true, false])) {
+      for (const enabled of (seed % 2 ? sides : [...sides].reverse())) {
         checksOn = enabled;
         console.log(`SIM ${count} entities, ${baselineDirectory ? (enabled ? 'AFTER' : 'BEFORE') : `checks ${enabled ? 'ON' : 'OFF'}`}, seed ${seed}`);
         const trial = await simulation.evaluate(({ seed, durationMs }) => Sim.simulateTrial(snapshot, { seed, durationMs, trace: true }), { seed, durationMs: simMs });
         trials[enabled ? 'on' : 'off'] = trial;
         assert.deepEqual(trial.loadProbe.recoveries, [], 'No healthy entity may be restarted in the real virtual-time engine');
       }
+      trials.off ||= trials.on;
       await writeFile(resolve(output, `simulation-${count}-${seed}.json`), JSON.stringify({ before: comparable(trials.off), after: comparable(trials.on) }));
       await writeFile(resolve(output, `probes-${count}-${seed}.json`), JSON.stringify({ before: trials.off.loadProbe, after: trials.on.loadProbe }));
       if (process.env.LOAD_EXACT_JOURNAL === '1') {
         await writeFile(resolve(output, `journal-${count}-${seed}.json`), JSON.stringify({ before: trials.off.journal, after: trials.on.journal }));
         assert.deepEqual(trials.on.journal, trials.off.journal, 'Full journal: order, times and intermediate resource snapshots');
       }
-      let identical = true;
+      let identical = sides.length === 2 ? true : null;
       try { assert.deepEqual(comparable(trials.on), comparable(trials.off)); }
       catch { identical = false; console.error(`MISMATCH ${count} entities, seed ${seed}: saved full event comparison`); }
       simulations.push({ count, seed, durationMs: trials.on.durationMs, identical,
@@ -382,7 +394,7 @@ try {
     await simulation.close();
   }
   assert.deepEqual(errors, []);
-  assert.ok(simulations.every(trial => trial.identical), 'Every seeded comparison must retain entity results, events and exact phase transitions');
+  assert.ok(simulations.every(trial => trial.identical !== false), 'Every seeded comparison must retain entity results, events and exact phase transitions');
   for (const [name, hash] of Object.entries(fingerprints)) {
     const currentHash = createHash('sha256').update(await readFile(resolve(root, 'js', name))).digest('hex');
     if (currentHash !== hash) workspaceChanges.push({ name, captured: hash, current: currentHash });
@@ -391,7 +403,8 @@ try {
   // workspace. Preserve that distinction instead of invalidating a frozen run.
   if (workspaceChanges.length) console.log('Workspace changed; all trials used frozen source buffers:', workspaceChanges.map(x => x.name));
   passed = true;
-  console.log('PASS: rendered stress tests and deterministic comparisons');
+  console.log('PASS: rendered stress tests' + (!simulations.length ? ' (simulation skipped)'
+    : sides.length === 2 ? ' and deterministic comparisons' : ' and simulation runs'));
 } catch (error) {
   failure = error.stack || error.message;
   throw error;

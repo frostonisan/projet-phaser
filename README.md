@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.94.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.94.1-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -189,3 +189,46 @@ redimensionnement ou la disparition du monstre annulent l’aperçu sans coût.
 F5 conserve les placements validés. Les hitboxes HTML, menus et dépôts depuis
 l’inventaire/admin restent utilisables. Les fichiers existants sont réutilisés,
 sans nouvelle dépendance ni nouveau fichier de jeu. Le gain de FPS n’est pas mesuré.
+
+## Gros combats — v0.94.1-dev
+
+Les copies de mêlée gardent leurs pixels en mémoire et ne les encodent en PNG
+qu'au moment de capturer la sauvegarde. Les textures statiques de mêlée, de
+projectile et de glisser-déposer évitent la copie CPU de tous les pixels effectuée
+par `CanvasTexture`. La définition des images, les couleurs et les effets restent
+identiques. Les lectures de géométrie partagent un cache limité à une seule mise
+à jour Phaser, pour conserver le suivi des cibles mobiles et du redimensionnement.
+Les compteurs de déplacement conservent leurs éléments et ne réécrivent plus les
+valeurs inchangées. Les règles de combat et le format des sauvegardes restent les mêmes.
+
+Le banc existant `scripts/verify-combat-load-browser.mjs` utilise les chemins
+actuels et mesure par défaut 20, 40 et 80 monstres. Les comparaisons utilisent
+les mêmes configurations et graines, dans un seul navigateur à la fois, en
+alternant les versions avant/après. Les traces CPU sont séparées des mesures
+de fluidité ; `LOAD_PROFILE=1` active le profilage et `LOAD_TRACE=1` ajoute la
+trace détaillée. `LOAD_ARCHIVE_SOURCES=1` conserve les sources mesurées ;
+`LOAD_BASELINE` désigne leur dossier pour une comparaison ultérieure.
+Les résultats et captures de cette correction sont dans `outputs/combat-performance/`.
+
+Mesure de cette correction : Chrome sans interface, viewport 1920 × 1080,
+combats synthétiques rapides avec mêlée, projectiles et contrôles, deux passages
+de 12 secondes par taille et par version, ordre alterné. Moyennes des deux passages :
+
+| Monstres au total | Image moyenne avant (ms) | Après (ms) | P95 avant (ms) | Après (ms) |
+| --- | --- | --- | --- | --- |
+| 20 | 125 | 103 | 483 | 225 |
+| 40 | 237 | 207 | 1158 | 508 |
+| 80 | 487 | 372 | 2582 | 983 |
+
+Le P95 est le délai sous lequel se trouvent 95 % des images. Il baisse de 53 à
+62 %, et le délai moyen par image de 13 à 24 %. Le cas à 80 reste très chargé :
+ces chiffres ne constituent pas une promesse de 60 FPS ni une mesure sur téléphone.
+Le nombre d'impacts effectivement traités est également conservé dans le rapport ;
+la version optimisée en traite davantage pendant les 12 secondes. Les résultats
+logiques sont comparés séparément à temps simulé identique.
+
+Validation : 57 tests Node, huit suites navigateur (attaques, pause/F5, souris et
+tactile, déplacements, ressources, compteurs et nettoyage), six comparaisons
+logiques identiques avant/après, et captures figées de mêlée identiques pixel à
+pixel en trajet, à l'impact et après annulation. Le profil après correction ne
+contient plus d'encodage PNG ni de lecture CPU des pixels pendant les attaques.

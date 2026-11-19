@@ -617,8 +617,12 @@ function getMovementCounterState(entite) {
   return { current, max, delta, extra };
 }
 
+const movementCounterViews = new WeakMap();
 export function renderMovementCounter(node, entite, state = getMovementCounterState(entite)) {
   const { current, max, delta, extra } = state;
+  const signature = `${current}:${max}:${delta}:${extra}`;
+  let view = movementCounterViews.get(node);
+  if (view?.signature === signature && node.contains(view.current) && node.contains(view.max)) return view.current;
   let text = node;
   if (node.classList.contains('movement-counter')) {
     text = node.querySelector('.counter-shift');
@@ -628,9 +632,17 @@ export function renderMovementCounter(node, entite, state = getMovementCounterSt
       node.appendChild(text);
     }
   }
-  text.innerHTML = `${text !== node ? ': ' : ''}<span class="current-shift current">${current}</span> / <span class="current-shift max">${max}</span>`;
-  const currentSpan = text.querySelector('.current');
-  const maxSpan = text.querySelector('.max');
+  if (!view || !text.contains(view.current) || !text.contains(view.max)) {
+    text.innerHTML = `${text !== node ? ': ' : ''}<span class="current-shift current"></span> / <span class="current-shift max"></span>`;
+    view = { current: text.querySelector('.current'), max: text.querySelector('.max') };
+    movementCounterViews.set(node, view);
+  }
+  const currentSpan = view.current, maxSpan = view.max;
+  view.bounce = null;
+  currentSpan.classList.remove("bounce-shift");
+  if (currentSpan.textContent !== String(current)) currentSpan.textContent = String(current);
+  if (maxSpan.textContent !== String(max)) maxSpan.textContent = String(max);
+  view.signature = signature;
   currentSpan.classList.toggle('negative-shift', current < 0);
   currentSpan.classList.toggle('movement-reduced', delta < 0 || current < 0);
   currentSpan.classList.toggle('movement-overflow', delta >= 0 && current > max);
@@ -662,18 +674,21 @@ export function updateMovementDisplay(entite, { animate = true } = {}) {
     previousCurrent < max &&
     current <= max;
 
-  const state = getMovementCounterState(entite);
-  document
-    .querySelectorAll(`[data-movement-entity-id="${entite.id}"]`)
-    .forEach(el => {
+  const nodes = document.querySelectorAll(`[data-movement-entity-id="${entite.id}"]`);
+  const state = nodes.length ? getMovementCounterState(entite) : null;
+  nodes.forEach(el => {
       const currentSpan = renderMovementCounter(el, entite, state);
 
       if (hasGeneratedMove && currentSpan) {
+        const view = movementCounterViews.get(el), bounce = {};
+        view.bounce = bounce;
         currentSpan.classList.remove("bounce-shift");
         void currentSpan.offsetWidth;
         currentSpan.classList.add("bounce-shift");
 
         setTimeout(() => {
+          if (view.bounce !== bounce) return;
+          view.bounce = null;
           currentSpan.classList.remove("bounce-shift");
         }, 500);
       }

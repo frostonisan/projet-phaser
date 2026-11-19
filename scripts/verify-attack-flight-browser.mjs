@@ -204,8 +204,18 @@ try {
       };
       Math.random = () => .999999;
       try {
-        const first = launchMelee(1600);
-        await waitForVisual(() => first.visual()?.ready);
+        let encodes = 0;
+        const encode = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function (...args) { encodes++; return encode.apply(this, args); };
+        let first;
+        try {
+          first = launchMelee(1600);
+          await waitForVisual(() => first.visual()?.ready);
+          check(encodes === 0, 'A live melee starts without PNG encoding');
+          const pixels = first.visual().snapshot().resume.pixels;
+          check(pixels.startsWith('data:image/png') && encodes === 1, 'Saving a melee captures its exact pixels on demand');
+          check(first.visual().snapshot().resume.pixels === pixels && encodes === 1, 'Repeated snapshots reuse the immutable melee pixels');
+        } finally { HTMLCanvasElement.prototype.toDataURL = encode; }
         check(first.visual()?.renderer === 'phaser' && first.visual().ready, 'Physical melee boots in the shared Phaser scene');
         await sleep(100);
         check(document.querySelectorAll('canvas[id^=meleeClone_]').length === 0, 'The pilot creates no duplicate HTML melee clone');
