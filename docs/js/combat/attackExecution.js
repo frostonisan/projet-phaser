@@ -4,7 +4,7 @@ import { cloneCombatSnapshot } from './snapshot.js';
 import { createAttackFlight } from './attackFlight.js';
 import { isAttackEntityAlive, acceptsImpactTarget, acceptsSelectedTarget, acceptsExecutionTarget } from './targeting.js';
 import { isHexTarget } from '../board/targets.js';
-import { presentAttackTransport } from '../rendering/attackTransport.js';
+import { presentAttackTransport, prepareAttackTransport } from '../rendering/attackTransport.js';
 import {
   getPhaseElapsed,
   waitPreparationPulse,
@@ -600,6 +600,7 @@ export async function executeAttack(attacker, target, selectedAttack, { onStart 
   let stopPreparationAnimation = null;
   try {
     if (state.stage === 'preparation') {
+      prepareAttackTransport(attack);
       if (state.interruptedBySilence || isEntitySilenced(attacker)) {
         state.interruptedBySilence = true;
         return 'silenced';

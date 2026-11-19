@@ -18,6 +18,7 @@ await new Promise(done => server.listen(0, '127.0.0.1', done));
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'chrome', headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+  const phaserRequests = []; page.on('request', request => { if (request.url().includes('/vendor/phaser-')) phaserRequests.push(request.url()); });
   // Alter the live view after restoration, not only the saved HTML before it.
   // The injected branch is confined to this regression test's intercepted module.
   await page.route('**/js/debug/simulationRuntime.js', async route => {
@@ -76,6 +77,24 @@ try {
     window.before = JSON.stringify(E.entites, (k, v) => typeof v === 'function' || v instanceof Node ? undefined : v);
     window.beforeStorage = JSON.stringify(Object.entries(localStorage));
   });
+  const phaserPilot = await page.evaluate(async () => {
+    const pilot = structuredClone(snapshot);
+    let count = 0;
+    for (const entity of pilot.entities) for (const key of ['attacks', 'attackDetails', 'nativeAttacks']) {
+      if (!Array.isArray(entity[key])) continue;
+      for (const attack of entity[key]) if (attack && typeof attack === 'object') {
+        attack.functionName = 'shot-p-r'; attack.attackRange = ['range']; count++;
+      }
+    }
+    if (!count) throw Error('Pilot fixture must replace real attack definitions');
+    const options = {seed:92,durationMs:5000,trace:true};
+    const first = await Sim.simulateTrial(pilot, options), second = await Sim.simulateTrial(pilot, options);
+    const metric = trial => ({end:trial.end,winner:trial.winner,entities:trial.entities,journal:trial.journal});
+    return {first:metric(first),second:metric(second)};
+  });
+  assert.deepEqual(phaserPilot.second, phaserPilot.first, 'The Phaser-selected attack remains deterministic in the simulator');
+  assert.ok(phaserPilot.first.journal.some(entry => entry.type === 'damage_resolution'), 'The pilot simulation must resolve real attacks: ' + JSON.stringify(phaserPilot.first.journal.map(entry=>entry.type)));
+  assert.deepEqual(phaserRequests, [], 'Simulation never loads the Phaser renderer');
   const restoredFromData = await page.evaluate(async () => {
     const dirty = structuredClone(snapshot), doc = new DOMParser().parseFromString(dirty.boardHtml, 'text/html');
     const cells = [...doc.querySelectorAll('#hexGrid .hex')];

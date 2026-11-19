@@ -56,7 +56,7 @@ async function fixture(config = {}) {
         type: 'sbire', role: 'gueux', position: String(i+1), level: 1, awakening: 1, stuff: {}, stats: {}, modifierStats: {},
         baseStats: { HP: 1000, strength: 0, intelligence: 0, agility: 0, physicalDamage: 40, magicalDamage: 40,
           speed: config.speed ?? 100, extraLife: own.extraLife || 0 },
-        attacks: [{ functionName: 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
+        attacks: [{ functionName: config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
           combatFunction: own.support ? 'Support' : 'Attaquant', attacknature: [magic ? 'magicalDamage' : 'physicalDamage'],
           attackRange: [own.range || 'melee'], attackTarget: [own.support ? 'ally' : 'enemy'], deadTarget: ['no'], type: [], effets: own.support ? ['heal'] : [], selfEffects: [],
           preparationTime: own.preparation ?? 500, executionTime: own.execution ?? 1800, recoveryTime: own.recovery ?? 300, cooldown: 20000,
@@ -81,14 +81,14 @@ async function fixture(config = {}) {
 
 try {
   if (!process.env.PAUSE_EXTRA_ONLY) {
-  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee'])) {
-  const page = await fixture({ A: { range: mode }, B: { range: mode } });
+  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee', 'phaser'])) {
+  const page = await fixture({ phaser: mode === 'phaser', A: { range: mode === 'phaser' ? 'range' : mode, execution: mode === 'phaser' ? 6000 : 1800 }, B: { range: mode === 'phaser' ? 'range' : mode, execution: mode === 'phaser' ? 6000 : 1800 } });
   await page.evaluate(async () => {
     G.startGame();
     const {poison} = await import("/js/combat/effects.js");
     poison(E.entites[0], { effectDot: 9, effectDuration: 4, type: ['alteration'] }, E.entites[1]);
   });
-  await page.waitForSelector(mode === 'range' ? '.projectile-parent' : 'canvas[id^=meleeClone_]');
+  await page.waitForSelector(mode === 'phaser' ? '#phaser-projectiles:not([hidden]) canvas' : mode === 'range' ? '.projectile-parent' : 'canvas[id^=meleeClone_]');
   await page.waitForTimeout(150);
   await page.keyboard.press('Space');
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
@@ -100,11 +100,18 @@ try {
       positions: entites.map(entity => document.getElementById(`Box_Entite_${entity.id}`)?.closest('.hex')?.dataset.position),
       e: entites.map(e => ({ id:e.id,hp:e.stats.HP.current,turn:e.turnCount,prep:e.preparationTime,speed:e.speedTimer,action:e._combatAction,cooldowns:e.attackSelection?.readyAt })),
       projectiles:[...document.querySelectorAll('.projectile-parent')].map(el=>({id:el.id,transform:el.style.transform})),
+      phaser: entites.flatMap(entity => (entity.projectiles || []).filter(p => p.visual?.renderer === 'phaser').map(p => ({id:p.id, visual:p.visual}))),
       effects: [...document.querySelectorAll('.effect-vfx')].map(el=>el.id),
       melee: [...document.querySelectorAll('canvas[id^=meleeClone_]')].map(el=>({id:el.id, transform:getComputedStyle(el).transform,opacity:getComputedStyle(el).opacity})),
     };
   });
   const before = await read();
+  if (mode === 'phaser') {
+    assert.equal(before.phaser.length, 2);
+    assert.ok(before.phaser.every(p => p.visual.progress > 0 && p.visual.progress < 1));
+    assert.equal(await page.locator('.projectile-parent').count(), 0);
+    await page.screenshot({path:resolve(output,'phaser-paused.png')});
+  }
   assert.equal(before.paused,true); if (mode === 'range') assert.equal(before.projectiles.length,2);
   await page.waitForTimeout(2600);
   assert.deepEqual(await read(),before,'live pause freezes deadlines, positions, damage and phases');
@@ -132,6 +139,7 @@ try {
   });
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
+  if (mode === 'phaser') await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
   const restored = await read();
   const compare=(actual,expected,message)=>{
     const {melee:am,...a}=actual,{melee:bm,...b}=expected;assert.deepEqual(a,b,message);
@@ -149,7 +157,7 @@ try {
   await page.screenshot({path:resolve(output,'restored-paused.png')});
   await page.keyboard.press('Space');
   await page.waitForFunction(async () => !(await import("/js/combat/clock.js")).isCombatPaused());
-  await page.waitForTimeout(2400);
+  await page.waitForTimeout(mode === 'phaser' ? 6400 : 2400);
   const after = await read();
   assert.ok(after.e.every((e,i)=>e.hp<before.e[i].hp),'both saved impacts apply after resume');
   assert.ok(after.e.every((e,i)=>before.e[i].hp-e.hp<100),'no duplicate impact');
@@ -294,6 +302,45 @@ try {
     assert.ok(await page.evaluate(async()=>(await import("/js/entities/runtime.js")).entites.find(e=>e.side==='A').stats.HP.current<1000),'poison persists after its caster left');
     assert.equal(await page.locator('#Box_Entite_999821').count(),0,'saved departure visual finishes');
     await page.close();console.log('PASS departed caster: poison continues and partial retreat is retained');
+  }
+  {
+    const page = await fixture({phaser:true,A:{range:'range',execution:4000},B:{range:'range',execution:4000}});
+    await page.evaluate(() => G.startGame());
+    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+    await page.waitForTimeout(120);
+    await page.evaluate(() => P.pauseCombat());
+    const before = await page.evaluate(() => E.entites.flatMap(e => e.projectiles.map(p => p.visual)));
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForFunction(() => document.querySelector('#phaser-projectiles canvas')?.width === 390);
+    assert.deepEqual(await page.evaluate(() => E.entites.flatMap(e => e.projectiles.map(p => p.visual))), before,
+      'Resizing the paused viewport does not advance the flight');
+    assert.equal(await page.locator('#phaser-projectiles').evaluate(node => getComputedStyle(node).pointerEvents), 'none');
+    assert.equal(await page.evaluate(() => !!document.elementFromPoint(20,20)?.closest('#phaser-projectiles')), false);
+    await page.screenshot({path:resolve(output,'phaser-mobile-paused.png')});
+    await page.evaluate(() => G.StopGame({preserveScene:true}));
+    assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true);
+    await page.close(); console.log('PASS Phaser: paused mobile resize, transparent input and stop cleanup');
+  }
+  for (const mode of ['slow','unavailable']) {
+    const page = await fixture({phaser:true,A:{range:'range',preparation:100,execution:500},B:{range:'range',preparation:100,execution:500}});
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    await page.route('**/vendor/phaser-3.90.0.esm.min.js', async route => {
+      if (mode === 'unavailable') return route.abort();
+      await gate; await route.continue();
+    });
+    await page.evaluate(() => G.startGame());
+    await page.waitForFunction(() => E.entites.every(e => e.stats.HP.current < 1000), null, {timeout:5000});
+    assert.equal(await page.locator('#phaser-projectiles canvas').count(), 0,
+      'Damage completes even when the renderer cannot load');
+    await page.evaluate(() => G.StopGame({preserveScene:true}));
+    release();
+    if (mode === 'slow') {
+      await page.waitForSelector('#phaser-projectiles', {state:'attached'});
+      assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true,
+        'A late boot cannot revive cleared projectiles');
+    }
+    await page.close(); console.log('PASS Phaser: '+mode+' renderer cannot delay combat or survive stop');
   }
   assert.deepEqual(errors,[]);
   console.log('PASS: space, frozen ranged flights and poison, F5 exact paused restoration, resume with no duplicate damage, repeated checkpoint, stop.');

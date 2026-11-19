@@ -2738,6 +2738,7 @@ projectileParent.appendChild(projectileChild);
 }
 
 export function clearProjectileEffects(entityList = []) {
+    window.dispatchEvent(new Event('projectileVisualsCleared'));
     projectileCleanupToken += 1;
     projectileTargetFollowers.clear();
 

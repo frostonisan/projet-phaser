@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.89.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.90.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -27,8 +27,8 @@ des projectiles dans les données du plateau, communes au jeu et au simulateur.
 La version est définie une seule fois dans `docs/js/ui/display.js` (`GAME_VERSION`).
 `formatGameIdentity()` compose le même libellé lors de la création et de la mise
 à jour de `#game-id-display`.
-Incrémenter le dernier nombre pour une correction publiée (`0.89.1-dev`), et le
-nombre central pour une nouvelle étape importante (`0.90.0-dev`). Le suffixe
+Incrémenter le dernier nombre pour une correction publiée (`0.90.1-dev`), et le
+nombre central pour une nouvelle étape importante (`0.91.0-dev`). Le suffixe
 `dev` indique que cette branche reste en développement.
 
 ## Publication
@@ -52,8 +52,8 @@ les modifications non commitees qui lui succedent.
 Les anciens historiques restent dans `frostonisan/DarkPit` et dans le dossier
 local d'origine. Ce nouveau depot commence par un instantane independant.
 
-Le premier chantier est la separation des regles de combat, de leur execution
-et du rendu. Phaser sera integre apres validation de ces frontieres.
+Les règles de combat, leur exécution et leur rendu sont progressivement séparés.
+Un premier projectile Phaser est intégré depuis la version 0.90.0-dev.
 
 ## Architecture
 
@@ -123,3 +123,20 @@ au ciblage. Les destinations des mouvements aléatoires et des attractions sont
 calculées dans `board/placementRules.js` ; `board/controller.js` applique ensuite
 le placement et actualise les vues. Le rendu d’un projectile retrouve sa case
 par identifiant, sans choisir lui-même son occupant.
+
+## Premier projectile Phaser — v0.90.0-dev
+
+L’attaque **Tir p r** (`shot-p-r`), utilisée notamment par **Porc physic range**
+(serial 8), affiche maintenant un projectile rouge lumineux et sa traînée dans
+Phaser. Placer ce monstre face à un ennemi en mode admin puis lancer le combat
+permet de voir le pilote. Les variantes devenues magiques ou dotées d’un effet
+visuel spécialisé continuent d’utiliser leur rendu existant.
+
+Le code reste dans `rendering/attackTransport.js`. La dépendance Phaser 3.90.0 et
+sa licence MIT sont dans `docs/vendor/`, servies avec le jeu, sans CDN à l’exécution.
+Le moteur se prépare au début du tir et sa couche transparente laisse passer les
+clics. Le simulateur exécute la même attaque sans charger Phaser.
+
+Les dégâts et l’échéance d’impact restent sous la responsabilité du combat.
+Ce premier pilote couvre le rendu et le trajet ; il n’ajoute pas de collisions
+physiques aux règles de placement ou de dégâts.

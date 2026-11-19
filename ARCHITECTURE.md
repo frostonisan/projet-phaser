@@ -741,3 +741,55 @@ la résurrection et quatre profils mobiles. Le simulateur vérifie aussi deux lo
 de 20 combats, les graines aléatoires, les journaux et l’export.
 Le test de résurrection utilise maintenant le véritable bouton de reprise, qui
 attend la fin de la sauvegarde, puis vérifie séparément que l’horloge a repris.
+
+
+## Premier projectile Phaser — v0.90.0-dev
+
+Le transport `shot-p-r` (physique, à distance, sans classe d’effet spécialisée)
+passe par une scène Phaser transparente. `rendering/attackTransport.js` conserve
+le choix du rendu, la scène et ses instances ; aucun module de jeu supplémentaire.
+La définition du tir et les formules de dégâts ne sont pas modifiées.
+
+`combat/attackExecution.js` préchauffe le rendu pendant la préparation et conserve
+la programmation de l’impact. Le transport observe cette promesse et utilise
+`clockNow()` pour la progression, indépendamment du nombre d’images affichées.
+Ni la fin du dessin ni une collision Phaser ne déclenchent de dégâts. Un chargement
+lent ou impossible du moteur ne repousse pas le résultat du combat.
+
+Le départ est capturé dans le repère du viewport ; l’arrivée est la vue de la case
+verrouillée par l’état logique. Les coordonnées normalisées permettent de redessiner
+après redimensionnement. La position, le départ et le temps du vol sont conservés
+par les données visuelles de l’instantané de vol existant. F5 recrée la scène depuis
+ces données ; le canvas n’est pas une sauvegarde du combat. Le format de pause reste 2.
+
+Un seul canvas est partagé par les tirs simultanés. La boucle dort lorsque tous
+les tirs sont terminés ou quand le combat est en pause ; reprise et redimensionnement
+la réveillent. L’arrêt du combat et `clearProjectileEffects` retirent les instances,
+y compris celles qui attendaient encore le chargement du moteur. La couche ne prend
+aucune entrée clavier, tactile ou souris. Le pilote n’active aucun moteur physique.
+Le projectile simple s’arrête visuellement à la résolution ; les variantes de sorts
+et leurs effets de dispersion restent dans le transport HTML.
+
+Le simulateur ignore ce transport visuel avant tout import de Phaser. Les règles
+et le journal de cette attaque restent exécutés dans son environnement isolé.
+
+Dépendance locale : Phaser **3.90.0**, distribution ESM minifiée de
+https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.esm.min.js ; licence MIT
+conservée dans `docs/vendor/PHASER-LICENSE.md`. Empreinte SHA-256 du fichier distribué :
+`9327deb5e2f7d382cd054842f641fd504b9a784a730a2bdb94ea63516790ead1`.
+Documentation de l’API utilisée : https://docs.phaser.io/api-documentation/3.90.0/class/game.
+Les fichiers du moteur sont chargés uniquement pour ce pilote ; leur taille brute
+est de 1 197 130 octets. Aucun gain de FPS n’est revendiqué dans cette étape.
+
+Validation et captures conservées dans `outputs/phaser-projectile/`,
+`outputs/combat-tests/` et `outputs/paused-combat/`. Les tests existants de vol,
+de pause et de simulation accueillent les contrôles du pilote.
+
+Résultats : 57 tests Node, syntaxe et ressources statiques validés ; 146 contrôles
+de combat, 35 imports indépendants et quatre profils de démarrage passent.
+Les nouveaux cas couvrent l’absence de projectile HTML doublon, une perte de PV
+identique avec et sans rendu pour le même tir et le même jet, le départ de la cible,
+la suppression visuelle sans annulation de l’impact, deux tirs simultanés,
+la pause/F5/reprise sans double dégât, le redimensionnement mobile pendant la pause
+et un moteur retardé ou indisponible. La simulation du tir reste reproductible
+sans requête vers Phaser ; sa suite complète et ses lots de 20 + 20 essais passent.

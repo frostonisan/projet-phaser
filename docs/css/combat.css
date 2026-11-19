@@ -2625,3 +2625,8 @@ filter: drop-shadow(0 0 10px rgba(226, 189, 255));}
   filter: drop-shadow(0 0 6px #ff9100);
   color:#ff9100;
 }
+
+/* Phaser's first projectile layer uses viewport coordinates above the board. */
+#phaser-projectiles { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
+#phaser-projectiles[hidden] { display: none; }
+#phaser-projectiles canvas { display: block; pointer-events: none; }

@@ -107,6 +107,50 @@ try {
     const kinetic = attack(['physicalDamage', 'piercingDamage']);
     const spectral = attack(['magicalDamage', 'piercingDamage']);
     const triple = attack(['hybridalDamage', 'piercingDamage']);
+    // The real Phaser pilot uses the same scheduled impact as the HTML renderer.
+    const previousPilotRandom = Math.random;
+    try {
+      Math.random = () => .999999;
+      const Transport = await import('/js/rendering/attackTransport.js');
+      const pilot = attack(['physicalDamage'], { functionName: 'shot-p-r', executionTime: 1200 });
+      const launchPilot = (duration = 1200) => {
+        const flight = createAttackFlight(attacker, target, { ...pilot, executionTime: duration }, { physical: 20 });
+        const impact = resolveAttackImpact(flight, { at: combatNow() + duration });
+        const done = Transport.presentAttackTransport(flight, impact, { duration, isRange: true, options: {} });
+        return { flight, done };
+      };
+      const initialHp = target.stats.HP.current;
+      const firstPilot = launchPilot(6000);
+      await waitForVisual(() => document.querySelector('#phaser-projectiles:not([hidden]) canvas'));
+      check(Boolean(document.querySelector('#phaser-projectiles canvas')), 'The selected physical shot boots a real Phaser canvas');
+      check(!document.getElementById(firstPilot.flight.id), 'The Phaser shot has no duplicate HTML projectile');
+      await sleep(250);
+      const firstVisual = attacker.projectiles.find(p => p.id === firstPilot.flight.id)?.visual;
+      check(firstVisual?.renderer === 'phaser' && firstVisual.progress > 0 && firstVisual.progress < 1, 'Phaser projects combat time into projectile progress');
+      await window.captureCombatTest('phaser-projectile-live');
+      await firstPilot.done;
+      const phaserLoss = initialHp - target.stats.HP.current;
+      check(phaserLoss > 0, 'The Phaser shot applies its scheduled damage');
+      target.stats.HP.current = initialHp;
+      await resolveAttackImpact(createAttackFlight(attacker, target, { ...pilot, executionTime: 6000 }, { physical: 20 }));
+      check(initialHp - target.stats.HP.current === phaserLoss, 'The same physical impact loses identical HP with and without Phaser: ' + JSON.stringify({phaserLoss, directLoss:initialHp-target.stats.HP.current}));
+      target.stats.HP.current = initialHp;
+      const movingPilot = launchPilot();
+      await sleep(100); move(target, hexes[4]);
+      check(await movingPilot.done === 'miss' && target.stats.HP.current === initialHp, 'Moving away from the locked cell makes the Phaser shot miss without damage');
+      move(target, hexes[3]);
+      const stoppedPilot = launchPilot(6000);
+      await sleep(80); clearProjectileEffects(entites);
+      check(document.querySelector('#phaser-projectiles').hidden, 'Clearing effects hides the Phaser layer immediately');
+      await stoppedPilot.done;
+      check(initialHp - target.stats.HP.current === phaserLoss, 'Clearing only the visual does not cancel or duplicate combat damage: ' + JSON.stringify({phaserLoss,clearedLoss:initialHp-target.stats.HP.current}));
+      target.stats.HP.current = initialHp;
+      const finalPilot = launchPilot(300);
+      await finalPilot.done;
+      check(document.querySelectorAll('#phaser-projectiles canvas').length === 1 && document.querySelector('#phaser-projectiles').hidden,
+        'The next shot reuses one canvas and the idle renderer becomes hidden');
+      target.stats.HP.current = initialHp;
+    } finally { Math.random = previousPilotRandom; }
     const beforeAvoidance = getEntityCombatDetails(target).physicalProjectilesAvoided;
     const avoided = createAttackFlight(attacker, target, physical, { physical: 40 });
     move(target, hexes[4]);

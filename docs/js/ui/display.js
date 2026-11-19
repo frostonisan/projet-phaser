@@ -10,7 +10,7 @@ import { renderCurrentBattleLog } from "../combat/journal.js";
 import { getVisibleHexes, setVisibleHexes } from "../storage/gameStorage.js";
 import { hideCombatAttackControlPanel, isCombatAttackControlPanelOpenFor, showCombatAttackControlPanel } from "./attacks.js";
 
-const GAME_VERSION = "0.89.0-dev";
+const GAME_VERSION = "0.90.0-dev";
 
 export function formatGameIdentity(gameId) {
     return `The Dark Pit v${GAME_VERSION} — ID de la partie : ${gameId}`;
