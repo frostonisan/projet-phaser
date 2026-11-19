@@ -22,7 +22,7 @@ try {
   const errors = [], checks = [];
   page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   // Reset restores production perspective; this fixture uses flat rectangular cells.
   await page.addStyleTag({ content: '#hexGrid { transform: none !important; }' });
   await page.evaluate(async () => {

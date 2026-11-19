@@ -350,7 +350,8 @@ function visitStyles(callback, includeDormant = false) {
   const walk = (rules, base, all) => {
     for (const rule of rules) {
       if (rule.style) {
-        let applies = all;
+        // Effects can appear after loading; their resources follow selectors, not filenames.
+        let applies = all || /\.(?:(?:projectile(?:-impacte)?|effect-vfx)(?![\w-])|damage-popup-|healing-feedback-icon|picto-stat\.overkill\b)/.test(rule.selectorText || '');
         try { applies ||= Boolean(document.querySelector(rule.selectorText?.replace(/::[\w-]+(?:\([^)]*\))?/g, ''))); }
         catch { /* Keyframes and unsupported selectors have no DOM match. */ }
         if (applies) callback(rule.style, base);
@@ -359,7 +360,7 @@ function visitStyles(callback, includeDormant = false) {
     }
   };
   for (const sheet of document.styleSheets) {
-    try { walk(sheet.cssRules, sheet.href || document.baseURI, includeDormant || /\/(?:spell|battle-infos)\.css(?:\?|$)/.test(sheet.href || '')); }
+    try { walk(sheet.cssRules, sheet.href || document.baseURI, includeDormant); }
     catch (error) { if (error.name !== 'SecurityError') throw error; }
   }
 }

@@ -624,3 +624,58 @@ lots de 20 + 20 essais, effets, contrôles, effets paramétriques, astralité, i
 et démarrage mobile). Les 35 points d'entrée restent importables isolément et le
 nombre de modules reste à 117. Les changements de camp sont vérifiés dans le jeu
 et le simulateur, y compris après altération de la classe HTML sauvegardée.
+
+
+## Styles regroupés par thème — v0.88.0-dev
+
+Les 11 anciennes feuilles deviennent 8 : cinq thèmes (`base`, `interface`, `stats`,
+`combat`, `animation`), les deux fichiers `monstre.css` et `monstre-hitbox.css`, et
+la feuille réservée au calibrateur. Les deux fichiers des monstres sont inchangés,
+octet pour octet. Les règles de `board.css`, `style.css`, `battle-infos.css` et
+`spell.css` rejoignent les thèmes correspondants. Les anciennes expérimentations
+`style-2.css`, `style-3.css` et `style-test.css`, sans référence dans le projet,
+sont retirées ; leur historique reste dans Git.
+
+Le tri retire 54 règles vides, trois doublons identiques et six sélecteurs invalides
+déjà ignorés par le navigateur. Les sélecteurs qui ne correspondent à aucun élément
+au chargement restent présents : le jeu crée des menus, attaques et effets plus tard.
+Les déclarations, variantes fournisseur, URL relatives et conditions responsive
+restent celles du jeu. Les règles d'un même thème conservent leur ordre initial.
+Les règles génériques de rang (`sbire`, `lord`) restent en fondation pour ne pas
+écraser les détails d'interface. Les pictogrammes et leurs variantes du Codex restent
+ensemble dans les statistiques. Le repère des auras calibrées est explicitement
+prioritaire dans une `entite-box` calibrée, comme avant le changement de fichiers.
+
+Les quatre pages utilisant le jeu partagent le même ordre de feuilles. Les tests
+qui chargeaient directement une ancienne feuille utilisent les nouveaux chemins.
+Le préchargement des effets dans `data/loaderList.js` reconnaît leurs sélecteurs
+au lieu du nom des feuilles : les mêmes neuf ressources CSS restent préchargées,
+sans précharger les centaines d'autres images regroupées dans `combat.css`.
+
+La comparaison des styles calculés porte sur 33 scènes sauvegardées (12 651 éléments,
+avec leurs pseudo-éléments) : choix de personnage, jeu, tailles de plateau, statistiques,
+Codex, objets, infobulles et outil d'effets, aux dimensions desktop et mobile.
+Le regroupement conserve les styles avant/après sur les propriétés comparées ; les animations
+sont comparées au même instant, et les polices sont chargées avant la mesure.
+Les diagnostics et les répartitions de règles sont dans `outputs/refactor-css/`.
+
+Les styles statiques encore injectés par JavaScript ne sont pas déplacés dans ce lot.
+Les valeurs visuelles calculées à l'exécution restent également dans leurs propriétaires.
+
+Deux fixtures anciennes mises en évidence avant le tri CSS sont raccordées au
+contrat de plateau courant : l'éditeur de statistiques publie sa géométrie après
+l'ajout direct d'une case, et le test des messages initialise les empreintes avant
+la comparaison F5. Les assertions existantes sont conservées ; le code du combat
+n'est pas modifié dans ce lot.
+
+Validation : 54 tests Node, contrôles de syntaxe/imports/assets et 15 scripts
+navigateur passent. Le contrôle des messages de combat comprend 145 assertions,
+dont les priorités des auras propres aux monstres et la reprise après F5.
+
+À la demande du joueur, le libellé de version quitte ensuite son emplacement fixe
+en bas à gauche : `ui/display.js` définit la version et compose le texte commun
+« The Dark Pit v0.88.0-dev — ID de la partie : … ». La création et le rafraîchissement
+du bloc utilisent ce format ; son style blanc est dans `interface.css`.
+Le bloc est ancré juste au-dessus des commandes admin ; l’ancien décalage
+`top: -630px` le plaçait hors écran selon la hauteur de ces commandes.
+Ce déplacement volontaire est vérifié séparément de la comparaison CSS ci-dessus.

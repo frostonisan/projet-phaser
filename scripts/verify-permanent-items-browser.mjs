@@ -25,7 +25,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   const report = await page.evaluate(async () => {
     const P = await import('/js/items/permanentItems.js');
     const M = await import('/js/items/itemManager.js');

@@ -1,3 +1,4 @@
+import { formatGameIdentity } from "../ui/display.js";
 import { ENTITY_SIZE_OPTIONS, entitySizeInCells, setEntitySizeInCells, planEntityPlacements, releaseEntityFootprint, hexCoordonne, syncEntityFootprints } from "../board/controller.js";
 import { gameStorage as localStorage, beginAdminSession } from "../storage/sessionStorage.js";
 import {
@@ -3527,7 +3528,7 @@ export function AdminButtons() {
     gameIdDisplay.id = 'game-id-display';
 
     const gameId = getOrCreateGameID();
-    gameIdDisplay.textContent = `ID de la partie : ${gameId}`;
+    gameIdDisplay.textContent = formatGameIdentity(gameId);
     console.log(`🆔 ID affiché via AdminButtons : ${gameId}`);
 
     // Ajout au DOM : icône admin tout à gauche, puis les boutons.

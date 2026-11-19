@@ -188,7 +188,7 @@ async function fixture(count) {
   await page.addInitScript(installProbe, { profile });
   page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.goto(`${origin}/index.html`);
-  await page.addStyleTag({ url: `${origin}/css/board.css` });
+  await page.addStyleTag({ url: `${origin}/css/combat.css` });
   // Cost isolation only, never a proposed production visual change.
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
   await page.evaluate(async ({ count, scenario }) => {

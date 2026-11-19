@@ -24,7 +24,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1536, height: 960 } });
   page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   const choices = await page.evaluate(async () => {
     const S = await import("/js/storage/gameStorage.js"), E = await import("/js/entities/runtime.js"), A = await import("/js/debug/admin.js");
     S.setAdminMode(true);
@@ -46,6 +46,8 @@ try {
       hex.className = 'hex SideA';
       hex.style.cssText = 'width:120px;height:120px;position:relative;transform:none;background:#20252a;';
       hex.appendChild(Object.assign(document.createElement('div'), { className: 'socle' })); grid.appendChild(hex);
+      // This fixture extends the terrain directly; publish its new geometry before spawning.
+      (await import('/js/board/controller.js')).invalidateFootprintGeometry(grid);
       const actor = E.enrichEntityStats({ ...structuredClone(template), id: 991800 + i, name: `Stats + ${i}`, side: 'A', position: hex.id,
         level: 1, awakening: 1, attacks: ['shot-p-r'], stats: {}, stuff: {},
         modifierStats: { durable: { adminLevel: { physicalDamage: 3 } } },

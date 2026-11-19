@@ -6,12 +6,12 @@
   <title>Index 15 · Gabarit des entités</title>
   <link rel="icon" href="media/assets/ui/favicon.png">
   <!-- Feuilles de production, intactes et dans l'ordre du jeu. Aucun script du jeu. -->
-  <link rel="stylesheet" href="css/board.css">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/interface.css">
+  <link rel="stylesheet" href="css/stats.css">
+  <link rel="stylesheet" href="css/combat.css">
   <link rel="stylesheet" href="css/animation.css">
   <link rel="stylesheet" href="css/monstre.css">
-  <link rel="stylesheet" href="css/battle-infos.css">
-  <link rel="stylesheet" href="css/spell.css">
   <link rel="stylesheet" href="css/monstre-hitbox.css">
   <style>
     /* 1. Présentation du banc d'essai. Ces règles ne sont pas destinées au jeu. */
@@ -187,7 +187,7 @@
     /* Aucun gabarit ne dépend de la largeur du texte, du GIF ou du critique.
        Le scale du parent reste le seul changement d'échelle des ancres. */
     .lab-message-front { position: absolute; left: 0; bottom: 0; width: 0; height: 0; }
-    /* Chaque IMG garde son placement de spell.css dans le gabarit du sprite.
+    /* Chaque IMG garde son placement de combat.css dans le gabarit du sprite.
        Le calque et la durée de vie n'imposent plus une ancre centrale commune. */
     .lab-proc-field { --body-proc-size: clamp(32px, min(calc(var(--sprite-w) * .9), calc(var(--sprite-h) * .75)), 110px); position: absolute; inset: 0; z-index: 160; pointer-events: none; }
     .lab:not([data-mode=messages]) .lab-proc-field { display: none; }
@@ -336,7 +336,7 @@
     <p>Les tailles et espacements proposés sont des réglages à juger ici. En vue d’ensemble, l’ancienne animation des dégâts, qui anime aussi la taille de police, est conservée des deux côtés afin d’isoler l’essai de placement. Le recalibrage n’a lieu qu’à la création ou au remplacement d’une entité.</p>
     <p>En mode « Messages / dégâts », les chiffres partent tous du même point absolu. Le dernier apparaît en gros au premier plan ; les précédents continuent leur trajectoire sans être remplacés ni copiés dans une archive. Les arrivées alternent centre, gauche, droite tant qu’un chiffre est visible. Les jets montent puis retombent en courbe et rapetissent jusqu’à disparition. Après une pause sans chiffre visible, le premier jet repart au centre. Huit chiffres au maximum par entité, sans file d’attente.</p>
     <p>Les critiques gardent leur picto et leur pop plus gros ; les exécutions critiques sont les plus importantes. Le montant conserve la couleur de sa nature et les « !!! » leur couleur critique. Durées : 1,35 seconde pour un dégât normal, 1,55 seconde pour un critique, 1,75 seconde pour une exécution critique. Les GIF de capacités restent à gauche, les noms d’effets à droite, avec leurs piles et l’archive compacte des effets. Les durées disponibles sont affichées en secondes, avec au plus une décimale.</p>
-    <p>La jauge VFX tire au hasard parmi les capacités cochées, indépendamment du flux de messages. Chaque VFX reprend son placement de spell.css sur le gabarit du sprite, ainsi que le centrage de l’ambidextrie défini dans le code du jeu et la classe recoveryGif de la récupération. Les dimensions natives sont plafonnées selon la largeur et la hauteur du sprite, à 110 px au maximum avant le scale du parent. Trois VFX au maximum par entité ; un nouveau proc du même type relance son affichage.</p>
+    <p>La jauge VFX tire au hasard parmi les capacités cochées, indépendamment du flux de messages. Chaque VFX reprend son placement de combat.css sur le gabarit du sprite, ainsi que le centrage de l’ambidextrie défini dans le code du jeu et la classe recoveryGif de la récupération. Les dimensions natives sont plafonnées selon la largeur et la hauteur du sprite, à 110 px au maximum avant le scale du parent. Trois VFX au maximum par entité ; un nouveau proc du même type relance son affichage.</p>
     <p>Le nouveau flux anime uniquement transform et opacity. Deux timers indépendants génèrent les messages et les procs VFX ; les fins d’animations retirent les messages. Quitter le mode, remplacer une entité, vider ou masquer l’onglet nettoie/suspend le travail concerné. Le témoin conserve ses animations actuelles et se limite à 48 messages par entité pour protéger l’onglet. Ce laboratoire ne modifie ni les sauvegardes ni le combat.</p>
   </details>
   </div>
@@ -729,7 +729,7 @@
 
   function placeNativeProc(image, fxClass) {
     image.className = fxClass === 'recovery' ? 'recoveryGif' : `effect-vfx ${fxClass}`;
-    // AmbidextryVFX (damagesCalcul.js) surcharge ce placement de spell.css.
+    // AmbidextryVFX (damagesCalcul.js) surcharge ce placement de combat.css.
     if (fxClass === 'ambidextry') Object.assign(image.style, { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' });
   }
 

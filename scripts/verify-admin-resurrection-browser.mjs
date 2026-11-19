@@ -23,7 +23,7 @@ async function fixture(count = 3) {
   page.on('pageerror', e => errors.push(e.stack || e.message));
   page.on('console', m => { if (m.type() === 'error' && !m.text().includes('Failed to load resource')) errors.push(m.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   await page.evaluate(async count => {
     window.S = await import("/js/storage/gameStorage.js"); window.E = await import("/js/entities/runtime.js");
     window.Admin = await import("/js/debug/admin.js"); window.G = await import("/js/app/state.js");

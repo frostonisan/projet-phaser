@@ -26,7 +26,7 @@ const input = (id, value) => page.evaluate(({ id, value }) => { const node = doc
 const ready = () => page.evaluate(() => visualLab.ready);
 const inspect = () => page.evaluate(() => visualLab.procs.inspect());
 const slot = '#new-world .lab-slot[data-index="1"]';
-// Current spell.css placements, including the game's AmbidextryVFX override.
+// Current combat.css placements, including the game's AmbidextryVFX override.
 const placements = {
   indestructibility: { top: -30 }, astrality: { middle: true }, resilience: { top: 5 },
   ambidextry: { middle: true, centered: true }, esoterism: { middle: true },

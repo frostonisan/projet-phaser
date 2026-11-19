@@ -23,7 +23,7 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   await page.evaluate(async () => {
     const S = await import("/js/storage/gameStorage.js"), E = await import("/js/entities/runtime.js"), A = await import("/js/debug/admin.js");
     S.setAdminMode(true);

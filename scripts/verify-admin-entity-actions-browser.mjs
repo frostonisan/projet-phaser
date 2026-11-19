@@ -23,7 +23,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1536, height: 960 } });
   page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   await page.evaluate(async () => {
     const S = await import("/js/storage/gameStorage.js");
     const E = await import("/js/entities/runtime.js");

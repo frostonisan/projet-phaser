@@ -111,6 +111,8 @@ try {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    // Match the live board's initial footprint styles before comparing F5 restoration.
+    (await import('/js/board/controller.js')).syncEntityFootprints(grid);
     G.configureBattleActionManager({ createStartButton: node => node, createFleeButton: node => node, createQuitButton: node => node });
     const rect = Element.prototype.getBoundingClientRect, rects = Element.prototype.getClientRects, style = window.getComputedStyle, raf = window.requestAnimationFrame;
     window.__popupProbe = { rect: 0, rects: 0, style: 0, raf: 0, rectOf: node => rect.call(node), styleOf: node => style(node) };

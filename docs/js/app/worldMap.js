@@ -1,3 +1,4 @@
+import { formatGameIdentity } from "../ui/display.js";
 import { gameStorage as localStorage, beginAdminSession } from "../storage/sessionStorage.js";
 import { buildLevelHelper } from "../data/helpers.js";
 import { isAdminMode, saveStageConfig, loadFromLocalStorage, saveToLocalStorage, getOrCreateGameData,getOrCreateGameID, setCurrentLevel, getStageChests, getOrCreateStageChest, stageHasRewardChest } from "../storage/gameStorage.js";
@@ -640,6 +641,6 @@ export function initializeWorldMapInterface() {
   const gameId = getOrCreateGameID();
     const displayElement = document.getElementById('game-id-display');
     if (displayElement) {
-        displayElement.textContent = `ID de la partie : ${gameId}`;
+        displayElement.textContent = formatGameIdentity(gameId);
     }
 }

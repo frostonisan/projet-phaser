@@ -24,7 +24,7 @@ try {
   page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.clock.install({ time: new Date('2026-10-25T12:00:00Z') });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
-  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/board.css` });
+  await page.addStyleTag({ url: `http://127.0.0.1:${server.address().port}/css/combat.css` });
   const report = await page.evaluate(async () => {
     const Admin = await import("/js/debug/admin.js");
     const E = await import("/js/entities/runtime.js");
@@ -564,7 +564,13 @@ try {
   // Probe the rendered shared masks, not just their CSS declarations.
   const maskPage = await browser.newPage({ viewport: { width: 1200, height: 500 } });
   await maskPage.setContent(`<base href="http://127.0.0.1:${server.address().port}/">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/interface.css">
+    <link rel="stylesheet" href="css/stats.css">
+    <link rel="stylesheet" href="css/combat.css">
+    <link rel="stylesheet" href="css/animation.css">
+    <link rel="stylesheet" href="css/monstre.css">
+    <link rel="stylesheet" href="css/monstre-hitbox.css">
     <style>body { margin:0; background:#000; }
       [data-probe] { position:fixed; top:200px; width:84px; height:100px; margin:0; transform:none; }
       [data-probe] > .glitter-loot-container { background:#fff; }
