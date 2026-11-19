@@ -195,7 +195,7 @@ async function fixture(count) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   await page.addInitScript(installProbe, { profile });
   page.on('pageerror', error => errors.push(error.stack || error.message));
-  await page.goto(`${origin}/index.html`);
+  await page.goto(`${origin}/index.html${process.env.LOAD_MONSTERS === "webgl" && checksOn ? "?monsters=webgl" : ""}`);
   await page.addStyleTag({ url: `${origin}/css/combat.css` });
   // Cost isolation only, never a proposed production visual change.
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
@@ -253,6 +253,13 @@ async function fixture(count) {
       const created = C.createEntiteInDOM(entity); hex.append(created.element); renders.push(created.spriteReady);
     }
     await Promise.all(renders);
+    // Follow the level loading path on both sides before measuring the fight.
+    await (await import('/js/data/loaderList.js')).prepareLevelResources(new Set([
+      'blood-impact-1.gif', 'blood-impact-2.gif', 'blood-impact-3.gif', 'blood-impact-4.gif',
+      'armor-impact.gif', 'recovery.gif', 'death-blood.gif', 'dodge-smoke.gif', 'mysticism.gif', 'mysticism-attack.gif',
+      'castingfx-base.gif',
+    ].map(file => new URL(`/media/assets/effects/${file}`, location.href).href)));
+
     // The load fixture builds its own cells/entities instead of the normal
     // placement pipeline. Publish that initial board before starting combat.
     (await import("/js/board/controller.js")).syncEntityFootprints(grid);
@@ -266,6 +273,20 @@ async function fixture(count) {
       longObserver.observe({ type: 'longtask', buffered: false });
     };
   }, { count, scenario });
+  if (process.env.LOAD_MONSTERS === 'webgl' && checksOn) {
+    await page.waitForFunction(count => document.querySelectorAll('[data-monster-webgl="ready"]').length === count, count, { timeout: 90000 });
+    assert.equal(await page.evaluate(async () => {
+      const original = Math.random; let calls = 0;
+      Math.random = () => { calls++; return original(); };
+      const host = document.querySelector('[id^="PopUp_"]'), content = document.createElement('span');
+      content.textContent = 'WebGL: 123';
+      try {
+        (await import('/js/rendering/popups.js')).showDamagePopup(host, content);
+        await new Promise(resolve => globalThis.setTimeout(resolve, 200));
+        return calls;
+      } finally { Math.random = original; host.replaceChildren(); }
+    }), 0, 'Painting text and effects must not consume gameplay randomness');
+  }
   await page.waitForTimeout(1000);
   return page;
 }
@@ -282,6 +303,7 @@ function validateLive(entry) {
   // Keep pre-change faults in the report; the optimized build must have none.
   if (!baselineDirectory || entry.enabled) assert.deepEqual(entry.probe.recoveries, [], 'No healthy entity may be restarted under real rendering load');
   assert.deepEqual(entry.probe.errors, [], 'No real-time combat errors');
+  if (process.env.LOAD_MONSTERS === 'webgl') assert.equal(entry.webglMonsters, entry.enabled ? entry.count : 0, 'Every prototype actor remains on WebGL for the entire fight');
   // Supports and controlled actors need not land a hit within the sample.
   // Require actual battle activity and applied effects, not one hit per actor.
   assert.ok(entry.probe.impacts >= entry.count / 2 && entry.probe.interactions.movement > 0,
@@ -324,7 +346,7 @@ try {
       // Exclude battle teardown from the CPU profile of the active fight.
       const cpuProfile = profile ? (await cdp.send('Profiler.stop')).profile : null;
       const result = await page.evaluate(() => {
-        const result = { elapsedMs: performance.now() - liveStart, probe: structuredClone(__loadProbe), frameGaps, longTasks,
+        const result = { webglMonsters: document.querySelectorAll('[data-monster-webgl="ready"]').length, elapsedMs: performance.now() - liveStart, probe: structuredClone(__loadProbe), frameGaps, longTasks,
           entities: E.entites.map(e => ({ id: e.id, turns: e.turnCount || 0, phase: e.currentPhase, hp: e.stats.HP.current })) };
         sampling = false; longObserver.disconnect(); __loadProbe.active = false; Clock.freezeCombatClock(); return result;
       });
@@ -341,7 +363,7 @@ try {
           await writeFile(resolve(output, `${prefix}.trace.json`), trace);
         }
       }
-      const entry = { count, enabled, repeat, elapsedMs: result.elapsedMs,
+      const entry = { count, enabled, repeat, webglMonsters: result.webglMonsters, elapsedMs: result.elapsedMs,
         cpuMs: (after.TaskDuration - before.TaskDuration) * 1000,
         scriptMs: (after.ScriptDuration - before.ScriptDuration) * 1000,
         layoutMs: (after.LayoutDuration - before.LayoutDuration) * 1000,
@@ -363,6 +385,11 @@ try {
     if (process.env.LOAD_SKIP_SIM === '1' || (process.env.LOAD_SEEDS || '1701,1702').split(',').map(Number).every(seed => simulations.some(entry => entry.count === count && entry.seed === seed))) continue;
     checksOn = true;
     const simulation = await fixture(count);
+    // The isolated simulator consumes the captured data, not this preview.
+    // Stop its GPU/DOM animation so it cannot starve the simulator's iframe.
+    await simulation.evaluate(() => document.getElementById('hexGrid')?.remove());
+    await simulation.waitForTimeout(100);
+
     for (const seed of (process.env.LOAD_SEEDS || '1701,1702').split(',').map(Number)) {
       if (simulations.some(entry => entry.count === count && entry.seed === seed)) continue;
       const trials = {};

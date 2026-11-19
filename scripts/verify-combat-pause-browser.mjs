@@ -40,7 +40,7 @@ async function fixture(config = {}) {
       await gate; await route.continue();
     });
   }
-  await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/index.html${process.env.MONSTER_WEBGL === "1" ? "?monsters=webgl" : ""}`);
   await page.evaluate(async config => {
     // Ambidextry's base chance caps at 50%; force a successful roll in its fixture.
     if (config.double) Math.random = () => .25;
@@ -102,6 +102,7 @@ async function fixture(config = {}) {
       entries.push({ type, at: Timeline.combatNow(), side: data.attacker?.side || data.entity?.side, damage: data.damage });
     });
   }, config);
+  if (process.env.MONSTER_WEBGL === '1' && !config.rendererMode) await page.waitForFunction(() => document.querySelectorAll('[data-monster-webgl="ready"]').length > 0);
   return page;
 }
 
@@ -124,7 +125,9 @@ try {
     const {poison} = await import("/js/combat/effects.js");
     poison(E.entites[0], { effectDot: 9, effectDuration: 4, type: ['alteration'] }, E.entites[1]);
   }, mode);
-  await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+  await page.waitForFunction(mode => mode.includes('melee')
+    ? Clock.captureCombatState().melee.active.length >= 2
+    : E.entites.filter(e => e.projectiles?.some(p => p.status === 'in-flight')).length === 2, mode);
   if (mode === 'melee-double-active') await page.waitForFunction(() => Clock.captureCombatState().melee.active.filter(e=>e.isAmbidextry).length===2);
   if (mode !== 'melee-double-pending') {
     await page.waitForTimeout(150);
@@ -329,13 +332,14 @@ try {
       (await import("/js/storage/gameStorage.js")).setAdminMode(false);
       window.levelRunning='scripted'; F.initFightEntites(); G.startGame();
     });
-    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');await page.evaluate(()=>P.pauseCombat());
+    await page.waitForFunction(()=>E.entites.filter(e=>e.projectiles?.some(p=>p.status==='in-flight')).length===2);await page.evaluate(()=>P.pauseCombat());
     const before=await page.evaluate(()=>E.entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction})));
     await page.reload();
     await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
     assert.deepEqual(await page.evaluate(async()=>(await import("/js/entities/runtime.js")).entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction}))),before,'normal battle restored');
     assert.equal(await page.evaluate(async()=>(await import("/js/storage/sessionStorage.js")).isAdminSessionActive()),false,'normal restored game stays outside admin');
-    await page.keyboard.press('Space');await page.waitForTimeout(2400);
+    await page.evaluate(async()=>{window.RestoredRuntime=await import('/js/entities/runtime.js');});
+    await page.keyboard.press('Space');await page.waitForFunction(()=>RestoredRuntime.entites.length===2 && RestoredRuntime.entites.every(e=>e.stats.HP.current<1000),null,{timeout:10000});
     assert.ok(await page.evaluate(async()=>(await import("/js/entities/runtime.js")).entites.every(e=>e.stats.HP.current<1000)),'normal restored impacts complete');
     await page.close();console.log('PASS ordinary combat F5 outside admin');
   }
@@ -364,7 +368,7 @@ try {
   for (const range of ['range','melee']) {
     const page = await fixture({phaser:range==='range',phaserMelee:range==='melee',A:{range,execution:4000},B:{range,execution:4000}});
     await page.evaluate(() => G.startGame());
-    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+    await page.waitForFunction(range => range === 'melee' ? Clock.captureCombatState().melee.active.length === 2 : E.entites.filter(e=>e.projectiles?.some(p=>p.status==='in-flight')).length===2, range);
     await page.waitForTimeout(120);
     await page.evaluate(() => P.pauseCombat());
     const readVisuals = () => page.evaluate(() => ({projectiles:E.entites.flatMap(e => (e.projectiles || []).map(p => p.visual)),melee:Clock.captureCombatState().melee}));
@@ -377,7 +381,7 @@ try {
     assert.equal(await page.evaluate(() => !!document.elementFromPoint(20,20)?.closest('#phaser-projectiles')), false);
     await page.screenshot({path:resolve(output,`phaser-${range}-mobile-paused.png`)});
     await page.evaluate(() => G.StopGame({preserveScene:true}));
-    assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true);
+    assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), process.env.MONSTER_WEBGL !== '1');
     await page.close(); console.log('PASS Phaser '+range+': paused mobile resize, transparent input and stop cleanup');
   }
   {
@@ -415,7 +419,7 @@ try {
     await page.keyboard.press('Space');
     await page.evaluate(async () => { window.RestoredClock = await import('/js/combat/clock.js'); });
     await page.waitForFunction(() => !RestoredClock.isCombatPaused() && RestoredClock.captureCombatState()['projectile-effects'].length===0);
-    assert.equal(await page.locator('#phaser-projectiles').evaluate(node=>node.hidden), true);
+    assert.equal(await page.locator('#phaser-projectiles').evaluate(node=>node.hidden), process.env.MONSTER_WEBGL !== '1');
     await page.close(); console.log('PASS Phaser: detached dispersion and miss tail survive pause/F5 and expire once');
   }
   {
@@ -495,7 +499,8 @@ try {
     page.releaseRenderer();
     if (mode === 'slow') {
       await page.waitForSelector('#phaser-projectiles', {state:'attached'});
-      assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true,
+      if(process.env.MONSTER_WEBGL==='1')await page.waitForFunction(()=>document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
+      assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), process.env.MONSTER_WEBGL !== '1',
         'A late boot cannot revive cleared projectiles');
     }
     await page.close(); console.log('PASS Phaser '+range+': '+mode+' renderer cannot delay combat or survive stop');

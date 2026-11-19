@@ -2,6 +2,8 @@ import {
   updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
   IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
+import { attachPhaserMonster, wakePhaserMonsters, renderEntityTint } from "./animations.js";
+import { persistentMediaMarkup, loadResource, loadSpriteAtlas, getAnimatedImageState } from "../data/loaderList.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
 import { calibrateEntityVisuals } from "./popups.js";
@@ -755,6 +757,9 @@ statusBar.appendChild(healthBarContainer);
       }, 60);
     }
 
+    if (monsterWebGLRequested()) spriteReady.then(() => {
+      globalThis.requestAnimationFrame(() => mountWebGLMonster(entite, entiteBox));
+    });
     return { element: entiteBox, canvas, spriteReady };
 }
 
@@ -1465,3 +1470,393 @@ export function CreateATBEntity(entite, { mirror = false } = {}) {
 
     return SpeedInterface; // On retourne l'élément DOM complet
 }
+
+// Experimental complete paint path for one species. HTML remains a temporary
+// layout/input adapter: its paint is suppressed only after WebGL is ready.
+// This deliberately exposes the cost of that adapter in the load comparison.
+const monsterViews = new WeakSet(), monsterImages = new Map(), monsterResources = new Map();
+let monsterTextureId = 0, activeMonsterViews = 0, monsterCacheEpoch = 0;
+const monsterStyles = new WeakMap();
+function monsterVisibility(node, cache) {
+  if (!node) return { opacity: 1, visible: true };
+  if (cache.has(node)) return cache.get(node);
+  const parent = monsterVisibility(node.parentElement, cache), css = monsterStyle(node);
+  const value = { opacity: parent.opacity * Number(css.opacity), visible: parent.visible && css.display !== 'none' };
+  cache.set(node, value); return value;
+}
+function monsterStyle(node) {
+  if (!monsterStyles.has(node)) monsterStyles.set(node, getComputedStyle(node));
+  return monsterStyles.get(node); // Computed style declarations are live.
+}
+const monsterPanels = new Map(), monsterTextTextures = new Map();
+function releaseMonsterText(entry, scene) {
+  if (entry && --entry.users === 0) { scene.textures.remove(entry.texture); monsterTextTextures.delete(entry.key); }
+}
+function updateMonsterText(layer, scene, css) {
+  const text = layer.node.textContent;
+  if (layer.text === text && layer.color === css.color) return;
+  layer.text = text; layer.color = css.color;
+  const font = `${css.fontStyle} ${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
+  const key = `${font}|${css.color}|${css.textShadow}|${text}`;
+  if (layer.textEntry?.key === key) return;
+  let entry = monsterTextTextures.get(key);
+  if (!entry) {
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d'); ctx.font = font;
+    const metrics = ctx.measureText(text), size = parseFloat(css.fontSize);
+    const width = Math.max(1, Math.ceil(metrics.width)), height = Math.max(1, Math.ceil(size * 1.3));
+    const padding = 4;
+    canvas.width = (width + padding * 2) * 2; canvas.height = (height + padding * 2) * 2; ctx.scale(2, 2); ctx.font = font;
+    const shadow = css.textShadow.match(/(rgba?\([^)]+\)) (-?[\d.]+)px (-?[\d.]+)px ([\d.]+)px/);
+    if (shadow) { ctx.shadowColor = shadow[1]; ctx.shadowOffsetX = +shadow[2]; ctx.shadowOffsetY = +shadow[3]; ctx.shadowBlur = +shadow[4]; }
+    ctx.fillStyle = css.color; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(text, padding, padding + (height + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
+    const texture = `monster-text-${++monsterTextureId}`; scene.textures.addImage(texture, canvas);
+    monsterTextTextures.set(key, entry = { key, texture, width, height, padding, users: 0 });
+  }
+  entry.users++; releaseMonsterText(layer.textEntry, scene); layer.textEntry = entry;
+  if (!layer.image) layer.image = scene.add.image(0, 0, entry.texture).setOrigin(0);
+  else layer.image.setTexture(entry.texture);
+}
+function monsterPanelKey(node, entity) {
+  if (node.matches(monsterBars)) {
+    const css = monsterStyle(node), fill = node.querySelector('.health-fill,.armor-fill');
+    return `bar:${node.className}:${css.backgroundColor}:${css.backgroundImage}:${fill ? monsterStyle(fill).backgroundColor : ''}`;
+  }
+  if (node.classList.contains('hud-ingame')) return `hud:${entity.side}:${entity.type}:${entity.role}:${entity.level}:` +
+    [node.querySelector('[id^="Targetrole-img_"]')?.className, node.querySelector('.target-picto-hud')?.className,
+      ...[...node.querySelectorAll('.extraLife-counter,.fadedLife-counter,.eternalLife-counter,.hudbattletexte')].map(n => n.textContent)].join('|');
+  if (node.classList.contains('attaque-timers')) return `attack:${node.querySelector('img')?.src}:${node.querySelector('img')?.className}:${node.firstElementChild?.className}`;
+  return `${node.className}:${persistentMediaMarkup(node.innerHTML).replace(/ id="[^"]*"/g, '')}`;
+}
+async function acquireMonsterPanel(scene, node, signature) {
+  let entry = monsterPanels.get(signature);
+  if (!entry) {
+    entry = { users: 0, signature };
+    const epoch = monsterCacheEpoch;
+    entry.ready = monsterPanelTexture(node).then(panel => {
+      if (epoch !== monsterCacheEpoch) throw new DOMException('Scene disposed', 'AbortError');
+      entry.texture = `monster-panel-${++monsterTextureId}`; scene.textures.addImage(entry.texture, panel.image);
+      return entry.panel = panel;
+    });
+    monsterPanels.set(signature, entry);
+  }
+  entry.users++;
+  try { await entry.ready; return entry; }
+  catch (error) { entry.users--; monsterPanels.delete(signature); throw error; }
+}
+function releaseMonsterPanel(entry, scene) {
+  if (!entry) return; entry.users--;
+  for (const [key, cached] of monsterPanels) {
+    if (monsterPanels.size <= 96) break;
+    if (cached.users || !cached.texture) continue;
+    scene.textures.remove(cached.texture); monsterPanels.delete(key);
+  }
+}
+const monsterWebGLRequested = () => !globalThis.__combatSimulation
+  && new URLSearchParams(location.search).get('monsters') === 'webgl';
+const monsterPaintProperties = (`display position left top right bottom width height min-width min-height max-width max-height
+ box-sizing box-shadow padding margin overflow border border-radius border-top border-right border-bottom border-left
+ background background-size background-position background-repeat color opacity visibility z-index
+ font-family font-size font-weight font-style line-height letter-spacing text-align text-shadow text-transform white-space
+ align-items justify-content flex flex-direction flex-wrap gap order float vertical-align
+ transform transform-origin filter clip-path object-fit object-position`).split(/\s+/).filter(Boolean);
+function monsterResource(url) {
+  const key = new URL(url, document.baseURI).href;
+  if (!monsterResources.has(key)) monsterResources.set(key, fetch(key).then(response => {
+    if (!response.ok) throw new Error(`Monster texture: ${response.status} ${key}`);
+    return response.blob();
+  }).then(async blob => {
+    if (!/image\/svg\+xml/.test(blob.type)) return blob;
+    const image = new Image(), url = URL.createObjectURL(blob);
+    try {
+      image.src = url; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth || 128; canvas.height = image.naturalHeight || 128;
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      return await new Promise(resolve => canvas.toBlob(resolve));
+    } finally { URL.revokeObjectURL(url); }
+  }).then(blob => new Promise((resolve, reject) => {
+    const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);
+  })));
+  return monsterResources.get(key);
+}
+async function inlineMonsterUrls(value) {
+  const urls = [...value.matchAll(/url\(["']?([^"')]+)["']?\)/g)];
+  for (const match of urls) value = value.replace(match[0], `url("${await monsterResource(match[1])}")`);
+  return value;
+}
+const monsterPanelSelector = '.hud-ingame,.attaque-timers,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer';
+const monsterBars = '.health-bar,.armor-bar,.atb-fill,.attack-bar-fill';
+const monsterTexts = '.HP-counter,.armor-text,.current-shift,.timer-activeattack';
+const monsterDynamic = `${monsterBars},${monsterTexts},.attaque-timers`;
+async function monsterMarkup(node, root = true) {
+  const clone = node.cloneNode(false), css = getComputedStyle(node);
+  clone.removeAttribute('id'); clone.removeAttribute('class'); clone.removeAttribute('style');
+  for (const key of monsterPaintProperties) clone.style.setProperty(key, css.getPropertyValue(key));
+  if (node.matches('.health-fill,.armor-fill')) clone.style.width = '100%';
+  clone.style.animation = 'none'; clone.style.transition = 'none'; clone.style.visibility = 'visible';
+  if (!root && node.matches(monsterDynamic)) { clone.style.visibility = 'hidden'; return clone; }
+  const jobs = [];
+  if (css.backgroundImage !== 'none') jobs.push(inlineMonsterUrls(css.backgroundImage).then(value => { clone.style.backgroundImage = value; }));
+  if (node instanceof HTMLImageElement && node.currentSrc) jobs.push(monsterResource(node.currentSrc).then(value => { clone.src = value; }));
+  for (const child of node.childNodes) {
+    if (child.nodeType === 3) clone.append(child.cloneNode());
+    else if (child.nodeType === 1) jobs.push(monsterMarkup(child, false).then(value => childClones.set(child, value)));
+  }
+  // Preserve child order even when embedded images finish in a different order.
+  const childClones = new Map();
+  for (const pseudo of ['::before', '::after']) {
+    const style = getComputedStyle(node, pseudo);
+    if (style.content === 'none' || style.content === 'normal' || style.display === 'none') continue;
+    const part = document.createElement('span');
+    for (const key of monsterPaintProperties) part.style.setProperty(key, style.getPropertyValue(key));
+    part.textContent = style.content.replace(/^['"]|['"]$/g, '');
+    if (style.backgroundImage !== 'none') jobs.push(inlineMonsterUrls(style.backgroundImage).then(value => { part.style.backgroundImage = value; }));
+    childClones.set(pseudo, part);
+  }
+  await Promise.all(jobs);
+  clone.replaceChildren();
+  if (childClones.has('::before')) clone.append(childClones.get('::before'));
+  for (const child of node.childNodes) clone.append(child.nodeType === 3 ? child.cloneNode() : childClones.get(child) || '');
+  if (childClones.has('::after')) clone.append(childClones.get('::after'));
+  return clone;
+}
+async function monsterPanelTexture(node) {
+  const width = node.matches(monsterBars) ? 256 : Math.max(1, node.offsetWidth), height = Math.max(1, node.offsetHeight), padding = 48;
+  const clone = await monsterMarkup(node);
+  Object.assign(clone.style, { position: 'absolute', left: `${padding}px`, top: `${padding}px`, right: 'auto', bottom: 'auto',
+    width: `${width}px`, height: `${height}px`, transform: 'none', margin: '0', opacity: '1', visibility: 'visible' });
+  const font = await monsterResource('./media/typo/EBGaramond-Regular.ttf');
+  const w = width + padding * 2 + (node.classList.contains('hud-ingame') ? 80 : 0), h = height + padding * 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>@font-face{font-family:'EB Garamond';src:url('${font}')}</style>${new XMLSerializer().serializeToString(clone)}</div></foreignObject></svg>`;
+  const image = new Image(); image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await image.decode();
+  const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(image, 0, 0);
+  return { image: canvas, width, height, padding, w, h };
+}
+async function monsterAsset(scene, source, filter = 'none', body = false) {
+  const resourceSource = persistentMediaMarkup(source), key = `${resourceSource}|${filter}|${body}`;
+  let entry = monsterImages.get(key);
+  if (!entry) {
+    const epoch = monsterCacheEpoch;
+    entry = (async () => {
+      const resource = await loadResource(resourceSource);
+      const width = Math.min(body ? 256 : 512, resource.image.naturalWidth), height = Math.round(width * resource.image.naturalHeight / resource.image.naturalWidth);
+      const frames = resource.decodedFrames || await resource.sharedFrames;
+      let atlas;
+      if (frames) {
+        const columns = Math.max(1, Math.floor(2048 / width)), canvas = document.createElement('canvas');
+        canvas.width = columns * width; canvas.height = Math.ceil(frames.images.length / columns) * height;
+        const ctx = canvas.getContext('2d');
+        frames.images.forEach((frame, i) => ctx.drawImage(frame, i % columns * width, Math.floor(i / columns) * height, width, height));
+        atlas = { canvas, width, height, columns, count: frames.images.length, nativeDurations: frames.durations };
+      } else atlas = await loadSpriteAtlas(resourceSource, width, height);
+      const padding = filter === 'none' ? 0 : 48;
+      if (padding) {
+        const w = width + padding * 2, h = height + padding * 2, canvas = document.createElement('canvas');
+        const columns = Math.max(1, Math.floor(2048 / w)); canvas.width = columns * w; canvas.height = Math.ceil(atlas.count / columns) * h;
+        const ctx = canvas.getContext('2d'); ctx.filter = filter;
+        // Crop first: filtering a source atlas can rasterize every frame for
+        // each drawImage, blocking the main thread for seconds after F5.
+        const frame = document.createElement('canvas'); frame.width = width; frame.height = height;
+        const frameContext = frame.getContext('2d');
+        for (let i = 0; i < atlas.count; i++) {
+          frameContext.clearRect(0, 0, width, height);
+          frameContext.drawImage(atlas.canvas, i % atlas.columns * width, Math.floor(i / atlas.columns) * height, width, height, 0, 0, width, height);
+          ctx.drawImage(frame, i % columns * w + padding, Math.floor(i / columns) * h + padding);
+        }
+        atlas = { ...atlas, canvas, width: w, height: h, columns };
+      }
+      if (epoch !== monsterCacheEpoch) throw new DOMException('Scene disposed', 'AbortError');
+      const name = `monster-asset-${++monsterTextureId}`;
+      const texture = scene.textures.addImage(name, atlas.canvas);
+      for (let frame = 0; frame < atlas.count; frame++) texture.add(frame, 0,
+        frame % atlas.columns * atlas.width, Math.floor(frame / atlas.columns) * atlas.height, atlas.width, atlas.height);
+      return { ...atlas, name, padding, contentWidth: width, contentHeight: height, total: atlas.nativeDurations.reduce((sum, delay) => sum + delay, 0) };
+    })();
+    monsterImages.set(key, entry);
+    entry.catch(() => monsterImages.delete(key));
+  }
+  return entry;
+}
+function disposeMonsterLayer(layer, scene) {
+  layer.cancelled = true; layer.image?.destroy(); layer.tint?.destroy();
+  releaseMonsterPanel(layer.panelEntry, scene); releaseMonsterText(layer.textEntry, scene);
+  if (layer.node instanceof HTMLCanvasElement) {
+    delete layer.node._phaserMonsterTint;
+    if (layer.node.isConnected) renderEntityTint(layer.node);
+  }
+}
+function mountWebGLMonster(entity, box) {
+  if (!monsterWebGLRequested() || entity.class !== 'grouille-doigt' || !box.isConnected || !box.closest('#hexGrid') || monsterViews.has(box)) return;
+  monsterViews.add(box);
+  void attachPhaserMonster(box, async scene => {
+    activeMonsterViews++;
+    const layers = new Map(); let listDirty = true, destroyed = false;
+    const install = (node, kind) => {
+      if (layers.has(node)) return layers.get(node);
+      const ancestors = []; let flipX = false;
+      for (let parent = node; parent && parent !== box; parent = parent.parentElement) {
+        ancestors.push(parent); if (new DOMMatrixReadOnly(monsterStyle(parent).transform).a < 0) flipX = !flipX;
+      }
+      const layer = { node, kind, ancestors, flipX, dirty: true, startedAt: performance.now() }; layers.set(node, layer); return layer;
+    };
+    const refreshList = () => {
+      for (const node of box.querySelectorAll('canvas')) install(node, 'body');
+      for (const node of box.querySelectorAll(monsterPanelSelector)) install(node, 'panel');
+      for (const node of box.querySelectorAll('img')) if (!node.closest('.hud-ingame, .combat-popup-life')) install(node, 'asset');
+      for (const [node, layer] of layers) if (!box.contains(node)) { disposeMonsterLayer(layer, scene); layers.delete(node); }
+      for (const node of box.querySelectorAll(monsterBars)) install(node, 'bar');
+      for (const node of box.querySelectorAll(monsterTexts)) install(node, 'text');
+      listDirty = false;
+    };
+    const prepare = async layer => {
+      if (layer.busy || layer.cancelled || layer.kind === 'text') return;
+      layer.busy = true; layer.dirty = false;
+      try {
+        let texture, panel;
+        if (layer.kind === 'panel' || layer.kind === 'bar') {
+          if (!layer.node.offsetWidth || !layer.node.offsetHeight) return;
+          const signature = monsterPanelKey(layer.node, entity);
+          if (signature === layer.signature) return;
+          const cached = await acquireMonsterPanel(scene, layer.node, signature);
+          if (destroyed || layer.cancelled) { releaseMonsterPanel(cached, scene); return; }
+          releaseMonsterPanel(layer.panelEntry, scene); layer.panelEntry = cached; layer.signature = signature;
+          panel = cached.panel; texture = cached.texture;
+        } else {
+          const source = layer.kind === 'body' ? getEntitySpriteSource(entity) : getAnimatedImageState(layer.node)?.key || layer.node.currentSrc || layer.node.src;
+          if (!source) return;
+          layer.source = source;
+          const filters = [];
+          for (let node = layer.node; node && node !== box; node = node.parentElement) {
+            const filter = getComputedStyle(node).filter; if (filter !== 'none') filters.push(filter);
+          }
+          layer.asset = await monsterAsset(scene, source, filters.join(' ') || 'none', layer.kind === 'body'); texture = layer.asset.name;
+        }
+        if (destroyed || layer.cancelled) return;
+        if (!layer.image) layer.image = scene.add.image(0, 0, texture).setOrigin(0).setVisible(false);
+        else layer.image.setTexture(texture);
+        layer.texture = panel ? texture : null; layer.panel = panel;
+        if (layer.kind === 'body') {
+          const neutral = await monsterAsset(scene, layer.source, 'none', true);
+          if (destroyed || layer.cancelled) return;
+          texture = neutral.name;
+          layer.tint ||= scene.add.image(0, 0, texture).setOrigin(0).setVisible(false);
+          layer.tint.setTexture(texture);
+          layer.tintHandler = layer.node._phaserMonsterTint = store => {
+            layer.tone = [...(store?.values() || [])].sort((a, b) => b.priority - a.priority || b.updatedAt - a.updatedAt)[0];
+          };
+          renderEntityTint(layer.node);
+        }
+      } catch (error) {
+        // Never leave an invisible monster after a failed texture/decoder.
+        fail(error);
+      } finally { layer.busy = false; }
+    };
+    const observer = new MutationObserver(records => {
+      for (const record of records) {
+        if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === 1)) listDirty = true;
+        const target = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+        if (record.type === 'attributes' && target?.classList.contains('sprite-container')) {
+          const body = box.querySelector('canvas'), layer = layers.get(body);
+          if (layer) layer.dirty = true;
+        }
+        if (!target || target.closest(`${monsterBars},${monsterTexts},.battle-timer-display`)) continue;
+        // Panel transforms/opacity are sampled by WebGL, not baked again.
+        if (record.type === 'attributes' && target.matches('.hud-ingame,.attaque-timers,.combat-popup-life')) continue;
+        const panel = target.closest(monsterPanelSelector);
+        if (panel && layers.has(panel)) layers.get(panel).dirty = true;
+      }
+      wakePhaserMonsters();
+    });
+    const destroy = () => {
+      if (destroyed) return; destroyed = true; observer.disconnect(); box.removeAttribute('data-monster-webgl');
+      for (const layer of layers.values()) disposeMonsterLayer(layer, scene); layers.clear();
+      if (--activeMonsterViews === 0) {
+        monsterCacheEpoch++;
+        for (const key of Object.keys(scene.textures.list)) if (key.startsWith('monster-')) scene.textures.remove(key);
+        monsterPanels.clear(); monsterImages.clear(); monsterResources.clear(); monsterTextTextures.clear();
+      }
+    };
+    const fail = error => { if (destroyed) return; destroy(); console.warn('[MonsterWebGL] HTML restored:', error); };
+    let suspended = false;
+    const update = (visibility = new Map(), showHTML = false) => {
+      if (destroyed) return;
+      // HTML menus live in a different stacking context from the shared canvas.
+      // While a menu covers the board, let the original paint keep its layering.
+      if (suspended !== showHTML) {
+        suspended = showHTML; box.dataset.monsterWebgl = suspended ? 'suspended' : 'ready';
+        for (const layer of layers.values()) if (layer.tintHandler) {
+          if (suspended) delete layer.node._phaserMonsterTint;
+          else layer.node._phaserMonsterTint = layer.tintHandler;
+          renderEntityTint(layer.node);
+        }
+      }
+      if (suspended) {
+        for (const layer of layers.values()) { layer.image?.setVisible(false); layer.tint?.setVisible(false); }
+        return;
+      }
+      if (listDirty) refreshList();
+      const style = monsterStyle;
+      let order = 0;
+      for (const layer of layers.values()) {
+        const node = layer.node;
+        if (layer.kind === 'asset' && (getAnimatedImageState(node)?.key || node.currentSrc || node.src) !== layer.source) layer.dirty = true;
+        if (layer.kind === 'body' && getEntitySpriteSource(entity) !== layer.source) layer.dirty = true;
+        if (layer.kind === 'text') {
+          updateMonsterText(layer, scene, style(node));
+        } else if (layer.kind === 'bar') {
+          if (monsterPanelKey(node, entity) !== layer.signature) void prepare(layer);
+        } else if (layer.dirty) void prepare(layer);
+        if (!layer.image) continue;
+        const { opacity, visible } = monsterVisibility(node, visibility), flipX = layer.flipX;
+        const image = layer.image;
+        if (!visible || opacity <= 0) { image.setVisible(false); layer.tint?.setVisible(false); continue; }
+        const rect = node.getBoundingClientRect();
+        image.setVisible(rect.width > 0 && rect.height > 0).setAlpha(opacity);
+        const depth = layer.kind === 'text' ? 5 : layer.kind === 'bar' ? 4 : layer.kind === 'body' ? 1 : layer.kind === 'asset' && node.closest('.cast-animation-container') ? 0 : layer.kind === 'asset' ? 2 : 3;
+        image.setDepth(-100 + depth + order++ / 100000);
+        if (layer.kind === 'text') {
+          const entry = layer.textEntry, sx = rect.width / (node.offsetWidth || 1), sy = rect.height / (node.offsetHeight || 1);
+          const align = style(node).textAlign, offset = align === 'center' ? (rect.width - entry.width * sx) / 2 : align === 'right' ? rect.width - entry.width * sx : 0;
+          image.setPosition(rect.left + offset - entry.padding * sx, rect.top + (rect.height - entry.height * sy) / 2 - entry.padding * sy)
+            .setDisplaySize((entry.width + entry.padding * 2) * sx, (entry.height + entry.padding * 2) * sy);
+        } else if (layer.panel) {
+          const p = layer.panel, sx = rect.width / p.width, sy = rect.height / p.height;
+          image.setPosition(rect.left - p.padding * sx, rect.top - p.padding * sy).setDisplaySize(p.w * sx, p.h * sy);
+        } else {
+          const a = layer.asset, sx = rect.width / a.contentWidth, sy = rect.height / a.contentHeight;
+          image.setPosition(rect.left - a.padding * sx, rect.top - a.padding * sy).setDisplaySize(a.width * sx, a.height * sy).setFlipX(flipX);
+          const playback = getAnimatedImageState(node);
+          let elapsed = (performance.now() - (playback?.startedAt ?? layer.startedAt)) % a.total, frame = 0;
+          while (frame < a.count - 1 && elapsed >= a.nativeDurations[frame]) elapsed -= a.nativeDurations[frame++];
+          image.setFrame(frame);
+        }
+        if (layer.tint) {
+          const tone = layer.tone, rgb = tone?.color.split(',').map(Number) || [0, 0, 0];
+          layer.tint.setPosition(rect.left, rect.top).setDisplaySize(rect.width, rect.height).setFlipX(flipX)
+            .setDepth(image.depth + .000001).setVisible(image.visible && Boolean(tone)).setAlpha(opacity * (tone?.opacity || 0)).setTintFill((rgb[0] << 16) | (rgb[1] << 8) | rgb[2]);
+        }
+      }
+    };
+    refreshList();
+    await Promise.all([...layers.values()].map(prepare));
+    if (!destroyed) {
+      if (!document.getElementById('monster-webgl-style')) {
+        const css = document.createElement('style'); css.id = 'monster-webgl-style';
+        css.textContent = '[data-monster-webgl="ready"] :is(canvas,img,.hud-ingame,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer){visibility:hidden!important}'; document.head.append(css);
+      }
+      box.dataset.monsterWebgl = 'ready';
+      observer.observe(box, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'src'] });
+      update();
+    }
+    return { update, destroy, active: () => !destroyed };
+  }).catch(error => { monsterViews.delete(box); console.warn('[MonsterWebGL]', error); });
+}
+
+window.addEventListener('combatPauseRestored', () => {
+  if (!monsterWebGLRequested()) return;
+  for (const entity of entites) {
+    const box = document.getElementById(`Box_Entite_${entity.id}`);
+    if (box && !monsterViews.has(box)) { box.removeAttribute('data-monster-webgl'); mountWebGLMonster(entity, box); }
+  }
+});

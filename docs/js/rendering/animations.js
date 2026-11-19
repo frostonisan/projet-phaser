@@ -651,6 +651,7 @@ function createCanvasSnapshot(canvas) {
 
 function restoreCanvasSnapshot(canvas, context, snapshot) {
   if (!canvas || !context || !snapshot) return false;
+  if (canvas._phaserMonsterTint) { canvas._phaserMonsterTint(activeEntityTints.get(canvas)); return true; }
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
   return true;
@@ -705,6 +706,10 @@ function ensureOriginalCanvasImage(canvas) {
 }
 
 export function renderEntityTint(canvas) {
+  if (canvas?._phaserMonsterTint) {
+    ensureOriginalCanvasImage(canvas); // Neutral pixels and tint registry still participate in F5.
+    canvas._phaserMonsterTint(activeEntityTints.get(canvas)); return;
+  }
   const ctx = ensureOriginalCanvasImage(canvas);
   if (!ctx) return;
 
@@ -804,6 +809,10 @@ export function removeIddle(sprite) {
 
 // TEINTER CANVAS
 export function entiteTinter(canvas, color, opacity = 0.6) {
+  if (canvas?._phaserMonsterTint) {
+    ensureOriginalCanvasImage(canvas);
+    canvas._phaserMonsterTint(new Map([['direct', { color, opacity, priority: Infinity, updatedAt: clockNow() }]])); return;
+  }
   let ctx = canvas.getContext('2d');
   if (!ctx) {
     console.error(`❌ Impossible d'obtenir le contexte 2D pour canvas id: ${canvas.id}`);
@@ -2081,6 +2090,31 @@ export function animateRecuperation(entity, attack) {
 // One shared Phaser scene projects combat time; it never resolves an attack.
 const phaserFlights = new Map(), phaserEffects = new Map(), phaserMelees = new Map();
 let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
+// The opt-in monster prototype uses the same WebGL context as attacks.
+const phaserMonsterViews = new Map();
+export async function attachPhaserMonster(box, create) {
+  if (globalThis.__combatSimulation || phaserMonsterViews.has(box)) return;
+  const layer = await ensurePhaserLayer();
+  if (!layer.game.renderer.gl || !box.isConnected || phaserMonsterViews.has(box)) return;
+  const view = await create(layer.scene);
+  if (!box.isConnected) { view.destroy(); return; }
+  phaserMonsterViews.set(box, view);
+  layer.host.hidden = false; layer.game.loop.wake();
+}
+export function wakePhaserMonsters() {
+  if (phaserMonsterViews.size) phaserLayer?.game?.loop.wake();
+}
+function updatePhaserMonsters() {
+  if (!phaserMonsterViews.size) return;
+  const visibility = new Map();
+  const showHTML = [...document.querySelectorAll('.menu-map-container > *, .settings-menu, #gameOverMessage')]
+    .some(node => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden');
+  for (const [box, view] of phaserMonsterViews) {
+    if (!box.isConnected || !view.active()) { view.destroy(); phaserMonsterViews.delete(box); }
+    else view.update(visibility, showHTML);
+  }
+}
+
 const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
 // The shared Phaser scene drives board travel while the HTML entity, HUD and
 // shaped hitbox stay together. Logical placement is committed before this view.
@@ -2323,7 +2357,7 @@ function projectileProfile(attacker, data) {
 }
 function hideIdlePhaser() {
   if (!phaserLayer?.game) return;
-  const visible = boardDrag || boardDragPending?.pointer.wasTouch || phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
+  const visible = phaserMonsterViews.size || boardDrag || boardDragPending?.pointer.wasTouch || phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
   phaserLayer.host.hidden = !visible;
   if (!visible && !phaserPlacements.size) phaserLayer.game.loop.sleep();
 }
@@ -2539,6 +2573,7 @@ async function ensurePhaserLayer() {
               const { width, height } = viewport();
               if (this.scale.width !== width || this.scale.height !== height) this.scale.resize(width, height);
               updatePhaserPlacements();
+              updatePhaserMonsters();
               updatePhaserBoardDrag();
               phaserFrameRects = new Map();
               try {
@@ -2556,7 +2591,7 @@ async function ensurePhaserLayer() {
                 for (const entry of phaserEffects.values()) drawProjectile(entry, this);
               } finally { phaserFrameRects = null; }
               hideIdlePhaser();
-              if (isCombatPaused() && !boardDrag) this.game.loop.sleep();
+              if (isCombatPaused() && !boardDrag && !phaserMonsterViews.size) this.game.loop.sleep();
             },
           },
         });

@@ -24,6 +24,7 @@ const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL 
 
 const errors = [];
 async function fixture(config = {}) {
+  config.webglMonster = process.env.MONSTER_WEBGL === "1";
   const page = await browser.newPage({ viewport: { width: config.touch ? 390 : 1280, height: config.touch ? 844 : 800 }, hasTouch: !!config.touch, isMobile: !!config.touch });
   page.on('pageerror', error => errors.push(error.message));
   page.testLog=[];page.on('console',message=>page.testLog.push(message.text()));
@@ -36,7 +37,7 @@ async function fixture(config = {}) {
       await gate;await route.continue().catch(()=>{});
     });
   }
-  await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/index.html${process.env.MONSTER_WEBGL === "1" ? "?monsters=webgl" : ""}`);
   await page.evaluate(async config => {
     window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
     window.Clock = await import("/js/combat/clock.js");
@@ -50,7 +51,7 @@ async function fixture(config = {}) {
     const E = await import("/js/entities/runtime.js");
     const C = await import("/js/rendering/entities.js");
     const S = await import("/js/storage/gameStorage.js");
-    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === (config.gesture ? 7 : 900013));
+    const template = (await import("/js/data/entityTemplates.js")).entitesNest.find(e => e.serial === (config.gesture && !config.webglMonster ? 7 : 900013));
     U.createGameContainer(); U.GameUi(); S.setAdminMode(true); window.levelRunning = 'admin';
     document.querySelector('.worldmap')?.remove();
     const store = await import("/js/storage/sessionStorage.js");
@@ -90,6 +91,7 @@ async function fixture(config = {}) {
       entries.push({ type, at: Timeline.combatNow(), side: data.attacker?.side || data.entity?.side, damage: data.damage });
     });
   }, config);
+  if (process.env.MONSTER_WEBGL === '1' && !config.rendererMode) await page.waitForFunction(() => document.querySelectorAll('[data-monster-webgl="ready"]').length > 0);
   return page;
 }
 
@@ -139,9 +141,10 @@ async function verifyPhaserGestures() {
     const source=()=>page.evaluate(()=>{
       const r=document.getElementById('spriteCanvas_999820').getBoundingClientRect(),points=[];
       // Use the existing shaped hitbox, away from its subpixel boundary.
-      for(let y=Math.max(1,Math.ceil(r.top+4));y<Math.min(innerHeight-1,r.bottom-4);y+=3)
-        for(let x=Math.max(1,Math.ceil(r.left+4));x<Math.min(innerWidth-1,r.right-4);x+=3)
-          if([[0,0],[2,0],[-2,0],[0,2],[0,-2]].every(([dx,dy])=>document.elementFromPoint(x+dx,y+dy)?.closest('#DragSprite_999820')))
+      const margin=Math.min(4,r.width/10,r.height/10),radius=Math.min(2,r.width/30,r.height/30),step=Math.min(3,margin);
+      for(let y=Math.max(1,r.top+margin);y<Math.min(innerHeight-1,r.bottom-margin);y+=step)
+        for(let x=Math.max(1,r.left+margin);x<Math.min(innerWidth-1,r.right-margin);x+=step)
+          if([[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius]].every(([dx,dy])=>document.elementFromPoint(x+dx,y+dy)?.closest('#DragSprite_999820')))
             points.push({x,y});
       if(points.length)return points.sort((a,b)=>Math.hypot(a.x-r.left-r.width/2,a.y-r.top-r.height/2)-Math.hypot(b.x-r.left-r.width/2,b.y-r.top-r.height/2))[0];
       throw Error('Monster hitbox is not reachable');

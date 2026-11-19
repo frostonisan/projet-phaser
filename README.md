@@ -357,3 +357,60 @@ concernent le préchargement du cache et son activation pour la fumée et le
 mysticisme : leur rendu et leur nettoyage sont couverts par les tests de pixels,
 de ressources et de drag/pause/F5 relancés sur la version finale. Les règles
 de combat n'ont pas été modifiées.
+
+
+## Prototype de monstre WebGL — v0.96.0-dev
+
+Activer avec [le lien expérimental](https://frostonisan.github.io/projet-phaser/?monsters=webgl).
+Seul le **Grouille-doigt** utilise cette voie sur le plateau. Sans ce paramètre,
+le rendu existant reste actif. Les corps, jauges, textes, icônes et effets de cette
+espèce sont peints dans la scène Phaser/WebGL déjà utilisée pour les attaques.
+Aucun fichier de jeu, média ni dépendance ajouté ; les changements restent dans
+`rendering/entities.js`, `rendering/animations.js` et le chargeur existant.
+
+Ce prototype conserve encore le HTML comme adaptateur de disposition, de poses
+CSS et de hitboxes. Les pixels sont masqués une fois les textures prêtes. Les
+menus retrouvent temporairement l'affichage HTML afin de conserver leurs couches.
+Un échec de chargement restaure aussi cet affichage. Les textures partagées sont
+libérées lorsque le dernier acteur WebGL quitte le plateau. Les règles, le
+simulateur et le format des sauvegardes restent inchangés.
+
+Les graphismes existants servent de sources aux textures. La reproduction n'est
+pas encore parfaite : les rotations sont projetées depuis les rectangles HTML
+et certains filtres/pulsations sont échantillonnés lors de la création de la texture.
+Le corps est préparé au plus à 256 pixels de large, les effets à 512. Les filtres
+s'appliquent à une image extraite avant assemblage de l'atlas : filtrer l'atlas
+entier par image provoquait un blocage de plusieurs secondes après F5.
+
+Comparaison avec 0.95.2-dev sur Chrome, WebGL matériel AMD Radeon, 1920 × 1080 :
+deux combats de 12 secondes par taille et version, ordre alterné, sources figées,
+chargeur de ressources exécuté des deux côtés et aucun autre navigateur de test
+concurrent. Le temps d'initialisation précède la mesure ; les premières créations
+de textures d'effets pendant le combat en font partie.
+
+| Monstres au total | Image moyenne HTML / prototype (ms) | P95 HTML / prototype (ms) | Impacts HTML / prototype |
+| --- | --- | --- | --- |
+| 40 | 149 / 78 | 275 / 258 | 274.0 / 64.0 |
+| 80 | 283 / 117 | 575 / 316 | 252.5 / 64.5 |
+
+**Cette version ne valide pas un gain de fluidité du combat.** Certaines images
+arrivent plus régulièrement, mais environ quatre fois moins d'impacts sont traités
+pendant la même durée. Une animation plus fréquente accompagnée d'un combat qui
+avance moins vite n'est pas un succès. Le prototype reste donc désactivé par défaut.
+La prochaine étape technique consiste à piloter les sprites et jauges directement
+avec l'état du combat, en supprimant les lectures HTML par image et les conversions
+de panneaux pendant les échanges. Il ne faut pas généraliser cet adaptateur aux
+autres espèces.
+
+Mesures, sources figées, captures et journaux : `outputs/webgl-monster/final/`.
+Les contrôles du prototype couvrent la souris, le tactile, les swaps, grabs,
+déplacements forcés, la pause, F5, les morts et le rendu indisponible. La création
+des textes ne consomme aucun tirage du hasard des combats.
+
+Validation complémentaire : quatre comparaisons déterministes à 40/80 monstres,
+graines 1701/1702, cinq secondes simulées ; résultats et journaux complets identiques
+avant/après, y compris les valeurs intermédiaires. Le premier calcul à 80 a dépassé
+120 secondes avec l'aperçu animé encore actif. Le harnais retire désormais cet
+aperçu avant le calcul isolé ; les comparaisons à 80 ont été reprises avec les mêmes
+sources et les huit mesures de combats visibles conservées. Contrôles statiques,
+imports, ressources et tests Node réussis.

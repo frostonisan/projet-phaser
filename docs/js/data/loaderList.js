@@ -330,6 +330,7 @@ function discardAnimatedImage(image, state) {
   animatedImages.delete(image);
   assignments.delete(image);
 }
+export function getAnimatedImageState(image) { return animatedImages.get(image) || null; }
 function tickSharedGifs() {
   sharedGifTick = null;
   let active = false;
@@ -344,7 +345,10 @@ function tickSharedGifs() {
     let elapsed = Math.max(0, now - state.startedAt) % state.frames.total, frame = 0;
     while (frame < state.frames.urls.length - 1 && elapsed >= state.frames.durations[frame])
       elapsed -= state.frames.durations[frame++];
-    if (frame !== state.frame) { image.src = state.frames.urls[frame]; state.frame = frame; }
+    if (frame !== state.frame) {
+      if (!image.closest('[data-monster-webgl="ready"]')) image.src = state.frames.urls[frame];
+      state.frame = frame;
+    }
   }
   if (active) sharedGifTick = requestAnimationFrame(tickSharedGifs);
 }
