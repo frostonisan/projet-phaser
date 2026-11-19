@@ -2062,6 +2062,101 @@ export function animateRecuperation(entity, attack) {
 const phaserFlights = new Map(), phaserEffects = new Map(), phaserMelees = new Map();
 let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
 const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
+// The shared Phaser scene drives board travel while the HTML entity, HUD and
+// shaped hitbox stay together. Logical placement is committed before this view.
+const phaserPlacements = new Map();
+function placementProgress(visual) {
+  const x = Math.max(0, Math.min(1, (clockNow() - visual.startedAt) / 420));
+  if (x === 0 || x === 1) return x;
+  // Match the existing cubic-bezier(.22,.65,.3,1), including interrupted moves.
+  const cubic = (t, a, b) => 3 * (1-t) ** 2 * t * a + 3 * (1-t) * t * t * b + t ** 3;
+  let low = 0, high = 1;
+  for (let i = 0; i < 24; i++) {
+    const t = (low + high) / 2;
+    if (cubic(t, .22, .3) < x) low = t; else high = t;
+  }
+  return cubic((low + high) / 2, .65, 1);
+}
+function validPlacement(entry) {
+  return entry.box.isConnected && !entry.entity.isDEAD && !entry.entity.hasFled
+    && String(entry.entity.position) === entry.visual.position
+    && entry.box.closest('.hex')?.dataset.position === entry.visual.position;
+}
+export function getEntityPlacementOrigin(entity) {
+  const entry = phaserPlacements.get(String(entity.id));
+  if (!entry || !validPlacement(entry)) return null;
+  const { from, to } = entry.visual, t = placementProgress(entry.visual);
+  return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+}
+export function clearEntityPlacement(id) {
+  const entry = phaserPlacements.get(String(id));
+  if (!entry) return;
+  phaserPlacements.delete(String(id)); clearTimeout(entry.timer);
+  const { previousTransform, previousPriority } = entry.visual;
+  if (previousTransform) entry.box.style.setProperty('transform', previousTransform, previousPriority);
+  else entry.box.style.removeProperty('transform');
+  entry.smoke?.remove(); hideIdlePhaser();
+}
+export function clearEntityPlacements() {
+  for (const id of [...phaserPlacements.keys()]) clearEntityPlacement(id);
+}
+function updatePhaserPlacements() {
+  for (const entry of phaserPlacements.values()) {
+    if (!validPlacement(entry) || clockNow() >= entry.visual.startedAt + 600) {
+      clearEntityPlacement(entry.entity.id); continue;
+    }
+    const { from, to } = entry.visual, remaining = 1 - placementProgress(entry.visual);
+    const dx = Number(((from.x-to.x)*remaining).toFixed(6)), dy = Number(((from.y-to.y)*remaining).toFixed(6));
+    const transform = `translate(${dx}px, ${dy}px)`;
+    if (entry.box.style.transform !== transform) entry.box.style.transform = transform;
+  }
+}
+export function animateEntityPlacement(entity, from, to, saved = null) {
+  if (globalThis.__combatSimulation) return;
+  const box = document.getElementById(`Box_Entite_${entity.id}`);
+  if (!box) return;
+  clearEntityPlacement(entity.id);
+  const visual = saved || { renderer: 'phaser', from, to, position: String(entity.position), startedAt: clockNow(),
+    previousTransform: box.style.getPropertyValue('transform'), previousPriority: box.style.getPropertyPriority('transform') };
+  // A saved inline offset belongs to this renderer, not to the base entity.
+  if (saved) {
+    if (visual.previousTransform) box.style.setProperty('transform', visual.previousTransform, visual.previousPriority);
+    else box.style.removeProperty('transform');
+  }
+  if (!visual.from || !visual.to || Math.hypot(visual.from.x-visual.to.x, visual.from.y-visual.to.y) < .1
+    || matchMedia('(prefers-reduced-motion: reduce)').matches || clockNow() >= visual.startedAt + 600) return;
+  const entry = { entity, box, visual, timer: null, smoke: null };
+  if (!validPlacement(entry)) return;
+  phaserPlacements.set(String(entity.id), entry);
+  // Project immediately: cold loading must never flash the monster at arrival.
+  updatePhaserPlacements();
+  const smoke = entry.smoke = new Image(); smoke.className = 'entity-footprint-smoke'; smoke.alt = '';
+  smoke.dataset.phaserPlacement = String(entity.id);
+  (box.querySelector('.drag-box') || box).append(smoke);
+  void playCachedGif(smoke, './media/assets/effects/dodge-smoke.gif');
+  entry.timer = setTimeout(() => clearEntityPlacement(entity.id), Math.max(0, visual.startedAt + 600 - clockNow()));
+  void ensurePhaserLayer().then(layer => {
+    if (phaserPlacements.get(String(entity.id)) !== entry) return;
+    updatePhaserPlacements(); layer.game.loop.wake();
+  }).catch(error => {
+    if (phaserPlacements.get(String(entity.id)) === entry) clearEntityPlacement(entity.id);
+    console.warn('[PhaserPlacement]', error);
+  });
+}
+for (const event of ['stageInterfaceClosing', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearEntityPlacements);
+for (const event of ['combatPaused', 'combatPauseRestored']) window.addEventListener(event, updatePhaserPlacements);
+registerCombatState('placements', () => {
+  updatePhaserPlacements();
+  return [...phaserPlacements.values()].map(entry => ({ entityId: entry.entity.id, visual: { ...entry.visual } }));
+}, (saved, { entities }) => {
+  clearEntityPlacements();
+  document.querySelectorAll('[data-phaser-placement]').forEach(node => node.remove());
+  for (const entry of saved) {
+    const entity = entities.find(candidate => String(candidate.id) === String(entry.entityId));
+    if (entity) animateEntityPlacement(entity, null, null, entry.visual);
+  }
+});
+
 // Phaser owns the gesture and its temporary preview. The board owns the drop.
 // Its input target is the document, so the transparent canvas never covers HTML
 // buttons, inventory drops or the existing shaped monster hitboxes.
@@ -2088,6 +2183,7 @@ export function cancelPhaserBoardDrag() {
   for (const pointer of input.manager.pointers) input.setDragState(pointer, 0);
 }
 function updatePhaserBoardDrag() {
+  if (boardDragPending && !boardDragHooks.valid(boardDragPending.view)) { cancelPhaserBoardDrag(); return; }
   if (!boardDrag) return;
   if (!boardDragHooks.valid(boardDrag.view)) { cancelPhaserBoardDrag(); return; }
   const { pointer, image, offsetX, offsetY } = boardDrag;
@@ -2209,7 +2305,7 @@ function hideIdlePhaser() {
   if (!phaserLayer?.game) return;
   const visible = boardDrag || boardDragPending?.pointer.wasTouch || phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
   phaserLayer.host.hidden = !visible;
-  if (!visible) phaserLayer.game.loop.sleep();
+  if (!visible && !phaserPlacements.size) phaserLayer.game.loop.sleep();
 }
 function destroyProjectileDisplay(entry) {
   entry.graphic?.destroy(); entry.sprite?.destroy(); entry.impactSprite?.destroy();
@@ -2233,7 +2329,7 @@ function clearPhaserProjectiles() {
 for (const event of ['projectileVisualsCleared', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearPhaserProjectiles);
 for (const event of ['combatResumed', 'resize']) window.addEventListener(event, () => {
   const wake = () => {
-    if (boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size) phaserLayer?.game?.loop.wake();
+    if (boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size || phaserPlacements.size) phaserLayer?.game?.loop.wake();
   };
   // Resize handlers also rescale the HTML board. Draw after those handlers,
   // including when the combat clock is paused and the scene draws only once.
@@ -2422,6 +2518,7 @@ async function ensurePhaserLayer() {
             update() {
               const { width, height } = viewport();
               if (this.scale.width !== width || this.scale.height !== height) this.scale.resize(width, height);
+              updatePhaserPlacements();
               updatePhaserBoardDrag();
               phaserFrameRects = new Map();
               try {

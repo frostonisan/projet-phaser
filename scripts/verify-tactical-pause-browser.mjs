@@ -28,6 +28,14 @@ async function fixture(config = {}) {
   page.on('pageerror', error => errors.push(error.message));
   page.testLog=[];page.on('console',message=>page.testLog.push(message.text()));
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
+  if (config.reducedMotion) await page.emulateMedia({reducedMotion:'reduce'});
+  if (config.rendererMode) {
+    let release; const gate=new Promise(done=>release=done);page.releaseRenderer=release;
+    await page.route('**/vendor/phaser-3.90.0.esm.min.js',async route=>{
+      if(config.rendererMode==='unavailable')return route.abort();
+      await gate;await route.continue().catch(()=>{});
+    });
+  }
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
     window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
@@ -183,6 +191,10 @@ async function verifyPhaserGestures() {
     await page.evaluate(async()=>{const C=await import('/js/combat/control.js');C.addEntityControl(E.entites[0],'immobilisation',Timeline.combatNow(),Timeline.combatNow()+5000);});
     await gesture('1');assert.deepEqual(await state(),moved,'Immobilisation retains its rule and charge');
     await page.evaluate(async()=>{(await import('/js/combat/control.js')).endEntityControl(E.entites[0],'immobilisation');});
+    await down();await move(await target('1'));await page.waitForFunction(()=>Drag.testBoardGesture().active);
+    await page.evaluate(async()=>{(await import('/js/combat/control.js')).addEntityControl(E.entites[0],'immobilisation',Timeline.combatNow(),Timeline.combatNow()+5000);});
+    await up();await clean();assert.deepEqual(await state(),moved,'Immobilisation arriving during the gesture rejects the drop without charging it');
+    await page.evaluate(async()=>{(await import('/js/combat/control.js')).endEntityControl(E.entites[0],'immobilisation');});
     // Repeated reconstruction binds one gesture, with one cost per accepted drop.
     await page.evaluate(async()=>{const I=await import('/js/board/interaction.js');for(let i=0;i<5;i++)I.restoreEntityDragAndDrop();});
     await gesture('1');await ready(page);assert.equal((await state()).charges[0],moved.charges[0]-cost);
@@ -210,17 +222,159 @@ async function verifyPhaserGestures() {
     await page.evaluate(()=>Clock.setCombatInteractionBlocked(true));await gesture('4');assert.deepEqual(await state(),beforeBlocked,'Absolute pause blocks placement');
     await page.evaluate(()=>Clock.setCombatInteractionBlocked(false));
     await page.keyboard.press('Space');await page.waitForFunction(()=>!Clock.isCombatPaused());
-    // Let the restored swap's existing HTML animation settle before picking its moving hitbox.
+    // Let the restored swap settle before picking its moving hitbox.
     await page.waitForTimeout(650);
     const live=await state();await gesture('4');const afterLive=await state();assert.equal(afterLive.positions[0],'4');assert.equal(afterLive.charges[0],live.charges[0]-cost);
+    // A forced move takes precedence even between pointerdown and dragstart.
+    await page.evaluate(async()=>{
+      await P.pauseCombat();window.B=await import('/js/board/controller.js');window.FX=await import('/js/combat/effects.js');
+      const grid=document.getElementById('hexGrid'),hex=document.createElement('div');
+      hex.className='hex Neutral';hex.dataset.position='5';hex.style.cssText='position:absolute;left:200px;top:50px;width:180px;height:200px';
+      hex.innerHTML='<div class="socle gueux"></div>';grid.append(hex);
+      for(const [id,row,col] of [['1',0,0],['2',0,2],['3',1,0],['4',1,1],['5',0,1]])Object.assign(grid.querySelector(`[data-position="${id}"]`).dataset,{row:String(row),col:String(col)});
+      B.invalidateFootprintGeometry(grid);B.syncEntityFootprints();
+      window.resetForGrab=()=>B.commitEntityPlacements(B.planEntityPlacements([
+        {entity:E.entites[0],hex:B.getBoardHex('1')},{entity:E.entites[2],hex:B.getBoardHex('3')}]),{animate:false});
+      resetForGrab();
+    });await ready(page);
+    for(const active of [false,true]){
+      await page.evaluate(()=>resetForGrab());const beforeGrab=await state();
+      await down();if(active){await move(await target('4'));await page.waitForFunction(()=>Drag.testBoardGesture().active);}
+      else assert.equal((await page.evaluate(()=>Drag.testBoardGesture())).pending,true);
+      assert.equal(await page.evaluate(()=>FX.grab(E.entites[0],{effectIcon:'./media/assets/ui/picto-grab.svg',effectDistance:1},E.entites[1])),true);
+      await page.waitForFunction(()=>!Drag.testBoardGesture().active&&!Drag.testBoardGesture().pending);
+      await up();await clean();await ready(page);
+      const afterGrab=await state();assert.equal(afterGrab.positions[0],'5');assert.deepEqual(afterGrab.charges,beforeGrab.charges,'A grab cancels the gesture without charging it');
+    }
+    await page.reload();await ready(page);await attach(page);
+    await page.evaluate(async()=>{window.Drag=await import('/js/rendering/animations.js');});
+    await page.waitForFunction(()=>Drag.isPhaserBoardDragReady());
+    assert.equal(await page.evaluate(()=>Clock.captureCombatState().placements.length),1,'F5 retains the paused grab');
+    const beforeDraggedGrab=await state();await gesture('4');await ready(page);
+    assert.equal((await state()).positions[0],'4');assert.equal((await state()).charges[0],beforeDraggedGrab.charges[0]-cost);
+    assert.deepEqual(await page.evaluate(()=>Clock.captureCombatState().placements),[],'A new manual drop releases the old grab offset');
+    await page.evaluate(()=>dropEntity('1'));await ready(page);
+    assert.equal((await state()).positions[0],'1');assert.equal((await state()).charges[0],beforeDraggedGrab.charges[0]-2*cost,'Native external drops keep the same placement command');
     await page.evaluate(()=>G.StopGame({preserveScene:true}));await clean();
-    console.log('PASS Phaser '+mode+': real gesture, preview, costs, blocked moves, cancellation, swap, pause/F5, restored and live combat');
+    console.log('PASS Phaser '+mode+': real gesture, costs, blocked moves, cancellation, swap, grab during pending/active drag, pause/F5, restored moving hitbox and native drop');
     await page.close();
   }
 }
 
+async function verifyPhaserPlacements() {
+  const page = await fixture({speed:50000,gesture:true}); await attach(page);
+  await page.evaluate(async () => {
+    window.B = await import('/js/board/controller.js'); window.An = await import('/js/rendering/animations.js');
+    window.FX = await import('/js/combat/effects.js');
+    const grid = document.getElementById('hexGrid'); grid.style.width = '1050px'; grid.style.height = '600px';
+    for (let row=0; row<3; row++) for (let col=0; col<6; col++) {
+      const id = row===1 && col===0 ? '1' : row===1 && col===4 ? '2' : `move-${row}-${col}`;
+      let hex = grid.querySelector(`[data-position="${id}"]`);
+      if (!hex) { hex=document.createElement('div');hex.className='hex Neutral';hex.dataset.position=id;hex.innerHTML='<div class="socle gueux"></div>';grid.append(hex); }
+      Object.assign(hex.dataset,{row:String(row),col:String(col)});
+      hex.style.cssText=`position:absolute;left:${col*150+row%2*75}px;top:${row*150}px;width:150px;height:180px`;
+    }
+    B.invalidateFootprintGeometry(grid);B.syncEntityFootprints();
+    G.startGame();(await import('/js/items/resourceStocks.js')).addMovementCharges(E.entites[0],40);
+    window.baseCharges=E.entites[0].stats.shift.current;
+    window.readPlacement=()=>({now:Clock.clockNow(),state:Clock.captureCombatState().placements,
+      positions:E.entites.map(e=>e.position),charges:E.entites.map(e=>e.stats.shift.current),
+      transforms:E.entites.map(e=>document.getElementById(`Box_Entite_${e.id}`).style.transform)});
+  });
+  await page.waitForFunction(()=>An.isPhaserBoardDragReady());
+  await page.evaluate(()=>{
+    document.querySelectorAll('.entitylootContainer, #black-overlay, .worldmap').forEach(node=>node.remove());
+    document.getElementById('game-windows').style.opacity='1';
+  });
+  const grab = await page.evaluate(async () => {
+    const Model = await import('/js/board/model.js'), Rules = await import('/js/board/placementRules.js');
+    const expected=Rules.pullBoardDestination(Model.restoreBoardState(B.getBoardSnapshot()),E.entites[0].id,E.entites[1].id,2);
+    const moved=FX.grab(E.entites[0],{effectIcon:'./media/assets/ui/picto-grab.svg',effectDistance:2},E.entites[1]);
+    return {expected,moved,position:E.entites[0].position,charges:E.entites[0].stats.shift.current,baseCharges,
+      state:Clock.captureCombatState().placements,waapi:document.getElementById('Box_Entite_999820').getAnimations().filter(a=>a.effect.getKeyframes().some(f=>f.transform)).length};
+  });
+  assert.equal(grab.moved,true);assert.equal(grab.position,grab.expected);assert.equal(grab.charges,grab.baseCharges);
+  assert.equal(grab.state.length,1);assert.equal(grab.state[0].visual.renderer,'phaser');assert.equal(grab.waapi,0);
+  const initialTransform=await page.locator('#Box_Entite_999820').evaluate(node=>node.style.transform);
+  await page.waitForTimeout(80);
+  assert.notEqual(await page.locator('#Box_Entite_999820').evaluate(node=>node.style.transform),initialTransform,
+    'The Phaser scene advances the live trajectory without requesting a checkpoint');
+  await page.evaluate(()=>P.pauseCombat());await ready(page);
+  const paused=await page.evaluate(()=>readPlacement());assert.equal(paused.state.length,1);
+  assert.ok(paused.now>paused.state[0].visual.startedAt && paused.now<paused.state[0].visual.startedAt+420,'Pause catches a moving grab');
+  await page.waitForTimeout(850);assert.deepEqual(await page.evaluate(()=>readPlacement()),paused,'Travel and smoke survive beyond the former wall-time cleanup');
+  await page.screenshot({path:resolve(output,'phaser-grab-paused.png')});
+  await page.reload();await ready(page);await attach(page);
+  await page.evaluate(async()=>{
+    window.B=await import('/js/board/controller.js');window.An=await import('/js/rendering/animations.js');window.FX=await import('/js/combat/effects.js');
+    window.readPlacement=()=>({now:Clock.clockNow(),state:Clock.captureCombatState().placements,
+      positions:E.entites.map(e=>e.position),charges:E.entites.map(e=>e.stats.shift.current),
+      transforms:E.entites.map(e=>document.getElementById(`Box_Entite_${e.id}`).style.transform)});
+  });
+  assert.deepEqual(await page.evaluate(()=>readPlacement()),paused,'F5 restores the exact movement, offsets and charges');
+  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(150);
+  assert.deepEqual(await page.evaluate(()=>readPlacement()),paused,'Mobile resize preserves board-local travel');
+  await page.screenshot({path:resolve(output,'phaser-grab-mobile.png')});
+  await page.setViewportSize({width:1280,height:800});
+  const chained=await page.evaluate(()=>{
+    const previous=An.getEntityPlacementOrigin(E.entites[0]);const moved=FX.grab(E.entites[0],{effectIcon:'./media/assets/ui/picto-grab.svg',effectDistance:1},E.entites[1]);
+    return {previous,moved,state:Clock.captureCombatState().placements,charges:E.entites[0].stats.shift.current};
+  });
+  assert.equal(chained.moved,true);assert.deepEqual(chained.state[0].visual.from,chained.previous,'A second grab starts at the visible point');
+  assert.equal(chained.charges,paused.charges[0]);
+  const blocked=await page.evaluate(()=>({moved:FX.grab(E.entites[0],{effectIcon:'./media/assets/ui/picto-grab.svg',effectDistance:0},E.entites[1]),state:Clock.captureCombatState().placements}));
+  assert.equal(blocked.moved,false);assert.deepEqual(blocked.state,chained.state,'A refused grab does not replace travel');
+  await ready(page);await page.keyboard.press('Space');await page.waitForFunction(()=>!Clock.isCombatPaused());
+  await page.waitForFunction(()=>Clock.captureCombatState().placements.length===0);
+  assert.equal(await page.locator('[data-phaser-placement]').count(),0);assert.equal(await page.locator('#Box_Entite_999820').evaluate(n=>n.style.transform),'');
+  await page.evaluate(()=>P.pauseCombat());await ready(page);
+  const varied=await page.evaluate(async()=>{
+    const actor=E.entites[0],enemy=E.entites[1],model=await import('/js/board/model.js'),rules=await import('/js/board/placementRules.js');
+    const charges=actor.stats.shift.current,candidates=rules.adjacentBoardDestinations(model.restoreBoardState(B.getBoardSnapshot()),actor.id);
+    const confused=B.moveEntityRandomly(actor,()=>0,{effectName:'confusion'});
+    const confusion={moved:confused,position:actor.position,expected:candidates[0],charges:actor.stats.shift.current,state:Clock.captureCombatState().placements};
+    const positions=E.entites.map(e=>e.position),afterConfusion=actor.stats.shift.current;
+    const swapped=B.swapEntitiesFromEffect(enemy,actor,enemy,{type:[],forcedMovement:true});
+    const swap={moved:swapped,positions:E.entites.map(e=>e.position),before:positions,charges:actor.stats.shift.current,state:Clock.captureCombatState().placements};
+    B.commitEntityPlacements(B.planEntityPlacements([{entity:actor,hex:B.getBoardHex('1')},{entity:enemy,hex:B.getBoardHex('move-1-1')}]),{animate:false});
+    const grown=B.setEntitySizeInCells(actor,2,{push:true,animate:true});
+    const growth={valid:grown.valid,pushed:[...grown.pushed],state:Clock.captureCombatState().placements,footprint:B.entityFootprint(actor).map(h=>h.dataset.position)};
+    actor.isDEAD=true;B.releaseEntityFootprint(actor);
+    const dead=Clock.captureCombatState().placements;
+    G.StopGame({preserveScene:true});
+    return {charges,afterConfusion,confusion,swap,growth,dead,stopped:Clock.captureCombatState().placements};
+  });
+  assert.equal(varied.confusion.moved,true);assert.equal(varied.confusion.position,varied.confusion.expected);assert.ok(varied.confusion.charges<varied.charges);assert.equal(varied.confusion.state.length,1);
+  assert.equal(varied.swap.moved,true);assert.deepEqual(varied.swap.positions,[...varied.swap.before].reverse());assert.equal(varied.swap.charges,varied.afterConfusion);assert.equal(varied.swap.state.length,2);
+  assert.equal(varied.growth.valid,true);assert.ok(varied.growth.pushed.includes('999821'));assert.equal(varied.growth.footprint.length,2);assert.equal(varied.growth.state.length,2);
+  assert.ok(varied.dead.every(e=>e.entityId!==999820));assert.deepEqual(varied.stopped,[]);assert.equal(await page.locator('[data-phaser-placement]').count(),0);
+  await page.close();console.log('PASS Phaser placements: grab, chained/refused grab, confusion, swap, size push, pause/F5, resize, death and stop');
+  for(const mode of ['reduced','cold','unavailable']){
+    const fallback=await fixture({speed:50000,gesture:true,reducedMotion:mode==='reduced',rendererMode:mode==='reduced'?null:mode});
+    await fallback.evaluate(async()=>{
+      window.B=await import('/js/board/controller.js');
+      const grid=document.getElementById('hexGrid'),hex=document.createElement('div');
+      hex.className='hex Neutral';hex.dataset.position='3';hex.style.cssText='position:absolute;left:200px;top:280px;width:180px;height:200px';
+      grid.append(hex);B.invalidateFootprintGeometry(grid);B.syncEntityFootprints();G.startGame();
+      window.oldCharges=E.entites[0].stats.shift.current;
+      if(!B.commitEntityPlacements(B.planEntityPlacements([{entity:E.entites[0],hex}]),{animate:true}))throw Error('Placement refused');
+    });
+    if(mode==='cold')assert.equal(await fallback.evaluate(()=>Clock.captureCombatState().placements.length),1,'Cold loading applies the starting offset immediately');
+    await fallback.waitForTimeout(750);
+    assert.deepEqual(await fallback.evaluate(()=>({position:E.entites[0].position,charged:E.entites[0].stats.shift.current!==oldCharges,
+      state:Clock.captureCombatState().placements,transform:document.getElementById('Box_Entite_999820').style.transform,smoke:document.querySelectorAll('[data-phaser-placement]').length})),
+      {position:'3',charged:false,state:[],transform:'',smoke:0},mode+' retains the logical placement and clears its visual');
+    if(mode==='cold'){
+      fallback.releaseRenderer();await fallback.waitForFunction(async()=>(await import('/js/rendering/animations.js')).isPhaserBoardDragReady());
+      assert.deepEqual(await fallback.evaluate(()=>Clock.captureCombatState().placements),[],'Late Phaser loading cannot revive an expired movement');
+    }
+    await fallback.evaluate(()=>G.StopGame({preserveScene:true}));await fallback.close();
+  }
+  console.log('PASS Phaser placements: reduced motion, cold and unavailable renderer keep placement and charges');
+}
+
 try {
-  if (!process.env.DRAG_TEST_ONLY) {
+  if (!process.env.DRAG_TEST_ONLY && !process.env.MOVEMENT_TEST_ONLY) {
   const page=await fixture({speed:50000}); await attach(page);
   await page.evaluate(async()=>{
     const S=await import("/js/storage/gameStorage.js");
@@ -347,6 +501,7 @@ try {
   console.log('PASS queued flee starts only after resume and survives F5');
   await page.close();
   }
-  await verifyPhaserGestures();
+  if (!process.env.MOVEMENT_TEST_ONLY) await verifyPhaserGestures();
+  await verifyPhaserPlacements();
   assert.deepEqual(errors,[]);
 } finally {await browser.close();await new Promise(done=>server.close(done));}

@@ -881,3 +881,34 @@ Tests étendus dans les suites existantes : gestes souris et tactiles natifs,
 coûts, cases interdites, immobilisation, annulations, second doigt, échange,
 réinitialisation, disparition, pause/F5 et reprise. Diagnostics et captures :
 `outputs/phaser-drag/`, `outputs/tactical-pause/`. Aucun fichier de jeu ajouté.
+
+
+## Déplacements forcés pilotés par Phaser — v0.95.0-dev
+
+`board/controller.js` conserve la validation et la publication atomique du
+placement logique. Il confie ensuite la projection du mouvement à
+`rendering/animations.js`, qui réutilise la scène Phaser commune. Le grab,
+la confusion, les échanges et les changements de taille passent déjà par cette
+commande. Le simulateur sort avant la création de toute animation.
+
+L’ancien registre de mouvements et ses animations Web Animations quittent le
+contrôleur du plateau. Le registre de rendu conserve le départ et l’arrivée en
+coordonnées locales du plateau, l’échéance de l’horloge de combat et le style
+initial de la boîte HTML. La scène calcule le même trajet de 420 ms avec la même
+courbe d’accélération, puis applique la translation à l’ensemble monstre/HUD/hitbox.
+Il ne s’agit pas encore de sprites de plateau entièrement dessinés dans le canvas.
+La fumée conserve son GIF natif et disparaît à 600 ms de temps de combat.
+
+La section de pause `placements` conserve uniquement ces données visuelles et
+l’identifiant de l’entité. Elle est restaurée après les effets de taille et de sol,
+avant les mêlées et les vols. F5 réapplique une seule fois le décalage sauvegardé.
+Un mouvement interrompu repart de sa position interpolée ; mort, retrait, arrêt
+ou remplacement du placement libèrent le décalage, la fumée et le délai associé.
+Le chargement tardif de Phaser ne peut pas ressusciter un mouvement terminé.
+
+La scène vérifie aussi les gestes en attente, entre l’appui et le seuil de drag :
+un grab invalide l’origine et annule le geste. Les tests souris et tactiles couvrent
+ces deux moments, l’immobilisation pendant le geste, le déplacement d’un monstre
+encore en trajet après F5 et la compatibilité du dépôt HTML. Les contrôles de rendu
+couvrent aussi le mouvement réduit, le moteur lent ou indisponible, la pause,
+le redimensionnement, la continuité des grabs, la mort et l’arrêt.

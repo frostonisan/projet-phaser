@@ -85,7 +85,9 @@ async function spatialAudit() {
   check(document.getElementById(`spriteContainer_${a.id}`)===sprite,'Growth preserves sprite/canvas identity');
   check(sprite.parentElement.style.getPropertyValue('--entity-size-scale')==='2.5','Six cells grows the sprite through a separate scale wrapper');
   if(!globalThis.__combatSimulation) {
-    check(document.getElementById(`Box_Entite_${b.id}`).getAnimations().length>0,'Pushed neighbor slides using WAAPI');
+    const moving=Clock.captureCombatState().placements.find(entry=>entry.entityId===b.id);
+    check(moving?.visual.renderer==='phaser' && document.getElementById(`Box_Entite_${b.id}`).style.transform.startsWith('translate('),
+      'Pushed neighbor follows the shared Phaser placement trajectory');
     check(Boolean(document.getElementById(`Box_Entite_${b.id}`).querySelector('.entity-footprint-smoke')),'Pushed neighbor emits foot smoke');
   }
   invariant();

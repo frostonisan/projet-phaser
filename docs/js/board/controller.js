@@ -22,7 +22,8 @@ import {
 import { createSoundManager } from "../rendering/sound.js";
 import { entites } from "../entities/runtime.js";
 import { saveEntityPositionState, recordEntityCombatMovement, recordEntityCombatProc } from "../storage/entityStorage.js";
-import { notifyProjectileTargetMoved } from "../rendering/animations.js";
+import { notifyProjectileTargetMoved, animateEntityPlacement, getEntityPlacementOrigin,
+  clearEntityPlacement, clearEntityPlacements } from "../rendering/animations.js";
 import { attemptAlterationResistance } from "../combat/statistics.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 
@@ -590,9 +591,8 @@ registerCombatState('board', () => ({ matchingBiome }), saved => {
 // Elementary hexes stay in the existing board. A footprint is one logical occupant.
 export { ENTITY_SIZE_OPTIONS, entitySizeInCells } from "./model.js";
 const SCALES = { 1: 1, 2: 1.35, 3: 1.65, 6: 2.5 };
-const occupancyRegistries = new WeakMap(), motions = new Map();
+const occupancyRegistries = new WeakMap();
 const entityBoards = new Map(), cellBindings = new WeakMap();
-let smokeSequence = 0;
 const boxFor = entity => document.getElementById(`Box_Entite_${entity?.id}`);
 export function invalidateFootprintGeometry(grid) {
   if(grid) { invalidateBoardGeometry(grid); occupancyRegistries.delete(grid); }
@@ -898,14 +898,14 @@ export function syncEntityFootprints(grid=document.getElementById('hexGrid')) {
   renderEntityFootprints(grid,[...registry.model.occupants.keys()].map(id=>getOccupantView(registry,id)));
 }
 function visibleOrigin(entity) {
-  const motion=motions.get(String(entity.id));
-  if(motion) {const t=motion.animation.effect?.getComputedTiming?.().progress ?? 1;return {x:motion.from.x+(motion.to.x-motion.from.x)*t,y:motion.from.y+(motion.to.y-motion.from.y)*t};}
-  const members=entityFootprint(entity);return members.length?center(members):null;
+  const moving = getEntityPlacementOrigin(entity);
+  if (moving) return moving;
+  const members = entityFootprint(entity);
+  return members.length ? center(members) : null;
 }
-function clearMotion(id) {const motion=motions.get(String(id));if(!motion) return;globalThis.clearTimeout(motion.timer);motion.animation.cancel();motion.smoke.remove();motions.delete(String(id));}
-export function clearFootprintAnimations() {for(const id of motions.keys()) clearMotion(id);}
+export function clearFootprintAnimations() { clearEntityPlacements(); }
 export function releaseEntityFootprint(entity, { remove = false } = {}) {
-  const box=boxFor(entity),registry=entityBoard(entity),grid=registry?.grid;clearMotion(entity.id);
+  const box=boxFor(entity),registry=entityBoard(entity),grid=registry?.grid;clearEntityPlacement(entity.id);
   const id=String(entity.id),record=registry?getOccupantView(registry,id):null;
   if(box) {box.dataset.footprintReleased='true';delete box.dataset.occupiedPositions;}
   if(!registry) return;
@@ -919,15 +919,6 @@ export function releaseEntityFootprint(entity, { remove = false } = {}) {
   grid.querySelector(`[data-footprint-entity="${entity.id}"]`)?.remove();
 }
 
-function animatePlacement(entity,from) {
-  if(!from || globalThis.__combatSimulation || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const box=boxFor(entity),to=center(entityFootprint(entity));if(!box || Math.hypot(from.x-to.x,from.y-to.y)<.1) return;
-  const animation=box.animate([{transform:`translate(${from.x-to.x}px,${from.y-to.y}px)`},{transform:'translate(0px,0px)'}],{duration:420,easing:'cubic-bezier(.22,.65,.3,1)',fill:'both'});
-  const smoke=new Image();smoke.className='entity-footprint-smoke';smoke.alt='';smoke.src=new URL(`../../media/assets/effects/dodge-smoke.gif#push-${++smokeSequence}`,import.meta.url).href;
-  (box.querySelector('.drag-box')||box).append(smoke);
-  const motion={animation,from,to,smoke,timer:0};motions.set(String(entity.id),motion);
-  motion.timer=globalThis.setTimeout(()=>{if(motions.get(String(entity.id))===motion) clearMotion(entity.id);},600);
-}
 export function commitEntityPlacements(plan,{animate=false,persist=false,notify=false,forced=false}={}) {
   if(!plan?.valid) return false;
   const requests=[...plan.moves.values()],check=planEntityPlacements(requests,{allowGroundConsumables:plan.allowGroundConsumables===true});
@@ -942,7 +933,7 @@ export function commitEntityPlacements(plan,{animate=false,persist=false,notify=
   const released = new Set(requests.filter(({entity}) => registry.model.placements.get(String(entity.id))?.released).map(({entity}) => String(entity.id)));
   applyBoardPlacements(registry.model,check.logical);
   for(const {entity,hex,size} of requests) {
-    const box=boxFor(entity);clearMotion(entity.id);entity.sizeInCells=size;
+    const box=boxFor(entity);clearEntityPlacement(entity.id);entity.sizeInCells=size;
     entity.position=entity.battlePosition=box.dataset.position=getBoardCell(hex).id;
     hex.append(box);
     const id = String(entity.id);
@@ -960,7 +951,7 @@ export function commitEntityPlacements(plan,{animate=false,persist=false,notify=
     if(persist) saveEntityPositionState(entity);
     if(notify) {notifyProjectileTargetMoved(entity);if(forced) recordEntityCombatMovement(entity,{forced:true});}
     hex.dispatchEvent(new Event('hexOccupied'));
-    if(animate) animatePlacement(entity,starts.get(String(entity.id)));
+    if(animate) animateEntityPlacement(entity,starts.get(String(entity.id)),center(entityFootprint(entity)));
   }
   return true;
 }
@@ -1004,7 +995,6 @@ export function nearestAvailableBoardHex(origin, candidates, {excludeElement=nul
   const position=nearestBoardCell(registry.model,binding.id,ids,{excludeId});
   return registry.geometry.byPosition.get(position)||null;
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden) clearFootprintAnimations();});
 
 // Distances and choices belong to the board data, regardless of CSS transforms.
 export function hexDistance(first, second) {

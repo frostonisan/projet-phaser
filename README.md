@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.94.1-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.95.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -232,3 +232,24 @@ tactile, déplacements, ressources, compteurs et nettoyage), six comparaisons
 logiques identiques avant/après, et captures figées de mêlée identiques pixel à
 pixel en trajet, à l'impact et après annulation. Le profil après correction ne
 contient plus d'encodage PNG ni de lecture CPU des pixels pendant les attaques.
+
+
+## Grabs et déplacements forcés — v0.95.0-dev
+
+La scène Phaser commune pilote maintenant les trajets des grabs, de la confusion,
+des échanges et des poussées dues à l’agrandissement. Le monstre HTML, ses barres
+et sa hitbox se déplacent ensemble ; leur rendu reste celui du jeu actuel.
+La destination, les résistances et les charges restent décidées par le combat.
+
+Les trajets suivent l’horloge du combat : pause, F5 et reprise conservent leur
+avancement. Leur nettoyage ne se déclenche plus pendant la pause. Un nouveau
+grab reprend au point visible ; un déplacement forcé annule un drag en cours
+sans facturer le geste. La souris, le tactile et les dépôts externes conservent
+la même commande de placement. Aucun fichier de jeu ni dépendance ajouté.
+
+Les vérifications sont regroupées dans les suites existantes de pause tactique,
+de placement, d’attaques et de simulation. Les captures sont dans
+`outputs/tactical-pause/` et les journaux dans `outputs/phaser-movement/`.
+
+Validation : 57 tests Node et sept suites navigateur réussis, dont les gestes
+souris/tactile, les tailles, la pause/F5, les attaques et le simulateur.

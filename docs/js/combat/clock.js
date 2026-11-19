@@ -107,7 +107,7 @@ export function captureCombatState() {
   return Object.fromEntries([...sections].map(([name, section]) => [name, section.capture()]));
 }
 export async function restoreCombatState(snapshot, context) {
-  const order = ['boosts', 'modifiers', 'roles', 'orders', 'nature-effects', 'alterations', 'ground', 'melee', 'flights', 'turns'];
+  const order = ['boosts', 'modifiers', 'roles', 'orders', 'nature-effects', 'alterations', 'ground', 'placements', 'melee', 'flights', 'turns'];
   const entries = [...sections].sort(([a], [b]) => (order.indexOf(a) < 0 ? 5 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 5 : order.indexOf(b)));
   for (const [name, section] of entries) if (snapshot[name] !== undefined) await section.restore(snapshot[name], context);
 }
