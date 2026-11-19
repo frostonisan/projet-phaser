@@ -20,6 +20,9 @@ const server = createServer(async (req, res) => {
     }
     if (file === resolve(root, 'js/rendering/entities.js')) {
       data=data.toString().replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,
+        inspectFX:()=>[...layers.values()].filter(l=>l.kind==='panel'||l.asset?.packed).map(l=>({kind:l.kind,
+          packed:l.asset?.packed,texture:l.asset?.name,frame:l.image?.frame?.name,parts:l.image?.list?.length,roleIcons:l.image?.list?.filter(p=>p.updateMonsterIntro).length,
+          type:l.image?.type,visible:l.image?.visible})),
         inspect:()=>[...layers.values()].filter(l=>l.kind==='body'||l.kind==='bar'||l.kind==='text').map(l=>({
           kind:l.kind,bar:l.bar,text:l.text,x:l.image?.x,y:l.image?.y,alpha:l.image?.alpha,
           width:l.image?.displayWidth,height:l.image?.displayHeight,visible:l.image?.visible}))}`);
@@ -113,6 +116,31 @@ async function fixture(config = {}) {
 }
 
 try {
+  if(process.env.MONSTER_WEBGL==='1') {
+    const page=await fixture({speed:20000});
+    await page.waitForFunction(()=>document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
+    await page.evaluate(async()=>{
+      window.ambidextry= (await import('/js/rendering/damageFeedback.js')).AmbidextryVFX;
+      window.readPacked=()=>[...document.querySelectorAll('[data-monster-webgl="ready"]')].flatMap(n=>n._monsterView.inspectFX()).filter(l=>l.packed);
+      ambidextry(E.entites[0]);
+    });
+    await page.waitForFunction(()=>readPacked().length===1&&readPacked()[0].visible);
+    await page.waitForTimeout(150);
+    await page.evaluate(()=>ambidextry(E.entites[1]));
+    await page.waitForFunction(()=>readPacked().length===2&&readPacked().every(l=>l.visible));
+    const frames=await page.evaluate(()=>readPacked());
+    assert.ok(frames.every(l=>l.type==='Image'&&l.frame.startsWith('frame_')));
+    assert.equal(frames[0].texture,frames[1].texture,'Ambidextry instances share the supplied PNG');
+    await page.waitForFunction(()=>readPacked()[0].frame!==readPacked()[1].frame);
+    assert.ok(await page.evaluate(()=>[...document.querySelectorAll('[data-monster-webgl="ready"]')].every(n=>n._monsterView.inspectFX().some(l=>l.kind==='panel'&&l.type==='Container'&&l.parts>0&&l.roleIcons===2))), 'Native Phaser panel components are present');
+    await page.evaluate(()=>{Clock.freezeCombatClock();window.pausedAtlasFrame=readPacked()[0].frame;});
+    await page.waitForFunction(()=>readPacked()[0].frame!==pausedAtlasFrame);
+    await page.waitForTimeout(2100);
+    assert.equal(await page.evaluate(()=>readPacked().length),2,'Pause freezes effect lifetime, as with the original looping GIF');
+    await page.evaluate(()=>Clock.resumeCombatClock());
+    await page.waitForFunction(()=>readPacked().length===0);
+    await page.close();console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
+  }
   if (!process.env.PAUSE_EXTRA_ONLY) {
   for (const mode of (process.env.PAUSE_TEST_MODE ? process.env.PAUSE_TEST_MODE.split(',') : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple', 'melee-magical', 'melee-mixed', 'melee-triple', 'melee-double-pending', 'melee-double-active'])) {
   const natures = mode.endsWith('magical') ? ['magicalDamage'] : mode.endsWith('mixed') ? ['hybridalDamage']

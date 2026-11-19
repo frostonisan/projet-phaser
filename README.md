@@ -477,3 +477,65 @@ Traces : `outputs/webgl-state/paired-final-v2/` pour les huit mesures finales et
 leurs sources ; `outputs/webgl-state/final/` pour les quatre comparaisons de
 simulation. Contrôles d’interaction et de pause : `functional-final/` ; contrôles
 du rendu habituel : `native-final/`, dans le même répertoire de sorties.
+
+## Panneaux Phaser et essai d’atlas — v0.96.2-dev
+
+Le mode `?monsters=webgl` reste réservé au Grouille-doigt et désactivé par défaut.
+Les panneaux du monstre (HUD, jauges, compteurs, messages et indicateurs) sont
+maintenant assemblés en conteneurs, images et textes Phaser. Les fonds, icônes,
+ombres et dégradés sont des textures élémentaires partagées : il n’y a plus de
+copie de sous-arbre HTML, de sérialisation SVG `foreignObject`, ni de capture
+complète de panneau à chaque nouveau message. Les contours et ombres multiples
+des chiffres sont repris, ainsi que l’apparition des icônes de rôle.
+
+Cette étape réutilise `rendering/entities.js` et `data/loaderList.js`. Les styles
+et les dimensions sont encore lus à la création ou au changement d’un composant,
+et le HTML conserve les interactions et la restauration. La boucle d’image reste
+pilotée par l’état et les commandes du combat. Les menus conservent le repli
+HTML du prototype. Il reste donc du travail HTML et des limites de projection
+3D ; ce n’est pas encore une interface entièrement indépendante du DOM.
+
+L’essai de spritesheet concerne uniquement l’ambidextrie. Phaser charge le PNG
+1024 × 512 et son JSON fournis dans `media/assets/spritesheets/png/` et `json/`,
+avec 33 découpes, leurs décalages de recadrage et une texture commune. Le JSON
+ne contient pas les durées : elles sont lues dans les métadonnées du GIF existant
+(33 × 30 ms, boucle de 990 ms). Les autres effets gardent leurs médias actuels.
+Le paramètre `&ambidextry=gif` permet de comparer avec la source GIF précédente.
+
+Les 33 silhouettes et transparences de l’atlas sont identiques au GIF, et les
+cadences sont vérifiées image par image. La palette du PNG fourni diffère du GIF
+(écart maximal observé : 48 sur un canal RGB de 0 à 255) ; le fichier fourni reste
+intact. Le halo est composé par Phaser. Cet essai ne prétend donc pas reproduire
+chaque pixel du filtre CSS. Les tests vérifient le partage entre 80 demandes,
+les départs indépendants, la pause de la durée de vie et le nettoyage des objets.
+
+Les contrôles de souris/tactile, grabs, déplacements forcés, pause, F5, projectiles,
+ressources et imports passent. Les mesures avant/après et leurs sources figées
+sont conservées dans `outputs/phaser-panels/final/` ; les contrôles fonctionnels
+et captures dans `outputs/phaser-panels/`.
+
+Comparaison avec 0.96.1-dev : Chrome, WebGL matériel AMD, 1920 × 1080,
+ressources préparées, deux combats de 12 secondes par taille et par version,
+ordre alterné, sans autre navigateur de test concurrent. Moyennes des passages :
+
+| Monstres | Image moyenne avant / après (ms) | P95 avant / après (ms) | Impacts avant / après |
+| --- | --- | --- | --- |
+| 40 | 86 / 54 | 317 / 192 | 47 / 86 |
+| 80 | 190 / 116 | 750 / 408 | 59,5 / 64,5 |
+
+Les délais d’image baissent d’environ 38 % en moyenne. Le P95 baisse d’environ
+39 % à 40 monstres et 46 % à 80. Le combat exécute davantage d’impacts dans la
+même fenêtre : le gain ne vient pas d’une réduction de l’activité mesurée.
+Ces deux passages par configuration indiquent une amélioration, sans établir
+une garantie pour tous les combats. À 80 monstres, 116 ms par image en moyenne
+et un P95 de 408 ms restent saccadés : l’objectif de fluidité n’est pas atteint,
+et le mode expérimental n’est pas généralisé aux autres monstres.
+
+Quatre comparaisons déterministes (40 et 80 monstres, graines 1701 et 1702,
+cinq secondes simulées) conservent exactement les journaux, les phases et les
+résultats. Aucun code de règle, de placement ou de sauvegarde n’est modifié.
+Le compteur des conversions HTML est vérifié séparément contre l’ancien chemin
+de sérialisation dans `outputs/phaser-panels/conversion-check/` ; les huit
+mesures de performance ci-dessus restent celles de `final/`.
+Sur ce contrôle dédié à 40 monstres : 82 sérialisations de panneaux HTML avant,
+zéro après, avec une activité de combat effective des deux côtés.

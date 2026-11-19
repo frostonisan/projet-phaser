@@ -102,6 +102,36 @@ try {
     }
     return counts;
   });
+  results.ambidextryAtlas = await page.evaluate(async () => {
+    let maximumColorDelta=0;
+    const source = '/media/assets/effects/ambidextry.gif', atlas = await L.loadEffectAtlas(source);
+    if (await L.loadEffectAtlas('/media/assets/effects/recovery.gif') !== null) throw Error('Atlas experiment escaped ambidextry');
+    const copies = await Promise.all(Array.from({length:80}, () => L.loadEffectAtlas(source)));
+    if (!copies.every(copy => copy === atlas)) throw Error('Atlas must be shared by all instances');
+    const resource = await L.loadResource(source);
+    const decoder = new ImageDecoder({data: await resource.blob.arrayBuffer(), type:'image/gif'});
+    await decoder.tracks.ready;
+    if (decoder.tracks.selectedTrack.frameCount !== atlas.names.length) throw Error('Atlas frame count');
+    const canvas = document.createElement('canvas'); canvas.width=atlas.width; canvas.height=atlas.height;
+    const ctx=canvas.getContext('2d', {willReadFrequently:true});
+    for (let index=0; index<atlas.names.length; index++) {
+      const {image}=await decoder.decode({frameIndex:index});
+      if (atlas.durations[index] !== image.duration / 1000) throw Error(`Atlas timing ${index}`);
+      ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0);image.close();
+      const expected=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      const frame=atlas.data.frames[atlas.names[index]], cut=frame.frame, trim=frame.spriteSourceSize;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(atlas.image,cut.x,cut.y,cut.w,cut.h,trim.x,trim.y,trim.w,trim.h);
+      const actual=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      // The supplied PNG has a different RGB palette, but identical silhouettes.
+      if (actual.some((value,pixel)=>pixel%4===3&&value!==expected[pixel])) throw Error(`Atlas alpha/trim ${index}`);
+      const delta=actual.reduce((max,value,pixel)=>Math.max(max,Math.abs(value-expected[pixel])),0);
+      if(delta>64)throw Error(`Atlas palette drift ${index}: ${delta}`);
+      maximumColorDelta=Math.max(maximumColorDelta,delta);
+    }
+    decoder.close();
+    return {frames:atlas.names.length,totalMs:atlas.total,instances:copies.length,exactAlphaAndTrim:true,maximumColorDelta,exactTiming:true};
+  });
   results.gifPlayback = await page.evaluate(async () => {
     const host = document.createElement('div'); document.body.append(host);
     const source = '/media/assets/effects/recovery.gif', frames = await L.testGifFrames(source);

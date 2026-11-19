@@ -320,6 +320,46 @@ export function loadSpriteAtlas(source, width, height, { cache = true, maxPixels
   return promise;
 }
 
+// The supplied packed atlas is an opt-in WebGL experiment for ambidextry only.
+// GIF bytes provide the original frame timings; no GIF pixels are decoded here.
+const effectAtlases = new Map();
+export function loadEffectAtlas(source) {
+  const key = resourceKey(source);
+  if (!new URL(key).pathname.endsWith('/effects/ambidextry.gif')) return Promise.resolve(null);
+  if (!effectAtlases.has(key)) effectAtlases.set(key, (async () => {
+    const jsonUrl = new URL('../spritesheets/json/ambidextry_atlas.json', key).href;
+    const pngUrl = new URL('../spritesheets/png/ambidextry_atlas.png', key).href;
+    const [response, png, gif] = await Promise.all([fetch(jsonUrl), loadResource(pngUrl), loadResource(key)]);
+    if (!response.ok) throw new Error(`Ambidextry atlas: ${response.status}`);
+    const data = await response.json(), names = data.animations.ambidextry;
+    const bytes = new Uint8Array(await gif.blob.arrayBuffer()), word = i => bytes[i] | bytes[i + 1] << 8;
+    let offset = 13 + ((bytes[10] & 128) ? 3 * (2 << (bytes[10] & 7)) : 0), delay = 100;
+    const durations = [];
+    const blocks = () => { let n; do { n = bytes[offset++]; offset += n; } while (n && offset < bytes.length); };
+    while (offset < bytes.length) {
+      const marker = bytes[offset++];
+      if (marker === 0x3b) break;
+      if (marker === 0x21) {
+        const label = bytes[offset++];
+        if (label === 0xf9) delay = word(offset + 2) > 1 ? word(offset + 2) * 10 : 100;
+        blocks();
+      } else if (marker === 0x2c) {
+        const packed = bytes[offset + 8]; offset += 9 + ((packed & 128) ? 3 * (2 << (packed & 7)) : 0);
+        offset++; blocks(); durations.push(delay); delay = 100;
+      } else throw new Error('Invalid ambidextry GIF timing block');
+    }
+    if (!names?.length || names.length !== durations.length) throw new Error('Ambidextry atlas/GIF frame count differs');
+    for (const name of names) {
+      const frame = data.frames[name], cut = frame?.frame;
+      if (!cut || cut.x < 0 || cut.y < 0 || cut.x + cut.w > png.image.naturalWidth || cut.y + cut.h > png.image.naturalHeight)
+        throw new Error(`Invalid ambidextry frame: ${name}`);
+    }
+    return { image: png.image, data, names, durations, width: data.frames[names[0]].sourceSize.w,
+      height: data.frames[names[0]].sourceSize.h, total: durations.reduce((sum, duration) => sum + duration, 0) };
+  })().catch(error => { effectAtlases.delete(key); throw error; }));
+  return effectAtlases.get(key);
+}
+
 // Small combat GIFs share decoded, lossless frames. Keep the original IMG and
 // its CSS (object-fit, filters, hitbox, dimensions); each playback owns its epoch.
 // Large/unsupported assets keep the native decoder rather than reserving huge atlases.

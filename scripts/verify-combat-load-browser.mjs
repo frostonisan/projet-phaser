@@ -158,6 +158,13 @@ function installProbe(options) {
     recoveries: [], effects: {}, interactions: {}, impacts: 0, impactBuckets: {}, turns: 0, errors: [],
     creates: {}, removes: 0, animations: 0, poolHits: 0, renderCalls: {} };
   probe.monsterFrames=0; probe.monsterDOMReads={};
+  probe.htmlPanelConversions=0;
+  const serialize=XMLSerializer.prototype.serializeToString;
+  XMLSerializer.prototype.serializeToString=function(node){
+    const result=serialize.call(this,node);
+    if(probe.active && node instanceof HTMLElement)probe.htmlPanelConversions++;
+    return result;
+  };
   const recordRead = name => {if(globalThis.__monsterFrame&&probe.active)probe.monsterDOMReads[name]=(probe.monsterDOMReads[name]||0)+1;};
   for(const [owner,name] of [[globalThis,'getComputedStyle'],[Element.prototype,'getBoundingClientRect'],
     [Element.prototype,'getAnimations'],[Element.prototype,'querySelector'],[Element.prototype,'querySelectorAll'],
@@ -352,7 +359,9 @@ function validateLive(entry) {
   // Keep pre-change faults in the report; the optimized build must have none.
   if (!baselineDirectory || entry.enabled) assert.deepEqual(entry.probe.recoveries, [], 'No healthy entity may be restarted under real rendering load');
   assert.deepEqual(entry.probe.errors, [], 'No real-time combat errors');
-  if(entry.enabled){assert.deepEqual(entry.probe.monsterDOMReads, {}, 'Monster frames never sample HTML geometry, style or text');
+  if(!entry.enabled&&baselineFiles.get(resolve(root,'js/rendering/entities.js'))?.includes('foreignObject'))
+    assert.ok(entry.probe.htmlPanelConversions>0,'The legacy HTML conversion counter must actually be exercised');
+  if(entry.enabled){assert.equal(entry.probe.htmlPanelConversions,0,'Panels never convert HTML through SVG foreignObject');assert.deepEqual(entry.probe.monsterDOMReads, {}, 'Monster frames never sample HTML geometry, style or text');
     if(process.env.LOAD_MONSTERS==='webgl')assert.ok(entry.probe.monsterFrames>=entry.count,'The pure render loop is exercised for every actor');}
   if (process.env.LOAD_MONSTERS === 'webgl') assert.equal(entry.webglMonsters, entry.enabled || process.env.LOAD_BASELINE_MONSTERS === 'webgl' ? entry.count : 0, 'Every prototype actor remains on WebGL for the entire fight');
   // Supports and controlled actors need not land a hit within the sample.
@@ -364,7 +373,7 @@ function validateLive(entry) {
   }
 }
 async function save() { await writeFile(resolve(output, 'results.json'), JSON.stringify({ passed, failure, workspaceChanges, scenario, poolPrototype, diagnosticFiltersOff,
-  profiled: profile, tracing, browser: browser.version(), gpu, baselineFingerprints, comparison: baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
+  profiled: profile, tracing, panelConversionProbe: 'serialized-html-elements', browser: browser.version(), gpu, baselineFingerprints, comparison: baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
 try {
   if (process.env.LOAD_RESUME === '1') {
     const previous = JSON.parse(await readFile(resolve(output, 'results.json'), 'utf8'));
