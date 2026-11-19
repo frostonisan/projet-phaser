@@ -282,6 +282,32 @@ try {
     check(!gifObserver.active, 'A second animation is cleaned up without leaking its observer');
   });
   await collect();
+  // The existing log switch must be active at startup and leave warnings/errors intact.
+  const consoleMessages=[];page.on('console',message=>consoleMessages.push(message.text()));
+  await page.evaluate(()=>{
+    const check=window.__check, api=window.DarkPitLogs;
+    check(api&&!api.isEnabled(),'Startup disables diagnostic logs by default');
+    console.log('perf-silent-log');console.groupCollapsed('perf-silent-group');console.table({silent:true});console.groupEnd();
+    console.warn('perf-visible-warning');console.error('perf-visible-error');
+    api.enable();console.log('perf-enabled-log');console.groupCollapsed('perf-enabled-group');console.groupEnd();
+    check(console.log===api.native.log&&console.warn===api.native.warn&&console.error===api.native.error,'Debug toggle preserves original console methods');
+  });
+  await collect();
+  await page.reload();
+  await page.waitForFunction(()=>window.DarkPitLogs);
+  assert.equal(await page.evaluate(()=>DarkPitLogs.isEnabled()),true,'Debug preference survives reload');
+  await page.evaluate(()=>DarkPitLogs.disable());await page.reload();
+  await page.waitForFunction(()=>window.DarkPitLogs);
+  assert.equal(await page.evaluate(()=>DarkPitLogs.isEnabled()),false);
+  assert.ok(!consoleMessages.includes('perf-silent-log')&&!consoleMessages.includes('perf-silent-group'));
+  for(const expected of ['perf-visible-warning','perf-visible-error','perf-enabled-log','perf-enabled-group'])assert.ok(consoleMessages.includes(expected),expected);
+  await page.goto(`http://127.0.0.1:${server.address().port}/?debugLogs=1`);
+  await page.waitForFunction(()=>window.DarkPitLogs);
+  assert.equal(await page.evaluate(()=>DarkPitLogs.isEnabled()),true,'Explicit diagnostic URL enables logs');
+  await page.goto(`http://127.0.0.1:${server.address().port}/?debugLogs=0`);
+  await page.waitForFunction(()=>window.DarkPitLogs);
+  assert.equal(await page.evaluate(()=>DarkPitLogs.isEnabled()),false,'Explicit diagnostic URL disables logs');
+  await collect();
   assert.deepEqual(report.errors, [], 'No browser runtime errors');
   report.result = 'passed';
   console.log(`PASS performance lifecycle: ${report.checks.length} checks`);

@@ -67,10 +67,12 @@ export function pulseTargetSearchAtb(entite, mode = 'search') {
     document.getElementById(`scanATBFill_${id}`),
   ].filter(Boolean);
 
+  const className = mode === 'cooldown' ? 'cooldown-wait-pulse' : 'target-search-pulse';
+  const restarting = bars.some(bar => bar.classList.contains(className));
   bars.forEach(bar => bar.classList.remove('target-search-pulse', 'cooldown-wait-pulse'));
-  // One layout flush restarts all three pulses at the same time.
-  if (bars.length) void bars[0].offsetWidth;
-  bars.forEach(bar => bar.classList.add(mode === 'cooldown' ? 'cooldown-wait-pulse' : 'target-search-pulse'));
+  // A new/different animation starts naturally; flush only to restart the same one.
+  if (restarting) void bars[0].offsetWidth;
+  bars.forEach(bar => bar.classList.add(className));
 
   targetSearchPulseTimers.set(id, setTimeout(() => {
     bars.forEach(bar => bar.classList.remove('target-search-pulse', 'cooldown-wait-pulse'));

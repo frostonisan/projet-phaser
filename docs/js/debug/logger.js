@@ -6,6 +6,10 @@ const nativeConsole = {
     log: console.log.bind(console),
     info: console.info.bind(console),
     debug: console.debug.bind(console),
+    group: console.group.bind(console),
+    groupCollapsed: console.groupCollapsed.bind(console),
+    groupEnd: console.groupEnd.bind(console),
+    table: console.table.bind(console),
     warn: console.warn.bind(console),
     error: console.error.bind(console),
 };
@@ -52,6 +56,9 @@ function applyConsoleState() {
     console.log = state.enabled ? nativeConsole.log : noop;
     console.info = state.enabled ? nativeConsole.info : noop;
     console.debug = state.enabled ? nativeConsole.debug : noop;
+    for (const method of ["group", "groupCollapsed", "groupEnd", "table"]) {
+        console[method] = state.enabled ? nativeConsole[method] : noop;
+    }
     console.warn = nativeConsole.warn;
     console.error = nativeConsole.error;
 }

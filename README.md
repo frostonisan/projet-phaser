@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.95.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.95.1-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -253,3 +253,43 @@ de placement, d’attaques et de simulation. Les captures sont dans
 
 Validation : 57 tests Node et sept suites navigateur réussis, dont les gestes
 souris/tactile, les tailles, la pause/F5, les attaques et le simulateur.
+
+
+## Mesures après les déplacements Phaser — v0.95.1-dev
+
+Les compteurs de mouvement et les pulsations ATB ne forcent plus une mise en page
+pour démarrer une nouvelle animation. Un redémarrage encore actif garde une seule
+lecture commune aux vues du monstre. Les couleurs, durées et animations CSS restent
+identiques ; les lectures associées à deux classes sans animation CSS sont retirées.
+
+Le module existant `debug/logger.js` est de nouveau chargé au démarrage. Les logs,
+groupes et tableaux de diagnostic sont désactivés par défaut ; avertissements,
+erreurs et journal du combat restent disponibles. `?debugLogs=1` ou
+`DarkPitLogs.enable()` réactivent le diagnostic, `DarkPitLogs.disable()` le coupe.
+
+Comparaison avec 0.95.0-dev : Chrome sans interface, 1920 × 1080, mêmes combats
+synthétiques rapides, deux passages de 12 secondes par taille et version, ordre
+avant/après alterné. Aucun profilage ni autre navigateur de test pendant les mesures.
+
+| Monstres au total | Image moyenne avant / après (ms) | P95 avant / après (ms) | Impacts traités avant / après |
+| --- | --- | --- | --- |
+| 20 | 94 / 86 | 183 / 183 | 203.0 / 210.0 |
+| 40 | 168 / 173 | 391 / 350 | 196.5 / 223.0 |
+| 80 | 332 / 320 | 775 / 800 | 167.0 / 227.5 |
+
+Le P95 est le délai sous lequel se trouvent 95 % des images. Le résultat est
+modeste : moyenne améliorée à 20 monstres, pics réduits à 40, mais pas de réduction
+nette des pics à 80. À 40, le délai moyen augmente légèrement. Davantage d'impacts
+sont traités, surtout à 80 ; cela ne prouve pas une amélioration générale des FPS.
+Le rendu des grands combats reste le chantier principal, sans promesse de 60 FPS.
+
+Six comparaisons du simulateur, avec deux graines par taille et 5 secondes de temps
+simulé, conservent exactement les résultats, phases et journaux complets, y compris
+les valeurs intermédiaires des ressources. Les sources figées, profils, mesures et
+captures sont conservés dans `outputs/combat-performance-095/`. Aucun fichier de
+jeu, média ou dépendance ajouté.
+
+Validation : 57 tests Node et sept suites navigateur réussis. Le scénario de
+pause a été relancé après une attente intermittente ; ses attentes sont désormais
+bornées. Les tests vérifient aussi les vraies animations CSS, le redémarrage des
+compteurs, le contrôle des logs, les ressources, le drag souris/tactile et F5.

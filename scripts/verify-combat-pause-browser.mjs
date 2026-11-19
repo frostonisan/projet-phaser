@@ -27,6 +27,7 @@ const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL 
 const errors = [];
 async function fixture(config = {}) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  page.setDefaultTimeout(15000);
   page.on('pageerror', error => errors.push(error.message));
   page.testLog=[];page.on('console',message=>page.testLog.push(message.text()));
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });

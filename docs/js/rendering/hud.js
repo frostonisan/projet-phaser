@@ -676,14 +676,21 @@ export function updateMovementDisplay(entite, { animate = true } = {}) {
 
   const nodes = document.querySelectorAll(`[data-movement-entity-id="${entite.id}"]`);
   const state = nodes.length ? getMovementCounterState(entite) : null;
-  nodes.forEach(el => {
-      const currentSpan = renderMovementCounter(el, entite, state);
+  let restart = null;
+  const views = [...nodes].map(el => {
+    const wasBouncing = movementCounterViews.get(el)?.current.classList.contains('bounce-shift');
+    const currentSpan = renderMovementCounter(el, entite, state);
+    if (hasGeneratedMove && wasBouncing) restart = currentSpan;
+    return { el, currentSpan };
+  });
+  // Starting a new CSS animation needs no synchronous layout. Only an active
+  // bounce needs a restart; one flush covers all views of this entity.
+  if (restart) void restart.offsetWidth;
+  views.forEach(({ el, currentSpan }) => {
 
       if (hasGeneratedMove && currentSpan) {
         const view = movementCounterViews.get(el), bounce = {};
         view.bounce = bounce;
-        currentSpan.classList.remove("bounce-shift");
-        void currentSpan.offsetWidth;
         currentSpan.classList.add("bounce-shift");
 
         setTimeout(() => {
@@ -711,7 +718,6 @@ export function animateMoveCounter(counterElement) {
     if (!counterElement) return;
 
     counterElement.classList.remove("counter-pop");
-    void counterElement.offsetWidth;
     counterElement.classList.add("counter-pop");
 }
 
@@ -725,7 +731,6 @@ export function presentMovementRefill(entite, before) {
       .querySelectorAll(`[data-movement-entity-id="${entite.id}"] .counter-shift.hu`)
       .forEach(currentValue => {
         currentValue.classList.remove("trailer-proc-highlight");
-        void currentValue.offsetWidth;
         currentValue.classList.add("trailer-proc-highlight");
 
         setTimeout(() => {

@@ -1,4 +1,5 @@
 // Game startup. UI construction lives in the themed modules below.
+import "../debug/logger.js";
 import { gameStorage as localStorage } from "../storage/sessionStorage.js";
 import {
   loadFromLocalStorage,
