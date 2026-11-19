@@ -4,11 +4,11 @@ import {
 import { consumeEntityMovement, positionnerEntites } from "./deployment.js";
 import { ENTITY_SIZE_OPTIONS, entitySizeInCells, createBoardState, footprintCells, chooseFootprintRole,
   putBoardOccupant, removeBoardOccupant, boardOccupantsAt, applyBoardPlacements,
-  snapshotBoardState, restoreBoardState, createBoardLayout, offsetToAxial, axialDistance } from "./model.js";
-import { planBoardPlacements, planBoardDeployment } from "./placementRules.js";
+  snapshotBoardState, restoreBoardState, createBoardLayout, boardEntityPosition, boardCellDistance, boardFootprintDistance, nearestBoardCell } from "./model.js";
+import { planBoardPlacements, planBoardDeployment, adjacentBoardDestinations, pullBoardDestination } from "./placementRules.js";
 import { getBoardGeometry as geometry, gridForHex as gridFor, invalidateBoardGeometry,
-  getFootprintElements, getFootprintCenter, getOccupantView, getPlacementViews,
-  readHexCoordinates, projectBoardCell, renderBoardGeometry } from "../rendering/boardAdapter.js";
+  getFootprintCenter, getOccupantView, getPlacementViews,
+  projectBoardCell, renderBoardGeometry } from "../rendering/boardAdapter.js";
 import { registerCombatState, notifyCombatAction } from "../combat/clock.js";
 import { scenarios } from "../data/boardList.js";
 import { cachedResourceUrl } from "../data/loaderList.js";
@@ -23,9 +23,6 @@ import { createSoundManager } from "../rendering/sound.js";
 import { entites } from "../entities/runtime.js";
 import { saveEntityPositionState, recordEntityCombatMovement, recordEntityCombatProc } from "../storage/entityStorage.js";
 import { notifyProjectileTargetMoved } from "../rendering/animations.js";
-import {
-  findNearestAvailableHex,
-} from "../rendering/boardElements.js";
 import { attemptAlterationResistance } from "../combat/statistics.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 
@@ -225,7 +222,7 @@ export function createHexGrid(forcedGridConfig = null) {
     hexGrid.innerHTML = '';
 
     const data = renderBoardGeometry(hexGrid, layout);
-    occupancyRegistries.set(hexGrid, { geometry: data, model: createBoardState(layout), views: new Map() });
+    publishRegistry(hexGrid, { geometry: data, model: createBoardState(layout), views: new Map() });
     refreshBoardSides(data);
     const placed = positionnerEntites(null, { previousCoordinates });
     if (previousBoxes.length && placed.length < previousBoxes.length) {
@@ -455,34 +452,16 @@ export function setupBoard(entityCount) {
 
 // Fonction calculateHexes
 export function calculateHexes(side) {
-    const allHexes = [...hexesSideA, ...hexesNeutral, ...hexesSideB];
-
-    const availableHexes = allHexes.filter(hex => {
-        const isOccupied = hex.classList.contains('occupied');
-        const isSideA = hex.classList.contains('SideA');
-        const isSideB = hex.classList.contains('SideB');
-        const isNeutral = hex.classList.contains('Neutral');
-
-        if (isOccupied) return false;
-        if (side === 'A' && (isSideB || isNeutral)) return false;
-        if (side === 'B' && (isSideA || isNeutral)) return false;
-        if (side === 'neutral' && (isSideA || isSideB)) return false;
-
-        return true;
-    });
-
+    const registry = boardOccupancy(document.getElementById('hexGrid'));
+    const cells = registry?.model.geometry.cells || [];
+    // Preserve the established camp order and stable order within each camp.
+    const available = ['SideA', 'Neutral', 'SideB'].flatMap(camp => cells.filter(cell => cell.side === camp))
+      .filter(cell => !boardOccupantsAt(registry.model, cell.id).length
+        && (side === 'A' ? cell.side === 'SideA' : side === 'B' ? cell.side === 'SideB'
+          : side === 'neutral' ? cell.side === 'Neutral' : true));
     const availableHexTypes = {};
-    availableHexes.forEach(hex => {
-        const role = hex.getAttribute('data-role');
-        if (role) {
-            if (!availableHexTypes[role]) {
-                availableHexTypes[role] = [];
-            }
-            availableHexTypes[role].push(hex.getAttribute('data-position'));
-        }
-    });
-
-    return { availableHexes, availableHexTypes };
+    for (const cell of available) if (cell.role) (availableHexTypes[cell.role] ||= []).push(cell.id);
+    return { availableHexes: available.map(cell => registry.geometry.byPosition.get(cell.id)), availableHexTypes };
 }
 
 /**
@@ -518,44 +497,12 @@ export function hexCoordonne(
     const requestedCount = Math.max(0, Math.floor(Number(count) || 0));
     if (requestedCount === 0) return [];
 
-    const allSideHexes = [...document.querySelectorAll(`#hexGrid .hex.${sideClass}[data-position]`)];
-    const candidates = allSideHexes.filter((hex) => !hex.classList.contains('occupied'));
-    if (candidates.length === 0) return [];
-
-    // Compatibilité avec une grille déjà créée avant l'ajout des datasets row/col.
-    // On peut reconstruire row/col depuis le texte A1, B2... si nécessaire.
-    const readCoordinate = (hex) => {
-        let row = Number(hex.dataset.row);
-        let col = Number(hex.dataset.col);
-
-        if (!Number.isFinite(row) || !Number.isFinite(col)) {
-            const label = hex.dataset.coordinate
-                || hex.querySelector('.hex-coordinate')?.textContent?.trim()
-                || '';
-            const match = /^([A-Z]+)(\\d+)$/i.exec(label);
-            if (match) {
-                const letters = match[1].toUpperCase();
-                col = [...letters].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
-                row = Number(match[2]) - 1;
-            }
-        }
-
-        return { row, col };
-    };
-
-    const sideGeometry = allSideHexes
-        .map((hex) => ({ hex, ...readCoordinate(hex) }))
-        .filter(({ row, col }) => Number.isFinite(row) && Number.isFinite(col));
-
-    const candidateGeometry = candidates
-        .map((hex) => ({ hex, ...readCoordinate(hex) }))
-        .filter(({ row, col }) => Number.isFinite(row) && Number.isFinite(col));
-
-    if (candidateGeometry.length === 0 || sideGeometry.length === 0) return [];
-
-    const boardHexes = [...document.querySelectorAll('#hexGrid .hex[data-position]')]
-        .map((hex) => ({ hex, ...readCoordinate(hex) }))
-        .filter(({ row, col }) => Number.isFinite(row) && Number.isFinite(col));
+    const registry = boardOccupancy(document.getElementById('hexGrid'));
+    if (!registry) return [];
+    const boardHexes = registry.model.geometry.cells.filter(cell => Number.isFinite(cell.row) && Number.isFinite(cell.col));
+    const sideGeometry = boardHexes.filter(cell => cell.side === sideClass);
+    const candidateGeometry = sideGeometry.filter(cell => !boardOccupantsAt(registry.model, cell.id).length);
+    if (!candidateGeometry.length || !sideGeometry.length) return [];
 
     const rows = boardHexes.length
         ? Math.max(...boardHexes.map(({ row }) => row)) + 1
@@ -593,7 +540,7 @@ export function hexCoordonne(
     const targetPoint = toPoint(targetRow, targetCol);
     const boardCenterPoint = toPoint(boardCenterRow, boardCenterCol);
 
-    const scored = candidateGeometry.map(({ hex, row, col }) => {
+    const scored = candidateGeometry.map(({ id, row, col }) => {
         const point = toPoint(row, col);
         const distanceTarget = Math.hypot(point.x - targetPoint.x, point.y - targetPoint.y);
         const distanceBoardCenter = Math.hypot(
@@ -602,7 +549,7 @@ export function hexCoordonne(
         );
 
         return {
-            hex,
+            id,
             row,
             col,
             distanceTarget,
@@ -625,7 +572,7 @@ export function hexCoordonne(
 
     return scored
         .slice(0, requestedCount)
-        .map(({ hex }) => hex.dataset.position)
+        .map(({ id }) => id)
         .filter(Boolean);
 }
 
@@ -644,14 +591,58 @@ registerCombatState('board', () => ({ matchingBiome }), saved => {
 export { ENTITY_SIZE_OPTIONS, entitySizeInCells } from "./model.js";
 const SCALES = { 1: 1, 2: 1.35, 3: 1.65, 6: 2.5 };
 const occupancyRegistries = new WeakMap(), motions = new Map();
+const entityBoards = new Map(), cellBindings = new WeakMap();
 let smokeSequence = 0;
 const boxFor = entity => document.getElementById(`Box_Entite_${entity?.id}`);
 export function invalidateFootprintGeometry(grid) {
   if(grid) { invalidateBoardGeometry(grid); occupancyRegistries.delete(grid); }
 }
 
-export function entityFootprint(entity, anchor=boxFor(entity)?.closest('.hex'), size=entitySizeInCells(entity)) {
-  return getFootprintElements(anchor, size);
+function publishRegistry(grid, registry) {
+  const previous = occupancyRegistries.get(grid);
+  for (const [id, known] of entityBoards) if (known === previous || !known.grid.isConnected) entityBoards.delete(id);
+  registry.grid = grid;
+  occupancyRegistries.set(grid, registry);
+  for (const hex of registry.geometry.cells) cellBindings.set(hex, { registry, id: registry.geometry.points.get(hex).id });
+  for (const id of registry.model.placements.keys()) entityBoards.set(id, registry);
+  return registry;
+}
+function entityBoard(entity) {
+  const id = String(entity?.id);
+  if (entityBoards.has(id)) {
+    const registry = entityBoards.get(id);
+    return occupancyRegistries.get(registry.grid) === registry ? registry : boardOccupancy(registry.grid);
+  }
+  const registry = boardOccupancy(document.getElementById('hexGrid'));
+  return registry?.model.placements.has(id) ? registry : null;
+}
+function cellBinding(hex) {
+  if (!hex) return null;
+  const previous = cellBindings.get(hex);
+  if (!previous || occupancyRegistries.get(previous.registry.grid) !== previous.registry)
+    boardOccupancy(previous?.registry.grid || gridFor(hex));
+  const binding = cellBindings.get(hex);
+  return binding && occupancyRegistries.get(binding.registry.grid) === binding.registry ? binding : null;
+}
+export function getEntityBoardGrid(entity) { return entityBoard(entity)?.grid || null; }
+export function getEntityBoardPosition(entity) { return boardEntityPosition(entityBoard(entity)?.model, entity?.id); }
+export function getEntityBoardHex(entity) {
+  const registry = entityBoard(entity), position = boardEntityPosition(registry?.model, entity?.id);
+  return registry?.geometry.byPosition.get(position) || null;
+}
+export function getBoardCell(reference, grid = document.getElementById('hexGrid')) {
+  if (typeof reference === 'string') return boardOccupancy(grid)?.model.geometry.byId.get(reference) || null;
+  const binding = cellBinding(reference);
+  return binding?.registry.model.geometry.byId.get(binding.id) || null;
+}
+export function getBoardCellOccupants(reference, grid = document.getElementById('hexGrid')) {
+  const binding = typeof reference === 'string' ? { registry: boardOccupancy(grid), id: reference } : cellBinding(reference);
+  return boardOccupantsAt(binding?.registry?.model, binding?.id);
+}
+export function entityFootprint(entity, anchor = getEntityBoardHex(entity), size = entitySizeInCells(entity)) {
+  const binding = cellBinding(anchor);
+  return binding ? footprintCells(binding.registry.model.geometry, binding.id, size)
+    .map(id => binding.registry.geometry.byPosition.get(id)) : [];
 }
 // Occupancy is restored from combat data. Existing DOM-only callers are adopted
 // at their explicit creation boundary until their own lifecycle is separated. All spatial
@@ -666,28 +657,34 @@ function removeOccupant(registry, record) {
 function registerEntityOccupant(registry,entity,box,anchor) {
   const id=String(entity.id);
   removeOccupant(registry,registry.model.occupants.get(id));
-  if(!anchor || box.dataset.footprintReleased==='true') return;
+  if (!anchor) return;
   const size=entitySizeInCells(entity);
-  putBoardOccupant(registry.model,{id,anchor:anchor.dataset.position,size,
-    members:footprintCells(registry.model.geometry,anchor.dataset.position,size),movable:true});
-  registry.views.set(id,{entity,box});
+  const position = cellBindings.get(anchor)?.id || anchor.dataset.position;
+  if (box.dataset.footprintReleased === 'true') {
+    registry.model.placements.set(id, { id, anchor: position, size, released: true });
+    registry.views.set(id, { entity, box }); entityBoards.set(id, registry);
+    return;
+  }
+  putBoardOccupant(registry.model,{id,anchor:position,size,
+    members:footprintCells(registry.model.geometry,position,size),movable:true});
+  registry.views.set(id,{entity,box}); entityBoards.set(id,registry);
 }
 function registerHexObjects(registry,hex) {
-  const id=`object:${hex.dataset.position}`;
+  const position=cellBindings.get(hex).id,id=`object:${position}`;
   removeOccupant(registry,registry.model.occupants.get(id));
   const nodes=[...hex.children].filter(node=>node.dataset.occupiesHex!=='false'
     && node.matches('.battle-element, [data-occupies-hex="true"]')&&!node.matches('.entite-box'));
   nodes.forEach(node => { node.dataset.boardOccupant = id; });
   if(nodes.length || hex.classList.contains('consommable-summoned')) {
-    putBoardOccupant(registry.model,{id,anchor:hex.dataset.position,size:1,
-      members:[hex.dataset.position],movable:false,groundConsumable:nodes.length===0});
+    putBoardOccupant(registry.model,{id,anchor:position,size:1,
+      members:[position],movable:false,groundConsumable:nodes.length===0});
     registry.views.set(id,{nodes});
   }
 }
 export function rebuildBoardOccupancy(grid=document.getElementById('hexGrid')) {
   if(!grid) return null;
   const data=geometry(grid), registry={geometry:data,model:createBoardState(data.model),views:new Map()};
-  occupancyRegistries.set(grid,registry);
+  publishRegistry(grid,registry);
   const entitiesById=new Map(entites.map(entity=>[String(entity.id),entity]));
   for(const box of grid.querySelectorAll('.entite-box')) {
     const anchor=box.closest('.hex');
@@ -710,28 +707,28 @@ export function refreshHexOccupancy(hex) {
 }
 // Camp changes (admin/spawn) update terrain data before its presentation.
 export function setBoardCellSide(hex, side) {
-  const data = geometry(gridFor(hex)), cell = data?.model.byId.get(hex?.dataset.position);
+  const binding = cellBinding(hex), data = binding?.registry.geometry, cell = getBoardCell(hex);
   if (!cell || !['SideA', 'Neutral', 'SideB'].includes(side)) return false;
   cell.side = side;
   hex.classList.remove('SideA', 'Neutral', 'SideB'); hex.classList.add(side);
   refreshBoardSides(data);
   return true;
 }
-export function getBoardHex(position,root=document) {
-  const grid=root===document?document.getElementById('hexGrid'):root;
-  if(!grid?.matches?.('.hex-grid, #hexGrid')) return null;
-  return geometry(grid).byPosition.get(position)||null;
+export function getBoardHex(position, root = document) {
+  const grid = root === document ? document.getElementById('hexGrid')
+    : occupancyRegistries.has(root) || root?.matches?.('.hex-grid, #hexGrid') ? root : root?.querySelector?.('.hex-grid, #hexGrid');
+  return boardOccupancy(grid)?.geometry.byPosition.get(position) || null;
 }
 export function getFootprintOccupants(hex,excludeElement=null) {
   if(!hex) return [];
-  const registry=boardOccupancy(gridFor(hex));
-  const records=boardOccupantsAt(registry?.model,hex.dataset.position);
+  const binding=cellBinding(hex),registry=binding?.registry;
+  const records=boardOccupantsAt(registry?.model,binding?.id);
   const entities=[],objects=[];
   for(const record of records) {
     const view=registry.views.get(record.id);
     if(record.movable) {
-      if(view.box!==excludeElement && view.box.dataset.occupiesHex!=='false') entities.push(view.box);
-    } else for(const node of view.nodes) if(node!==excludeElement) objects.push(node);
+      if(view?.box && view.box!==excludeElement) entities.push(view.box);
+    } else for(const node of view?.nodes || []) if(node!==excludeElement) objects.push(node);
   }
   return [...entities,...objects];
 }
@@ -740,22 +737,22 @@ export function getFootprintOccupant(hex, excludeElement=null) {
 }
 function center(members) { return getFootprintCenter(members); }
 export function footprintRole(members, previous='gueux') {
-  const order=['gueux','tank','fantassin','mage'];
-  const roles=members.map(hex=>order.includes(hex.dataset.role)?hex.dataset.role:
-    order.find(name=>hex.classList.contains(`${name}-role`)||hex.querySelector('.socle')?.classList.contains(name))||'gueux');
-  return chooseFootprintRole(roles,previous);
+  return chooseFootprintRole(members.map(hex => {
+    const role = getBoardCell(hex)?.role;
+    return ['gueux', 'tank', 'fantassin', 'mage'].includes(role) ? role : 'gueux';
+  }), previous);
 }
 // Pure planning: neither a resisted nor an impossible application changes size, occupants or roles.
 export function planEntityPlacements(requests,{push=false,allowedCell=()=>true,allowGroundConsumables=false}={}) {
   if(!requests.length) return {valid:false,reason:'Aucun placement.'};
-  const grid=gridFor(requests[0].hex),registry=boardOccupancy(grid);
+  const registry=cellBinding(requests[0].hex)?.registry,grid=registry?.grid;
   if(!registry) return {valid:false,reason:'Terrain introuvable.'};
   const entities=new Map([...registry.views].filter(([,view])=>view.entity).map(([id,view])=>[id,view.entity]));
   for(const {entity} of requests) entities.set(String(entity.id),entity);
   const logicalRequests=requests.map(({entity,hex,size=entitySizeInCells(entity)})=>({id:String(entity.id),size,
-    anchor:hex?.isConnected&&gridFor(hex)===grid?hex.dataset.position:null}));
+    anchor:cellBinding(hex)?.registry===registry?getBoardCell(hex)?.id:null}));
   const logical=planBoardPlacements(registry.model,logicalRequests,{push,allowGroundConsumables,
-    allowedCell:(id,cell)=>allowedCell(entities.get(id),registry.geometry.byPosition.get(cell))});
+    allowedCell:(id,cell)=>allowedCell(entities.get(id),registry.model.geometry.byId.get(cell))});
   if(!logical.valid) return logical;
   return {valid:true,grid,moves:getPlacementViews(registry,logical,entities),pushed:logical.pushed,
     allowGroundConsumables,logical};
@@ -778,12 +775,8 @@ export function getBoardSnapshot(grid=document.getElementById('hexGrid')) {
 export function captureCombatBoard(grid = document.getElementById('hexGrid')) {
   const registry = boardOccupancy(grid);
   if (!registry) throw new Error('Plateau du combat introuvable.');
-  const placements = entites.filter(entity => registry.model.occupants.has(String(entity.id)) || grid.contains(boxFor(entity)))
-    .map(entity => {
-      const occupant = registry.model.occupants.get(String(entity.id));
-      return { id: String(entity.id), anchor: occupant?.anchor || entity.position,
-        size: occupant?.size || entitySizeInCells(entity), released: !occupant };
-    });
+  const placements = entites.filter(entity => registry.model.placements.has(String(entity.id)))
+    .map(entity => ({ ...registry.model.placements.get(String(entity.id)) }));
   return { ...snapshotBoardState(registry.model), placements };
 }
 
@@ -806,12 +799,13 @@ export function restoreCombatBoard(snapshot, actors = entites, grid = document.g
     .map(record => [record.id, [...grid.querySelectorAll('[data-board-occupant]')].filter(node => node.dataset.boardOccupant === record.id)]));
   const data = renderBoardGeometry(grid, model.geometry), registry = { geometry: data, model, views: new Map() };
   clearFootprintAnimations();
-  occupancyRegistries.set(grid, registry);
+  publishRegistry(grid, registry);
   for (const { id, anchor, size, released, entity, box } of placements) {
     entity.position = entity.battlePosition = box.dataset.position = anchor;
     entity.sizeInCells = size; box.dataset.sizeInCells = size;
     if (released) { box.dataset.footprintReleased = 'true'; delete box.dataset.occupiedPositions; }
-    else { delete box.dataset.footprintReleased; registry.views.set(id, { entity, box }); }
+    else delete box.dataset.footprintReleased;
+    registry.views.set(id, { entity, box });
     data.byPosition.get(anchor).append(box);
   }
   for (const record of model.occupants.values()) if (!record.movable) {
@@ -868,7 +862,9 @@ function footprintOverlay(grid) {
 }
 function syncOccupiedCells(registry,cells) {
   for(const hex of cells) {
-    const records=boardOccupantsAt(registry.model,hex.dataset.position);
+    const position=registry.geometry.points.get(hex).id;
+    hex.dataset.position=position;
+    const records=boardOccupantsAt(registry.model,position);
     const occupant=records.find(record=>record.movable);
     if(occupant) {
       hex.dataset.footprintOwner=occupant.id;hex.dataset.occupiedBy=occupant.id;hex.classList.add('occupied');
@@ -884,7 +880,7 @@ function renderEntityFootprints(grid,occupants) {
   for(const occupant of occupants) {
     if(!occupant.movable || !occupant.members.length) continue;
     const {box,entity,members}=occupant,origin=data.points.get(occupant.anchor),p=center(members);
-    box.dataset.occupiedPositions=members.map(hex=>hex.dataset.position).join(' ');
+    box.dataset.occupiedPositions=members.map(hex=>data.points.get(hex).id).join(' ');
     box.style.left=`${p.x-origin.x}px`;box.style.top=`${p.y-origin.y}px`;
     entity.role=footprintRole(members,entity.role);updateRoleInDOM(entity);applyEntitySizeVisual(entity);
     let path=overlay.querySelector(`[data-footprint-entity="${CSS.escape(occupant.id)}"]`);
@@ -908,18 +904,21 @@ function visibleOrigin(entity) {
 }
 function clearMotion(id) {const motion=motions.get(String(id));if(!motion) return;globalThis.clearTimeout(motion.timer);motion.animation.cancel();motion.smoke.remove();motions.delete(String(id));}
 export function clearFootprintAnimations() {for(const id of motions.keys()) clearMotion(id);}
-export function releaseEntityFootprint(entity) {
-  const box=boxFor(entity),grid=gridFor(box?.closest('.hex'));clearMotion(entity.id);
-  const registry=boardOccupancy(grid),record=registry?getOccupantView(registry,String(entity.id)):null;
+export function releaseEntityFootprint(entity, { remove = false } = {}) {
+  const box=boxFor(entity),registry=entityBoard(entity),grid=registry?.grid;clearMotion(entity.id);
+  const id=String(entity.id),record=registry?getOccupantView(registry,id):null;
   if(box) {box.dataset.footprintReleased='true';delete box.dataset.occupiedPositions;}
-  if(!grid) return;
-  removeOccupant(registry,record);
-  for(const hex of record?.members||[]) if(hex.dataset.footprintOwner===String(entity.id)) {
+  if(!registry) return;
+  removeBoardOccupant(registry.model,id,{keepPosition:!remove});
+  if (remove) { registry.views.delete(id); entityBoards.set(id,registry); }
+  else if (registry.model.placements.has(id)) registry.model.placements.get(id).released=true;
+  for(const hex of record?.members||[]) if(hex.dataset.footprintOwner===id) {
     delete hex.dataset.footprintOwner;delete hex.dataset.occupiedBy;
     if(!getFootprintOccupant(hex)) hex.classList.remove('occupied');
   }
   grid.querySelector(`[data-footprint-entity="${entity.id}"]`)?.remove();
 }
+
 function animatePlacement(entity,from) {
   if(!from || globalThis.__combatSimulation || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const box=boxFor(entity),to=center(entityFootprint(entity));if(!box || Math.hypot(from.x-to.x,from.y-to.y)<.1) return;
@@ -940,13 +939,19 @@ export function commitEntityPlacements(plan,{animate=false,persist=false,notify=
     const previous=getOccupantView(registry,String(entity.id));
     previous?.members.forEach(hex=>dirtyCells.add(hex));
   }
+  const released = new Set(requests.filter(({entity}) => registry.model.placements.get(String(entity.id))?.released).map(({entity}) => String(entity.id)));
   applyBoardPlacements(registry.model,check.logical);
   for(const {entity,hex,size} of requests) {
     const box=boxFor(entity);clearMotion(entity.id);entity.sizeInCells=size;
-    entity.position=entity.battlePosition=box.dataset.position=hex.dataset.position;
+    entity.position=entity.battlePosition=box.dataset.position=getBoardCell(hex).id;
     hex.append(box);
-    if(box.dataset.footprintReleased==='true') removeOccupant(registry,{id:String(entity.id)});
-    else registry.views.set(String(entity.id),{entity,box});
+    const id = String(entity.id);
+    if(released.has(id)) {
+      box.dataset.footprintReleased='true';
+      removeBoardOccupant(registry.model,id,{keepPosition:true});
+      registry.model.placements.get(id).released=true;
+    } else delete box.dataset.footprintReleased;
+    registry.views.set(id,{entity,box}); entityBoards.set(id,registry);
     entityFootprint(entity,hex).forEach(cell=>dirtyCells.add(cell));
   }
   syncOccupiedCells(registry,dirtyCells);
@@ -966,7 +971,7 @@ export function setEntitySizeInCells(entity,size,{push=true,animate=true,tempora
   if(!temporary && entity._gigantismBaseSize != null) size=Math.max(size,...Object.values(entity.controlEffects||{})
     .filter(state=>state.kind==='gigantisme').map(state=>state.effect.effectSize));
   const updateBase=()=>{if(!temporary && entity._gigantismBaseSize != null) entity._gigantismBaseSize=baseSize;};
-  const anchor=boxFor(entity)?.closest('.hex');
+  const anchor=getEntityBoardHex(entity);
   if(!anchor) {entity.sizeInCells=size;updateBase();return {valid:true};}
   if(entitySizeInCells(entity)===size) {updateBase();return {valid:true};}
   const plan=planEntityPlacements([{entity,hex:anchor,size}],{push});
@@ -978,25 +983,33 @@ export function setEntitySizeInCells(entity,size,{push=true,animate=true,tempora
   return plan;
 }
 export function groupedHexDistance(first,second) {
-  const members=hex=>{const box=getFootprintOccupant(hex);const entity=box&&entites.find(e=>String(e.id)===box.id.replace('Box_Entite_',''));return entity?entityFootprint(entity):[hex];};
+  const members=hex=>{
+    const occupant=getBoardCellOccupants(hex).find(record=>record.movable),binding=cellBinding(hex);
+    return occupant ? occupant.members.map(id=>binding.registry.geometry.byPosition.get(id)) : [hex];
+  };
   return footprintDistance(members(first),members(second));
 }
 export function footprintDistance(first,second) {
-  let best=Infinity;
-  for(const a of first) for(const b of second) {
-    const c1=readHexCoordinates(a),c2=readHexCoordinates(b);
-    best=Math.min(best,axialDistance(offsetToAxial(c1.row,c1.col),offsetToAxial(c2.row,c2.col)));
-  }
-  return best;
+  const binding=cellBinding(first[0]);
+  return binding ? boardFootprintDistance(binding.registry.model.geometry,
+    first.map(hex=>getBoardCell(hex)?.id),second.map(hex=>getBoardCell(hex)?.id)) : Infinity;
+}
+export function nearestAvailableBoardHex(origin, candidates, {excludeElement=null}={}) {
+  const binding=cellBinding(origin);
+  if (!binding) return null;
+  const registry=binding.registry;
+  const excludeId=[...registry.views].find(([,view])=>view.box===excludeElement||view.nodes?.includes(excludeElement))?.[0];
+  const ids=candidates ? [...candidates].filter(hex=>cellBinding(hex)?.registry===registry).map(hex=>getBoardCell(hex).id)
+    : registry.model.geometry.cells.map(cell=>cell.id);
+  const position=nearestBoardCell(registry.model,binding.id,ids,{excludeId});
+  return registry.geometry.byPosition.get(position)||null;
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden) clearFootprintAnimations();});
 
-// Déplacements provoqués par les effets : Grab, mouvement aléatoire et swap.
-// Odd-row offset coordinates used by createHexGrid, converted to cube distance.
+// Distances and choices belong to the board data, regardless of CSS transforms.
 export function hexDistance(first, second) {
-  const a=readHexCoordinates(first),b=readHexCoordinates(second);
-  if(![a.row,a.col,b.row,b.col].every(Number.isFinite)) return Infinity;
-  return axialDistance(offsetToAxial(a.row,a.col),offsetToAxial(b.row,b.col));
+  const a=cellBinding(first),b=cellBinding(second);
+  return a && a.registry===b?.registry ? boardCellDistance(a.registry.model.geometry,a.id,b.id) : Infinity;
 }
 
 function commitPositions(moves, effect = null) {
@@ -1019,28 +1032,18 @@ function commitPositions(moves, effect = null) {
 }
 
 export function pullEntityToward(target, attacker, distance = 5, effect = null) {
-  const origin = document.getElementById(`Box_Entite_${target.id}`)?.closest('.hex');
-  const anchor = document.getElementById(`Box_Entite_${attacker.id}`)?.closest('.hex');
-  if (!origin || !anchor || origin === anchor) return false;
-  const grid = origin.closest('.hex-grid') || origin.parentElement;
-  const attackerCells = entityFootprint(attacker, anchor);
-  const separation = footprintDistance(entityFootprint(target, origin), attackerCells);
-  const candidates = [...grid.querySelectorAll('.hex[data-position]')].filter(hex =>
-    hex !== origin && hexDistance(origin, hex) <= Math.max(0, Math.floor(distance))
-    && footprintDistance(entityFootprint(target, hex), attackerCells) < separation
-    && planEntityPlacements([{entity:target,hex}]).valid);
-  // Exactly the free-cell proximity selector used by chest/summon placement.
-  const destination = findNearestAvailableHex(anchor, candidates, { excludeElement: document.getElementById(`Box_Entite_${target.id}`) });
+  const registry = entityBoard(target);
+  if (!registry || entityBoard(attacker) !== registry) return false;
+  const position = pullBoardDestination(registry.model, target.id, attacker.id, distance);
+  const destination = registry.geometry.byPosition.get(position);
   return destination ? commitPositions([{ entity: target, hex: destination }], effect) : false;
 }
 
 export function moveEntityRandomly(entity, random = Math.random, effect = null) {
   if (isEntityMovementBlocked(entity) || entity.hasFled || entity.isDEAD) return false;
-  const origin = document.getElementById(`Box_Entite_${entity.id}`)?.closest('.hex');
-  const grid = origin?.closest('.hex-grid') || origin?.parentElement;
-  if (!grid) return false;
-  const cells = [...grid.querySelectorAll('.hex[data-position]')].filter(hex =>
-    hexDistance(origin, hex) === 1 && planEntityPlacements([{entity,hex}]).valid);
+  const registry = entityBoard(entity);
+  if (!registry) return false;
+  const cells = adjacentBoardDestinations(registry.model, entity.id).map(id => registry.geometry.byPosition.get(id));
   if (!cells.length || !consumeEntityMovement(entity).allowed) return false;
   updateMovementDisplay(entity);
   return commitPositions([{ entity, hex: cells[Math.min(cells.length-1, Math.floor(random()*cells.length))] }], effect);
@@ -1048,8 +1051,8 @@ export function moveEntityRandomly(entity, random = Math.random, effect = null) 
 
 export function swapEntitiesFromEffect(attacker, first, second, effect = { type: ['entrave'], forcedMovement: true }) {
   if (!first || !second || first === second || first.isDEAD || second.isDEAD) return false;
-  const a = document.getElementById(`Box_Entite_${first.id}`)?.closest('.hex');
-  const b = document.getElementById(`Box_Entite_${second.id}`)?.closest('.hex');
+  const a = getEntityBoardHex(first);
+  const b = getEntityBoardHex(second);
   if (!a || !b || a === b) return false;
   // Validate both differently sized footprints before resistance rolls or any mutation.
   if (!planEntityPlacements([{entity:first,hex:b},{entity:second,hex:a}]).valid) return false;

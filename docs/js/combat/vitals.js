@@ -1,3 +1,4 @@
+import { isHexTarget } from "../board/targets.js";
 import {
   updateBonusLifeCounters, updateHealthBar, updateHPCounters, presentEntityVitals,
   presentSupportHealing, presentDamageOutcome, presentExecutionHealing, presentVitalImpact,
@@ -1981,7 +1982,7 @@ export async function applyDamageToDead(target, damage, attacker, currentAttack)
 }
 
 export async function applyDamageToHex(target, attacker, attack) {
-    if (!target?.isConnected || !target.classList.contains('hex')) return 'miss';
+    if (!isHexTarget(target)) return 'miss';
     for (const effectName of attack.effets || []) {
         const result = await applyEffect(target, effectName, attacker, attack);
         if (result === false || result?.ok === false) return 'miss';

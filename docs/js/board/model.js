@@ -43,10 +43,11 @@ export function chooseFootprintRole(roles, previous = 'gueux') {
 }
 
 export function createBoardState(geometry) {
-  return { geometry, occupants: new Map(), byCell: new Map() };
+  return { geometry, occupants: new Map(), byCell: new Map(), placements: new Map() };
 }
 
-export function removeBoardOccupant(state, id) {
+export function removeBoardOccupant(state, id, { keepPosition = false } = {}) {
+  if (!keepPosition) state.placements.delete(String(id));
   const record = state.occupants.get(String(id));
   if (!record) return;
   state.occupants.delete(record.id);
@@ -63,6 +64,7 @@ export function putBoardOccupant(state, input) {
     groundConsumable: input.groundConsumable === true };
   removeBoardOccupant(state, record.id);
   state.occupants.set(record.id, record);
+  if (record.movable) state.placements.set(record.id, { id: record.id, anchor: record.anchor, size: record.size, released: false });
   for (const cell of record.members) {
     if (!state.byCell.has(cell)) state.byCell.set(cell, new Set());
     state.byCell.get(cell).add(record.id);
@@ -84,7 +86,8 @@ export function applyBoardPlacements(state, plan) {
 
 export function snapshotBoardState(state) {
   return { cells: state.geometry.cells.map(cell => ({ ...cell })),
-    occupants: [...state.occupants.values()].map(record => ({ ...record, members: [...record.members] })) };
+    occupants: [...state.occupants.values()].map(record => ({ ...record, members: [...record.members] })),
+    placements: [...state.placements.values()].map(record => ({ ...record })) };
 }
 
 // Terrain layout is combat data; renderers only project these cells onto a surface.
@@ -143,5 +146,38 @@ export function restoreBoardState(snapshot) {
     if (!record.groundConsumable && members.some(id => boardOccupantsAt(state, id).some(other => !other.groundConsumable))) invalid();
     putBoardOccupant(state, { ...record, members });
   }
+  if (!Array.isArray(snapshot.placements)) invalid();
+  const placements = new Map();
+  for (const placement of snapshot.placements) {
+    const { id, anchor, size, released } = placement, occupant = state.occupants.get(id);
+    if (typeof id !== 'string' || !id || placements.has(id) || !ids.has(anchor)
+      || !ENTITY_SIZE_OPTIONS.includes(size) || typeof released !== 'boolean'
+      || (released ? !!occupant : !occupant?.movable || occupant.anchor !== anchor || occupant.size !== size)) invalid();
+    placements.set(id, { id, anchor, size, released });
+  }
+  if ([...state.occupants.values()].some(record => record.movable && !placements.has(record.id))) invalid();
+  state.placements = placements;
   return state;
+}
+
+// Spatial reads use combat data, including released bodies that reserve no cells.
+export const boardEntityPosition = (state, id) => state?.placements.get(String(id))?.anchor ?? null;
+export function boardCellDistance(geometry, first, second) {
+  const a = geometry?.byId.get(first), b = geometry?.byId.get(second);
+  return [a?.q, a?.r, b?.q, b?.r].every(Number.isFinite) ? axialDistance(a, b) : Infinity;
+}
+export function boardFootprintDistance(geometry, first, second) {
+  let distance = Infinity;
+  for (const a of first) for (const b of second) distance = Math.min(distance, boardCellDistance(geometry, a, b));
+  return distance;
+}
+export function nearestBoardCell(state, origin, candidates, { excludeId = null } = {}) {
+  const center = state?.geometry.byId.get(origin);
+  if (!center) return null;
+  return candidates.map((id, index) => {
+    const cell = state.geometry.byId.get(id);
+    return cell && { id, index, distance: (cell.x - center.x) ** 2 + (cell.y - center.y) ** 2 };
+  }).filter(candidate => candidate && candidate.id !== origin
+    && !boardOccupantsAt(state, candidate.id).some(record => record.id !== String(excludeId)))
+    .sort((a, b) => a.distance - b.distance || a.index - b.index)[0]?.id ?? null;
 }

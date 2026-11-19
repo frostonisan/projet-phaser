@@ -153,6 +153,49 @@ try {
     }
     check(clicked === 2, 'Resize preserves entity event listeners');
     U.HexButtonVisibility(true); await wait();
+    const Targets = await import('/js/board/targets.js'), Attacks = await import('/js/combat/attacks.js');
+    const origin = B.getEntityBoardHex(real), originId = Targets.getTargetPosition(real);
+    const destination = B.getBoardHex('hex_2'), snapshot = B.captureCombatBoard();
+    const distance = B.hexDistance(origin, destination), cells = JSON.stringify(B.calculateHexes('A').availableHexTypes);
+    const choices = JSON.stringify(B.hexCoordonne('A', 'middle', 'center', 4));
+    const attack = { functionName: 'logical-position', attacknature: ['physicalDamage'], attackRange: ['range'],
+      attackTarget: ['enemy'], deadTarget: ['no'], combatFunction: 'Attaquant', physicalRatio: 1 };
+    const shot = Attacks.createAttackFlight(real, real, attack, { physical: 10 });
+    destination.append(created.element); created.element.dataset.position = 'wrong';
+    for (const hex of host.querySelectorAll('.hex')) {
+      hex.className = 'hex SideB occupied mage-role'; hex.dataset.row = '999'; hex.dataset.col = '999'; hex.dataset.role = 'mage';
+      hex.style.left = '12345px';
+    }
+    origin.dataset.position = 'forged';
+    check(Targets.getTargetPosition(real) === originId && Targets.getEntityHex(real) === origin, 'Target positions ignore visual parents and datasets');
+    check(Targets.getHexEntity(origin, E.entites) === real, 'Cell occupants come from the logical footprint');
+    check(Attacks.acceptsImpactTarget(attack, real), 'A visually displaced live unit remains a valid impact target');
+    check(shot.aimedHex === originId && shot.resolveTarget(E.entites) === real, 'Physical projectiles retain cell identifiers and resolve logical occupants');
+    check(B.hexDistance(origin, destination) === distance, 'Distances ignore altered HTML coordinates');
+    check(JSON.stringify(B.calculateHexes('A').availableHexTypes) === cells, 'Available cells ignore forged side, role and occupancy classes');
+    check(JSON.stringify(B.hexCoordonne('A', 'middle', 'center', 4)) === choices, 'Administrative placement choices use the same logical cells');
+    origin.remove();
+    check(Targets.getTargetPosition(real) === originId && shot.resolveTarget(E.entites) === real, 'Removing a cell view does not remove its combat occupant');
+    B.restoreCombatBoard(snapshot);
+    check(B.getEntityBoardPosition(real) === originId, 'Restoration keeps the same logical position after visual corruption');
+    const random = Math.random;
+    try {
+      Math.random = () => .999999;
+      real.stats.shift = { current: 4, max: 4 };
+      const run = () => {
+        B.moveEntityRandomly(real, () => .2);
+        return { position: B.getEntityBoardPosition(real), charge: real.stats.shift.current };
+      };
+      const first = run(); B.restoreCombatBoard(snapshot); real.stats.shift = { current: 4, max: 4 };
+      // Geometry reads are forbidden during the decision; sprite rendering stays available.
+      for (const hex of host.querySelectorAll('.hex')) hex.getBoundingClientRect = () => { throw Error('Movement read a cell rectangle'); };
+      B.getBoardHex('hex_2').append(created.element);
+      created.element.dataset.footprintReleased = 'true'; created.element.dataset.occupiesHex = 'false';
+      const second = run();
+      check(Targets.getHexEntity(B.getEntityBoardHex(real), E.entites) === real, 'Forged release flags cannot free a logically occupied footprint during movement');
+      delete created.element.dataset.occupiesHex;
+      check(JSON.stringify(first) === JSON.stringify(second), 'The same movement roll spends the same charges and chooses the same cell with a false visual parent');
+    } finally { Math.random = random; B.restoreCombatBoard(snapshot); }
     window.__boardAudit.real = real;
     return { count: checks.length, checks };
   });

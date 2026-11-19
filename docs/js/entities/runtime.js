@@ -2878,7 +2878,7 @@ export function RemoveEntite(entite, mode = null) {
     }
 
     const entiteIndex = entites.findIndex(e => e.id === entite.id);
-    releaseEntityFootprint(entite);
+    releaseEntityFootprint(entite, { remove: true });
     if (entiteIndex !== -1) {
         endEntityBattleRole(entite, { pause: true });
         const removedEntity = entites.splice(entiteIndex, 1)[0];

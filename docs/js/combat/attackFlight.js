@@ -1,11 +1,11 @@
-import { combatData, combatReference, combatTarget } from "./clock.js";
+import { combatData, combatReference } from "./clock.js";
 import { hasPendingCombatDeath } from "./timeline.js";
 import { getAttackResolutionFlags } from "./attackResolution.js";
 import { createAttackStatView, getRangePenaltyDetails } from "./statistics.js";
 import { getControlState, getCombatSide } from "./control.js";
 import { getEntityManualMovementVersion, recordEntityCombatAmount } from "../storage/entityStorage.js";
-import { entites } from "../entities/runtime.js";
-import { isHexTarget, getEntityHex, getHexEntity } from '../board/targets.js';
+import { isHexTarget, getTargetPosition, getHexEntity } from '../board/targets.js';
+import { getEntityBoardGrid, getBoardHex, getBoardCell } from '../board/controller.js';
 import { isAttackEntityAlive } from './targeting.js';
 import { cloneCombatSnapshot } from './snapshot.js';
 import { flightModeFromFlags, flightRemnantFromFlags, sampleFlightState, isFlightCancelled, resolveFlightSources } from './flightRules.js';
@@ -27,7 +27,8 @@ export function createAttackFlight(attacker, target, attack, sources = {}, saved
   const flags = getAttackResolutionFlags(definition);
   const mode = getFlightMode(definition);
   const remnantNature = flightRemnantFromFlags(mode, flags);
-  const aimedHex = saved ? combatTarget(saved.aimedHex, entites) : getEntityHex(target);
+  const boardGrid = getEntityBoardGrid(attacker) || getEntityBoardGrid(target);
+  const aimedHex = saved ? saved.aimedHex?.hex ?? null : getTargetPosition(target);
   const projected = createAttackStatView(attacker, attack);
   const stats = saved?.stats ?? cloneCombatSnapshot(projected.stats || {}, 'attacker.stats');
   const modifiers = saved?.modifiers ?? cloneCombatSnapshot(projected.modifierStats || {}, 'attacker.modifierStats');
@@ -67,8 +68,8 @@ export function createAttackFlight(attacker, target, attack, sources = {}, saved
     snapshot() {
       return combatData({ id: this.id, attacker: attacker.id, target: combatReference(target), attack: definition,
         sources: this.sources, stats, modifiers, boosts, baseStats, statOverrides, seuilUmbra, level, side, folieAtLaunch,
-        movementAtLaunch, invisibleTargetAccuracy, aimedHex: combatReference(this.aimedHex),
-        lockedHex: this.lockedHex ? combatReference(this.lockedHex) : null,
+        movementAtLaunch, invisibleTargetAccuracy, aimedHex: { hex: this.aimedHex },
+        lockedHex: this.lockedHex ? { hex: this.lockedHex } : null,
         casterLost: this.casterLost, targetMoved: this.targetMoved, guidanceLost: this.guidanceLost,
         magicalLossConsumed: this.magicalLossConsumed, manualAvoidanceRecorded: this.manualAvoidanceRecorded });
     },
@@ -77,7 +78,7 @@ export function createAttackFlight(attacker, target, attack, sources = {}, saved
       if (this.manualAvoidanceRecorded || this.expired() || definition.combatFunction !== 'Attaquant'
         || isHexTarget(target) || !isAttackEntityAlive(target)
         || !(mode === 'physical' || mode === 'mixed' && this.guidanceLost)
-        || !getEntityHex(target) || getEntityHex(target) === locked
+        || !getTargetPosition(target) || getTargetPosition(target) === locked
         || getEntityManualMovementVersion(target) <= movementAtLaunch) return;
       this.manualAvoidanceRecorded = true;
       recordEntityCombatAmount(target, 'physicalProjectilesAvoided', 1);
@@ -88,7 +89,7 @@ export function createAttackFlight(attacker, target, attack, sources = {}, saved
         casterAlive: isAttackEntityAlive(attacker),
         casterDeathPending: hasPendingCombatDeath(attacker),
         targetIsHex: isHexTarget(target),
-        targetHex: isHexTarget(target) ? target : getEntityHex(target),
+        targetHex: getTargetPosition(target),
       });
       Object.assign(this, state);
       return casterJustLost;
@@ -105,12 +106,13 @@ export function createAttackFlight(attacker, target, attack, sources = {}, saved
     },
     resolveTarget(entities) {
       this.sample();
-      if (isHexTarget(target)) return this.aimedHex?.isConnected ? this.aimedHex : null;
+      if (isHexTarget(target)) return getBoardCell(this.aimedHex, boardGrid) ? this.cellView(this.aimedHex) : null;
       if (mode === 'physical' || mode === 'mixed' && this.guidanceLost) {
-        return getHexEntity(this.lockedHex || this.aimedHex, entities);
+        return getHexEntity(this.lockedHex || this.aimedHex, entities, boardGrid);
       }
       return target;
     },
+    cellView(position) { return getBoardHex(position, boardGrid); },
     impactSources() {
       this.sample();
       return resolveFlightSources(this);
@@ -118,7 +120,7 @@ export function createAttackFlight(attacker, target, attack, sources = {}, saved
   };
   if (saved) {
     for (const key of ['id', 'casterLost', 'targetMoved', 'guidanceLost', 'magicalLossConsumed', 'manualAvoidanceRecorded']) flight[key] = saved[key];
-    flight.lockedHex = saved.lockedHex ? combatTarget(saved.lockedHex, entites) : null;
+    flight.lockedHex = saved.lockedHex?.hex ?? null;
   }
   return flight;
 }

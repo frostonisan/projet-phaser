@@ -2508,8 +2508,8 @@ projectileParent.appendChild(projectileChild);
     function getCurrentTargetElement() {
         const flight = projectileData?.flight;
         flight?.sample?.();
-        if (flight?.mode === 'physical') return flight.aimedHex;
-        if (flight?.mode === 'mixed' && flight.guidanceLost) return flight.lockedHex;
+        if (flight?.mode === 'physical') return flight.cellView(flight.aimedHex);
+        if (flight?.mode === 'mixed' && flight.guidanceLost) return flight.cellView(flight.lockedHex);
         if (targetPrefix === "hex") return targetObj;
         return getBattleEntityElement(targetObj);
     }

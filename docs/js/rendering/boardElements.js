@@ -3,7 +3,7 @@
  * occupation, creation des elements et representation visuelle des roles.
  */
 
-import { getFootprintOccupant, getFootprintOccupants, getBoardHex, refreshHexOccupancy } from "../board/controller.js";
+import { getFootprintOccupant, getFootprintOccupants, getBoardHex, refreshHexOccupancy, nearestAvailableBoardHex, getBoardCell } from "../board/controller.js";
 
 const DEFAULT_OCCUPANT_SELECTOR = [
   ".entite-box[data-position]",
@@ -230,16 +230,8 @@ export function getNeutralHexElements({ container = document } = {}) {
 /**
  * Trouve une case libre dans la zone neutre.
  */
-export function findNearestAvailableHex(origin, candidates = document.querySelectorAll('.hex[data-position]'), options = {}) {
-  if (!origin?.isConnected) return null;
-  const center = origin.getBoundingClientRect();
-  const x = center.left + center.width / 2;
-  const y = center.top + center.height / 2;
-  return [...candidates].map((hex, index) => {
-    const rect = hex.getBoundingClientRect();
-    return { hex, index, distance: (rect.left + rect.width / 2 - x) ** 2 + (rect.top + rect.height / 2 - y) ** 2 };
-  }).filter(({ hex }) => hex !== origin && !isHexOccupied(hex.dataset.position, options))
-    .sort((a, b) => a.distance - b.distance || a.index - b.index)[0]?.hex || null;
+export function findNearestAvailableHex(origin, candidates, options = {}) {
+  return nearestAvailableBoardHex(origin, candidates, options);
 }
 
 export function findAvailableNeutralHexPosition({ preferredPosition = null, container = document } = {}) {
@@ -462,13 +454,6 @@ export function removeBattleElementFromDOM(elementOrId) {
 
 // Lecture et decoration des roles des cases du plateau.
 export function getRoleFromHex(hexElement) {
-    if (hexElement.classList.contains('fantassin-role')) {
-        return ['fantassin'];
-    } else if (hexElement.classList.contains('mage-role')) {
-        return ['mage'];
-    } else if (hexElement.classList.contains('tank-role')) {
-        return ['tank'];
-    } else {
-        return ['gueux'];
-    }
+    const role = getBoardCell(hexElement)?.role;
+    return [['fantassin', 'mage', 'tank'].includes(role) ? role : 'gueux'];
 }

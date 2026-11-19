@@ -1,3 +1,4 @@
+import { getBoundBoardCell, getBoardCellView } from "../rendering/boardAdapter.js";
 // One clock for gameplay deadlines, periodic effects and their rendering.
 // Browser/UI time is intentionally independent. GIF decoding stays native.
 const nativeTimeout = globalThis.setTimeout.bind(globalThis);
@@ -159,12 +160,13 @@ export function combatData(value) {
     return item;
   }));
 }
-export const combatReference = target => target?.nodeType === 1
-  ? { hex: target.dataset.position, id: target.id, side: target.classList.contains('SideB') ? 'B' : target.classList.contains('SideA') ? 'A' : 'Neutral' }
-  : { entity: target?.id };
+export function combatReference(target) {
+  if (target?.nodeType !== 1) return { entity: target?.id };
+  const cell = getBoundBoardCell(target);
+  return cell ? { hex: cell.id } : { id: target.id };
+}
 export function combatTarget(reference, entities) {
   if (reference?.entity != null) return entities.find(entity => String(entity.id) === String(reference.entity));
-  if (reference?.id) return document.getElementById(reference.id);
-  return [...document.querySelectorAll('#hexGrid .hex')].find(hex => hex.dataset.position === String(reference?.hex)
-    && hex.classList.contains(reference?.side === 'Neutral' ? 'Neutral' : `Side${reference?.side}`));
+  if (reference?.hex != null) return getBoardCellView(String(reference.hex));
+  return reference?.id ? document.getElementById(reference.id) : null;
 }

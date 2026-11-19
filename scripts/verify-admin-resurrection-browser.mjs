@@ -61,6 +61,8 @@ async function fixture(count = 3) {
       entity.isDEAD = false; entity.statut = ['alive']; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const boardController = await import('/js/board/controller.js');
+    boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
     window.actor = E.entites[0]; window.enemy = E.entites[1];
     (await import("/js/app/stages.js")).configureBattleSystemsOnce();
     Admin.initializeAdminLevel(E.entitesNestUp);
@@ -156,7 +158,8 @@ try {
     assert.ok(await battle.evaluate(() => G.gameStarted && Clock.isCombatPaused()));
     // The resurrection also refreshes the pause checkpoint; wait for that write
     // before asking the normal resume control to continue the battle.
-    await battle.waitForFunction(async () => { await P.resumeCombat(); return !Clock.isCombatPaused(); });
+    await battle.locator('#combat-pause-control').click();
+    await battle.waitForFunction(() => !Clock.isCombatPaused());
     await battle.waitForTimeout(300);
     assert.ok(await battle.evaluate(() => !actor.isDEAD && !document.querySelector(`#Box_Entite_${actor.id} .dead-sprite`)));
     try {

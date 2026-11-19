@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.88.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.89.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -21,11 +21,14 @@ données du combat, avec le même mécanisme pour le jeu et le simulateur.
 La version `0.88.0-dev` range les styles par grands thèmes tout en conservant
 les feuilles propres aux monstres et à leurs contours de sélection.
 
+La version `0.89.0-dev` fait lire les positions, occupants, distances et cibles
+des projectiles dans les données du plateau, communes au jeu et au simulateur.
+
 La version est définie une seule fois dans `docs/js/ui/display.js` (`GAME_VERSION`).
 `formatGameIdentity()` compose le même libellé lors de la création et de la mise
 à jour de `#game-id-display`.
-Incrémenter le dernier nombre pour une correction publiée (`0.88.1-dev`), et le
-nombre central pour une nouvelle étape importante (`0.89.0-dev`). Le suffixe
+Incrémenter le dernier nombre pour une correction publiée (`0.89.1-dev`), et le
+nombre central pour une nouvelle étape importante (`0.90.0-dev`). Le suffixe
 `dev` indique que cette branche reste en développement.
 
 ## Publication
@@ -113,3 +116,10 @@ Les feuilles du jeu se trouvent dans `docs/css/` et se chargent dans cet ordre :
 sept feuilles pour le jeu et une pour cet outil. L'ordre de chargement fait partie
 du rendu ; ne pas le remplacer par un tri alphabétique. Pour ajouter une règle,
 utiliser le thème existant plutôt qu'un nouveau fichier de correctifs.
+
+Les positions de combat sont indexées dans `board/model.js`, y compris celles des
+corps qui ne réservent plus de cases. `board/targets.js` fournit la lecture commune
+au ciblage. Les destinations des mouvements aléatoires et des attractions sont
+calculées dans `board/placementRules.js` ; `board/controller.js` applique ensuite
+le placement et actualise les vues. Le rendu d’un projectile retrouve sa case
+par identifiant, sans choisir lui-même son occupant.

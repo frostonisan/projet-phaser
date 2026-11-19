@@ -1,6 +1,18 @@
 // The current HTML board is one adapter for the logical grid and its coordinates.
 import { createBoardGeometry, footprintCells, footprintCenter } from '../board/model.js';
-const geometryCache = new WeakMap();
+const geometryCache = new WeakMap(), cellGeometry = new WeakMap();
+function cacheGeometry(grid, data) {
+  geometryCache.set(grid, data);
+  for (const hex of data.cells) cellGeometry.set(hex, { grid, data });
+  return data;
+}
+export function getBoundBoardCell(hex) {
+  const binding = cellGeometry.get(hex);
+  return binding && geometryCache.get(binding.grid) === binding.data ? binding.data.points.get(hex) || null : null;
+}
+export function getBoardCellView(position, grid = document.getElementById('hexGrid')) {
+  return getBoardGeometry(grid)?.byPosition.get(position) || null;
+}
 export const gridForHex = hex => hex?.closest('.hex-grid, #hexGrid') || hex?.parentElement;
 export const readHexCoordinates = hex => ({ row: Number(hex?.dataset.row), col: Number(hex?.dataset.col) });
 export { projectBoardCell } from '../board/model.js';
@@ -8,25 +20,25 @@ export function invalidateBoardGeometry(grid) { if (grid) geometryCache.delete(g
 export function getBoardGeometry(grid) {
   if (!grid) return null;
   let data = geometryCache.get(grid);
-  if (data?.first?.isConnected && data.first.parentElement === grid) return data;
+  if (data) return data;
   const cells = [...grid.querySelectorAll('.hex[data-position]')];
   const model = createBoardGeometry(cells.map(hex => ({ id: hex.dataset.position,
     ...readHexCoordinates(hex), x: parseFloat(hex.style.left) || 0, y: parseFloat(hex.style.top) || 0,
-    coordinate: hex.dataset.coordinate, role: hex.dataset.role,
+    coordinate: hex.dataset.coordinate, role: hex.dataset.role || ['tank', 'fantassin', 'mage']
+      .find(role => hex.classList.contains(`${role}-role`) || hex.querySelector('.socle')?.classList.contains(role)) || 'gueux',
     side: ['SideA', 'Neutral', 'SideB'].find(side => hex.classList.contains(side)) })));
   data = { cells, model, first: cells[0], byPosition: new Map(cells.map(hex => [hex.dataset.position, hex])),
     points: new Map(cells.map(hex => [hex, model.byId.get(hex.dataset.position)])) };
-  geometryCache.set(grid, data);
-  return data;
+  return cacheGeometry(grid, data);
 }
 export function getFootprintElements(anchor, size = 1) {
   if (!anchor?.isConnected) return [];
   const data = getBoardGeometry(gridForHex(anchor));
-  return footprintCells(data.model, anchor.dataset.position, size).map(id => data.byPosition.get(id));
+  return footprintCells(data.model, data.points.get(anchor)?.id, size).map(id => data.byPosition.get(id));
 }
 export function getFootprintCenter(members) {
   const data = getBoardGeometry(gridForHex(members[0]));
-  return footprintCenter(data?.model, members.map(hex => hex.dataset.position));
+  return footprintCenter(data?.model, members.map(hex => data.points.get(hex)?.id));
 }
 // A view binds IDs to live entities/DOM only at the renderer boundary.
 export function getOccupantView(registry, id) {
@@ -75,6 +87,5 @@ export function renderBoardGeometry(grid, model) {
   for (const [id, hex] of existing) if (!model.byId.has(id)) hex.remove();
   const data = { cells, model, first: cells[0], byPosition: new Map(cells.map(hex => [hex.dataset.position, hex])),
     points: new Map(cells.map(hex => [hex, model.byId.get(hex.dataset.position)])) };
-  geometryCache.set(grid, data);
-  return data;
+  return cacheGeometry(grid, data);
 }

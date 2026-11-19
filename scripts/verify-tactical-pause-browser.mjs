@@ -64,6 +64,8 @@ async function fixture(config = {}) {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const boardController = await import('/js/board/controller.js');
+    boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
     window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
     window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');

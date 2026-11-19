@@ -3630,7 +3630,7 @@ function removeSelectedAdminBattleObject() {
 export function removeAdminEntityIngame(entityId) {
     if (!isAdminMode()) return false;
     if (!entityId || !isAdminLevelActive()) return false;
-    releaseEntityFootprint({id:entityId});
+    releaseEntityFootprint({id:entityId}, { remove: true });
 
     const box = document.getElementById(`Box_Entite_${entityId}`);
     const hex = box?.closest('.hex');

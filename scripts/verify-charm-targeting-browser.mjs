@@ -59,6 +59,8 @@ async function fixture(side, withOthers = true, expiry = false, group = false) {
       entity.isDEAD = false; entity.statut = ['alive']; E.entites.push(entity);
       const created = Create.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const boardController = await import('/js/board/controller.js');
+    boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
     window.test = { E, G, F, A, Fx, Control, Attacks, D, Sim };
   }, { side, withOthers, expiry, group });
   return page;

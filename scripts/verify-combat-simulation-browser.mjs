@@ -18,6 +18,20 @@ await new Promise(done => server.listen(0, '127.0.0.1', done));
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'chrome', headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+  // Alter the live view after restoration, not only the saved HTML before it.
+  // The injected branch is confined to this regression test's intercepted module.
+  await page.route('**/js/debug/simulationRuntime.js', async route => {
+    const response = await route.fetch(), source = await response.text();
+    const anchor = '  footprints.restoreCombatBoard(input.board, E.entites);';
+    assert.ok(source.includes(anchor));
+    await route.fulfill({ response, body: source.replace(anchor, anchor + `
+      if (input.corruptLiveBoard) {
+        const grid = document.getElementById('hexGrid'), cells = [...grid.querySelectorAll('.hex')];
+        grid.querySelectorAll('.entite-box').forEach(box => { cells[0].append(box); box.dataset.position = 'forged'; });
+        cells.forEach(cell => { cell.className = 'hex SideA occupied'; cell.dataset.row = '999'; cell.dataset.col = '999'; cell.style.left = '12345px'; });
+      }
+    `) });
+  });
   const profiler = process.env.SIMULATION_PROFILE ? await page.context().newCDPSession(page) : null;
   if (profiler) { await profiler.send('Profiler.enable'); await profiler.send('Profiler.start'); }
   page.on('pageerror', error => console.error('PAGE ERROR:', error));
@@ -44,6 +58,8 @@ try {
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const boardController = await import('/js/board/controller.js');
+    boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
     window.Sim = await import("/js/debug/simulation.js");
     // Regression: real players already have an acquired army in storage.
     // This exercises Application startup's import-time acquisition registration, unlike
@@ -70,9 +86,11 @@ try {
     const options = { seed: 92, durationMs: 5000, trace: true };
     const clean = await Sim.simulateTrial(snapshot, options), restored = await Sim.simulateTrial(dirty, options);
     const metric = trial => ({ end: trial.end, winner: trial.winner, durationMs: trial.durationMs, entities: trial.entities, journal: trial.journal });
-    return { clean: metric(clean), restored: metric(restored) };
+    const corrupt = await Sim.simulateTrial(snapshot, { ...options, corruptLiveBoard: true });
+    return { clean: metric(clean), restored: metric(restored), corrupt: metric(corrupt) };
   });
   assert.deepEqual(restoredFromData.restored, restoredFromData.clean, 'Simulation uses combat positions and cells even when visual markup disagrees');
+  assert.deepEqual(restoredFromData.corrupt, restoredFromData.clean, 'Combat results and journals ignore altered live sprite parents and cell geometry after restoration');
   const report = await page.evaluate(async () => {
     window.progressHistory = [];
     window.report = await Sim.runCombatSimulation(snapshot, { count: 8, durationSeconds: 5, seed: 17 }, {

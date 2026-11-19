@@ -560,8 +560,8 @@ attaque hybride.
    d'attaque ; préciser le contrat entre l'exécution et la présentation.
 3. **P3 livrée** : état logique du plateau, occupation et placements indépendants du DOM,
    avec un adaptateur de coordonnées et de rendu pour le jeu actuel.
-4. **Création et restauration communes livrées** : terminer la lecture des positions
-   et des occupants dans cet état par les déplacements et le ciblage.
+4. **Lectures communes livrées** : positions, occupants, déplacements et ciblage
+   utilisent les données du plateau ; les projectiles verrouillent des identifiants de cases.
 5. Réduire les cycles restants, puis poursuivre le découpage de events/runtime.js,
    entities/progression.js et debug/admin.js par fonction métier.
 6. Intégrer un premier projectile Phaser lorsque ces frontières sont validées.
@@ -679,3 +679,65 @@ du bloc utilisent ce format ; son style blanc est dans `interface.css`.
 Le bloc est ancré juste au-dessus des commandes admin ; l’ancien décalage
 `top: -630px` le plaçait hors écran selon la hauteur de ces commandes.
 Ce déplacement volontaire est vérifié séparément de la comparaison CSS ci-dessus.
+
+
+## Positions, déplacements et ciblage communs — v0.89.0-dev
+
+Aucun module ajouté. `board/model.js` porte désormais aussi l’index des placements :
+les occupants réservent des cases, tandis qu’un corps libéré conserve sa position
+sans réservation. La suppression réelle d’une entité retire explicitement ce placement.
+Le champ `placements` des instantanés de combat existe déjà ; le format de pause reste 2.
+La restauration vérifie la cohérence entre placements et occupants avant publication.
+
+Les lecteurs de `board/controller.js` et `board/targets.js` utilisent ces index, sans
+retrouver la position d’une entité par son parent HTML. La géométrie reste stable
+jusqu’à une reconstruction explicite. Les classes de camp, d’occupation, de rôle,
+les attributs des sprites et les coordonnées CSS ne réécrivent pas les règles.
+`calculateHexes` et `hexCoordonne` lisent également les cases logiques.
+
+`board/placementRules.js` choisit les destinations voisines et les attractions dans
+les données. Les distances hexagonales, tailles complètes, obstacles et consommables
+restent pris en compte. La proximité utilise les coordonnées du plateau, avec un
+ordre stable en cas d’égalité : le zoom, la perspective CSS et les déplacements
+visuels ne peuvent plus changer le choix. Le calcul ne tire pas de nombre aléatoire ;
+le déplacement aléatoire conserve son tirage après la consommation autorisée de charge.
+Les échanges valident les deux empreintes avant résistance et application.
+
+Les attaques physiques et mixtes conservent `aimedHex` / `lockedHex` comme identifiants,
+pas comme éléments HTML. À l’impact, elles consultent l’occupant logique courant.
+`rendering/animations.js` résout ensuite la case visuelle pour dessiner la trajectoire.
+Les références de cases sauvegardées utilisent aussi leur identifiant ; l’horloge
+passe par l’adaptateur léger du plateau, sans importer le contrôleur du jeu.
+
+Les fixtures de tests qui créent directement leurs cases et sprites publient désormais
+explicitement leur géométrie et leur occupation. Leurs assertions de gameplay restent
+inchangées ; l’assertion de verrouillage d’un projectile compare maintenant l’identifiant.
+Le test des rôles modifie les rôles logiques, comme le fait le terrain généré.
+
+La comparaison couvre aussi des parents de sprites et métadonnées HTML faussés après
+l’initialisation : positions, occupants, distances, cases disponibles et cibles restent
+identiques. Le simulateur subit la même altération après sa restauration et compare
+résultat, PV et journal complet au combat intact. Le contrôle des tailles exécute les
+mêmes actions spatiales dans le jeu visible et dans le simulateur.
+
+Limite du lot : le rendu, l’application aux vues et certains cycles de création d’objets
+utilisent toujours l’adaptateur HTML. Le simulateur garde son document isolé. Il ne s’agit
+pas encore d’une exécution complète sans navigateur ni de l’intégration de Phaser.
+Les premières créations HTML historiques peuvent être adoptées explicitement par
+`rebuildBoardOccupancy` / `syncEntityFootprints` ; elles ne servent pas de référence
+aux lectures spatiales pendant le combat.
+
+Un échec préexistant de `verify-parametric-effects-browser.mjs` sur le réveil après
+dégâts + Grab est reproduit avec les sources publiées avant ce lot. Les assertions
+ne sont pas assouplies et les règles de sommeil ne sont pas changées ici. Les rapports
+de référence et de validation sont dans `outputs/refactor-board-reads/`.
+
+Validation retenue après les corrections de fixtures : 57 tests Node, syntaxe et
+références statiques, puis 14 scénarios navigateur validés (rapports détaillés et
+consolidation dans `outputs/refactor-board-reads/final-summary.json`). Cela inclut
+785 contrôles de placement, 815 contrôles spatiaux dans le jeu et 813 dans le
+simulateur, 35 imports indépendants, la pause/reprise/restauration, les projectiles,
+la résurrection et quatre profils mobiles. Le simulateur vérifie aussi deux lots
+de 20 combats, les graines aléatoires, les journaux et l’export.
+Le test de résurrection utilise maintenant le véritable bouton de reprise, qui
+attend la fin de la sauvegarde, puis vérifie séparément que l’horloge a repris.

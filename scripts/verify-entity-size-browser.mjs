@@ -156,9 +156,9 @@ async function spatialAudit() {
   const members=P.entityFootprint(a);P.releaseEntityFootprint(a);
   check(members.every(h=>!O.isHexOccupied(h.dataset.position)),'Release clears every occupied member, even while the sprite remains');
   delete document.getElementById(`Box_Entite_${a.id}`).dataset.footprintReleased;P.syncEntityFootprints(grid);invariant();
-  const roles=P.entityFootprint(a);roles.forEach((h,i)=>h.dataset.role=i<4?'mage':'tank');
+  const roles=P.entityFootprint(a);roles.forEach((h,i)=>P.getBoardCell(h).role=i<4?'mage':'tank');
   P.syncEntityFootprints(grid);check(a.role==='mage','Role follows majority of occupied cells');
-  roles.forEach((h,i)=>h.dataset.role=i<3?'mage':'tank');P.syncEntityFootprints(grid);check(a.role==='mage','Role tie keeps the current role');
+  roles.forEach((h,i)=>P.getBoardCell(h).role=i<3?'mage':'tank');P.syncEntityFootprints(grid);check(a.role==='mage','Role tie keeps the current role');
   reset();P.clearFootprintAnimations();
   return {checks,simulation:Boolean(globalThis.__combatSimulation)};
 }

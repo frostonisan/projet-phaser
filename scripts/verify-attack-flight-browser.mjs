@@ -311,7 +311,7 @@ try {
     attacker.isDEAD = true;
     await sleep(40);
     const hybridProjectile = document.getElementById(f.id);
-    check(f.guidanceLost && f.lockedHex === hexes[4]
+    check(f.guidanceLost && f.lockedHex === hexes[4].dataset.position
       && hybridProjectile?.classList.contains('hybrid-physical-remnant')
       && document.querySelectorAll(`.magic-projectile-dispersion[data-projectile-id="${CSS.escape(f.id)}"] .magic-projectile-dispel-particle`).length === 7,
     'Caster death disperses hybrid magic and turns the moving core into a physical remnant');

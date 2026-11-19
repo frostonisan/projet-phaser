@@ -1,4 +1,5 @@
-import { ENTITY_SIZE_OPTIONS, entitySizeInCells, footprintCells, footprintCenter, boardOccupantsAt } from './model.js';
+import { ENTITY_SIZE_OPTIONS, entitySizeInCells, footprintCells, footprintCenter, boardOccupantsAt,
+  boardCellDistance, boardFootprintDistance, nearestBoardCell } from './model.js';
 
 // No writes to the board, entities, random state or presentation while searching.
 export function planBoardPlacements(state, requests, {
@@ -93,4 +94,23 @@ export function planBoardDeployment(state, entities, { previousCoordinates = new
   const byEntity = new Map(entities.map(entity => [String(entity.id), entity]));
   return planBoardPlacements(state, [...assignments].map(([entity, cell]) => ({ id: String(entity.id), anchor: cell.id, size: entitySizeInCells(entity) })),
     { allowedCell: (id, cell) => allowed(byEntity.get(id), byId.get(cell)) });
+}
+
+// Effect movement choices share exactly the same geometry and occupancy as placement.
+export function adjacentBoardDestinations(state, id) {
+  const placement = state?.placements.get(String(id));
+  if (!placement) return [];
+  return state.geometry.cells.filter(cell => boardCellDistance(state.geometry, placement.anchor, cell.id) === 1
+    && planBoardPlacements(state, [{ id: String(id), anchor: cell.id, size: placement.size }]).valid).map(cell => cell.id);
+}
+export function pullBoardDestination(state, targetId, attackerId, distance = 5) {
+  const target = state?.placements.get(String(targetId)), attacker = state?.placements.get(String(attackerId));
+  if (!target || !attacker || target.anchor === attacker.anchor) return null;
+  const members = position => footprintCells(state.geometry, position.anchor, position.size);
+  const attackerCells = members(attacker), separation = boardFootprintDistance(state.geometry, members(target), attackerCells);
+  const candidates = state.geometry.cells.filter(cell => cell.id !== target.anchor
+    && boardCellDistance(state.geometry, target.anchor, cell.id) <= Math.max(0, Math.floor(distance))
+    && boardFootprintDistance(state.geometry, footprintCells(state.geometry, cell.id, target.size), attackerCells) < separation
+    && planBoardPlacements(state, [{ id: String(targetId), anchor: cell.id, size: target.size }]).valid).map(cell => cell.id);
+  return nearestBoardCell(state, attacker.anchor, candidates, { excludeId: String(targetId) });
 }

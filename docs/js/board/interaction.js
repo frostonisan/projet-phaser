@@ -1,8 +1,9 @@
+import { getEntityBoardHex, getBoardCell, getFootprintOccupant, planEntityPlacements,
+  commitEntityPlacements, calculateHexes } from "./controller.js";
 import { consumeEntityMovement, ensureMovementState } from "./deployment.js";
 import {
   updateRoleInDOM, updateMovementDisplay,
 } from "../rendering/hud.js";
-import { getFootprintOccupant, planEntityPlacements, commitEntityPlacements, calculateHexes } from "./controller.js";
 import { isEntityMovementBlocked } from "../combat/control.js";
 import { setTimeout, isCombatPaused, isCombatInteractionBlocked, notifyCombatAction } from "../combat/clock.js";
 import { generateUniqueID, entites, enrichEntityStats } from "../entities/runtime.js";
@@ -245,26 +246,6 @@ hex.addEventListener('drop', event => {
         return;
     }
 
-    let originalParent = null;
-    if (!isNewEntity && draggedElement) {
-        originalParent = draggedElement.closest('.hex');
-    }
-const originalHexPosition = originalParent?.dataset?.position || null;
-
-if (!isNewEntity && draggedElement) {
-    if (draggedElement.classList.contains('side-B') && !isAdminMode) {
-        console.error(`🚫 Drop interdit pour ${draggedElement.id} (côté B bloqué, mode normal)`);
-        return;
-    }
-
-    if (dropHex.classList.contains('SideB') && !isAdminMode) {
-        console.error(`🚫 Drop interdit sur hex SideB pour ${draggedElement.id} (Mode Normal)`);
-        return;
-    }
-
-    console.log(`✅ Drop autorisé pour ${draggedElement.id} (Mode Admin: ${isAdminMode})`);
-}
-
 let entite = null;
 
 if (!isNewEntity && draggedElement) {
@@ -277,16 +258,37 @@ if (!isNewEntity && draggedElement) {
     }
 }
 
+    let originalParent = null;
+    if (!isNewEntity && draggedElement) {
+        originalParent = getEntityBoardHex(entite);
+    }
+const originalHexPosition = getBoardCell(originalParent)?.id || null;
+
+if (!isNewEntity && draggedElement) {
+    if (entite.side === 'B' && !isAdminMode) {
+        console.error(`🚫 Drop interdit pour ${draggedElement.id} (côté B bloqué, mode normal)`);
+        return;
+    }
+
+    if (getBoardCell(dropHex)?.side === 'SideB' && !isAdminMode) {
+        console.error(`🚫 Drop interdit sur hex SideB pour ${draggedElement.id} (Mode Normal)`);
+        return;
+    }
+
+    console.log(`✅ Drop autorisé pour ${draggedElement.id} (Mode Admin: ${isAdminMode})`);
+}
+
+
 const previousRole = entite.role;
 const existingElement = getFootprintOccupant(dropHex, draggedElement);
 const swappedEntite = existingElement && entites.find(e => String(e.id) === existingElement.id.replace('Box_Entite_', ''));
 if (existingElement && (!swappedEntite || swappedEntite.side !== entite.side)) return;
-if (swappedEntite) dropHex = existingElement.closest('.hex');
-const targetHexPosition = dropHex.dataset.position;
+if (swappedEntite) dropHex = getEntityBoardHex(swappedEntite);
+const targetHexPosition = getBoardCell(dropHex)?.id;
 const isEffectiveHexMove = originalHexPosition !== targetHexPosition;
 const requests = [{ entity: entite, hex: dropHex }];
 if (swappedEntite) requests.push({ entity: swappedEntite, hex: originalParent });
-const plan = planEntityPlacements(requests, { allowGroundConsumables: !isAdminMode, allowedCell: (_entity, cell) => isAdminMode || !cell.classList.contains('SideB') });
+const plan = planEntityPlacements(requests, { allowGroundConsumables: !isAdminMode, allowedCell: (_entity, cell) => isAdminMode || cell.side !== 'SideB' });
 if (!plan.valid) { EffectMessage(entite, 'Placement impossible !'); finishDragHexFeedback(); return; }
 let movementCheck = null;
 if (isEffectiveHexMove && !isAdminMode) {

@@ -104,6 +104,8 @@ async function fixture(side, scenario) {
       entity.isDEAD = false; entity.statut = ['alive']; if (i) entity.stats.HP.current = i === 1 ? 9000 : 8000;
       E.entites.push(entity); const created = Create.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const boardController = await import('/js/board/controller.js');
+    boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
     window.test = { E, G, F, Sim, Timeline, Clock, scenario };
   }, { side, scenario });
   return page;

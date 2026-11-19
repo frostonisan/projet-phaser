@@ -148,7 +148,7 @@ async function spawnEntiteIngameInternal(entity, options) {
         ]);
 
         if (!spriteResult?.loaded) {
-            releaseEntityFootprint(entity);
+            releaseEntityFootprint(entity, { remove: true });
             const index = entites.indexOf(entity);
             if (index !== -1) entites.splice(index, 1);
             refreshStageAccess();

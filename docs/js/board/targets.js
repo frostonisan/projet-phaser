@@ -1,14 +1,15 @@
-import { getFootprintOccupant } from "./controller.js";
+import { getEntityBoardPosition, getEntityBoardHex, getBoardCell, getBoardCellOccupants } from "./controller.js";
 
-// DOM-backed board access stays here while the logical board is extracted.
-export const isHexTarget = target => target?.nodeType === 1 && target.classList.contains('hex');
+// HTML is accepted at the interaction boundary; spatial facts come from combat data.
+export const isHexTarget = target => target?.nodeType === 1 && Boolean(getBoardCell(target));
+export const getTargetPosition = target => target?.nodeType === 1
+  ? getBoardCell(target)?.id ?? null : getEntityBoardPosition(target);
 
+// Current renderer adapter. Combat decisions use getTargetPosition instead.
 export function getEntityHex(entity) {
-  if (isHexTarget(entity)) return entity.isConnected ? entity : null;
-  return document.getElementById(`Box_Entite_${entity?.id}`)?.closest('.hex') || null;
+  return isHexTarget(entity) ? entity : getEntityBoardHex(entity);
 }
-
-export function getHexEntity(hex, entities) {
-  const box = getFootprintOccupant(hex);
-  return box ? entities.find(entity => String(entity.id) === box.id.replace('Box_Entite_', '')) || null : null;
+export function getHexEntity(hex, entities, grid) {
+  const occupant = getBoardCellOccupants(hex, grid).find(record => record.movable);
+  return occupant ? entities.find(entity => String(entity.id) === occupant.id) || null : null;
 }

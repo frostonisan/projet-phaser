@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createBoardGeometry, createBoardState, footprintCells, footprintCenter, chooseFootprintRole,
   putBoardOccupant, removeBoardOccupant, boardOccupantsAt, applyBoardPlacements, snapshotBoardState,
-  offsetToAxial, axialDistance, createBoardLayout, restoreBoardState } from '../docs/js/board/model.js';
-import { planBoardPlacements, planBoardDeployment } from '../docs/js/board/placementRules.js';
+  offsetToAxial, axialDistance, createBoardLayout, restoreBoardState, boardEntityPosition, boardCellDistance, nearestBoardCell } from '../docs/js/board/model.js';
+import { planBoardPlacements, planBoardDeployment, adjacentBoardDestinations, pullBoardDestination } from '../docs/js/board/placementRules.js';
 const geometry = (rows=5,cols=7) => createBoardGeometry(Array.from({length:rows*cols},(_,i)=>{
   const row=Math.floor(i/cols),col=i%cols;
   return {id:`${row}:${col}`,row,col,x:col*70+(row%2?35:0),y:row*60};
@@ -132,6 +132,10 @@ test('restoration rejects incomplete footprints, duplicate IDs and solid overlap
     data => data.occupants[0].members.pop(),
     data => data.occupants[0].anchor = 'absent',
     data => data.occupants[0].size = 4,
+    data => data.placements[0].anchor = 'absent',
+    data => data.placements.push({ ...data.placements[0] }),
+    data => data.placements[0].released = true,
+    data => data.placements.length = 0,
   ]) {
     const data = JSON.parse(original); corrupt(data);
     assert.throws(() => restoreBoardState(data), /plateau invalides/); assert.equal(dump(state), original);
@@ -148,4 +152,40 @@ test('restoration retains drops and solid objects, including beneath a released 
   assert.deepEqual(boardOccupantsAt(restored, '1:1').map(o => o.id), ['drop']);
   assert.equal(boardOccupantsAt(restored, '1:2').length, 0);
   assert.equal(planBoardPlacements(restored, [{ id: 'new', anchor: '4:5' }], { push: true }).valid, false);
+});
+
+
+test('released bodies retain a logical position until removed, without blocking movement', () => {
+  const state = createBoardState(geometry()); occupant(state, 'body', '2:2', 3);
+  removeBoardOccupant(state, 'body', { keepPosition: true }); state.placements.get('body').released = true;
+  assert.equal(boardEntityPosition(state, 'body'), '2:2'); assert.equal(boardOccupantsAt(state, '2:2').length, 0);
+  const restored = restoreBoardState(JSON.parse(dump(state)));
+  assert.equal(boardEntityPosition(restored, 'body'), '2:2');
+  assert.equal(planBoardPlacements(restored, [{ id: 'new', anchor: '2:2' }]).valid, true);
+  removeBoardOccupant(restored, 'body'); assert.equal(boardEntityPosition(restored, 'body'), null);
+});
+
+test('nearest logical cell keeps stable ties and considers whole footprints and ground objects', () => {
+  const state = createBoardState(geometry()); occupant(state, 'large', '2:2', 2);
+  assert.equal(nearestBoardCell(state, '2:1', ['2:2', '2:3', '2:0']), '2:0');
+  assert.equal(nearestBoardCell(state, '2:1', ['2:2', '2:0'], { excludeId: 'large' }), '2:2');
+  assert.equal(nearestBoardCell(state, '2:1', ['2:0', '2:2'], { excludeId: 'large' }), '2:0');
+  putBoardOccupant(state, { id: 'drop', anchor: '2:0', size: 1, members: ['2:0'], groundConsumable: true });
+  assert.equal(nearestBoardCell(state, '2:1', ['2:0', '2:2']), null);
+  assert.equal(boardCellDistance(state.geometry, 'absent', '2:0'), Infinity);
+});
+
+test('movement choices survive serialization for every size and do not mutate the board', () => {
+  for (const size of [1, 2, 3, 6]) {
+    const state = createBoardState(geometry(7, 12)); occupant(state, 'target', '2:6', size); occupant(state, 'caster', '2:1', 2);
+    const original = dump(state), restored = restoreBoardState(JSON.parse(original));
+    const choices = adjacentBoardDestinations(state, 'target');
+    assert.ok(choices.length); assert.deepEqual(choices, adjacentBoardDestinations(restored, 'target'));
+    for (const anchor of choices) assert.equal(planBoardPlacements(state, [{ id: 'target', anchor, size }]).valid, true);
+    const destination = pullBoardDestination(state, 'target', 'caster', 2);
+    assert.ok(destination); assert.equal(destination, pullBoardDestination(restored, 'target', 'caster', 2));
+    assert.ok(boardCellDistance(state.geometry, '2:6', destination) <= 2);
+    assert.equal(pullBoardDestination(state, 'target', 'caster', 0), null);
+    assert.equal(dump(state), original);
+  }
 });

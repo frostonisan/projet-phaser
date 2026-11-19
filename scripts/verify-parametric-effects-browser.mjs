@@ -57,7 +57,7 @@ try{
       e.isDEAD=false;e.statut=['alive'];e.stats.shift={current:10,max:10};
       const box=document.createElement('div');box.id=`Box_Entite_${e.id}`;box.className='entite-box';box.dataset.position=e.position;
       box.innerHTML=`<div id="sbire_${e.id}"><div id="effectsContainer_${e.id}"></div><div id="PopDow_${e.id}"></div></div>`;
-      hex.append(box);E.entites.push(e);Move.refreshHexOccupancy(hex);return e;
+      hex.append(box);E.entites.push(e);Move.invalidateFootprintGeometry(host);Move.rebuildBoardOccupancy(host);return e;
     };
     const random=Math.random,date=Date.now;
     let now=date(),next=0;const timers=new Map();
