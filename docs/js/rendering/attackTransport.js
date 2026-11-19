@@ -1,9 +1,10 @@
-import { animationProjectile, animationMelee, getMeleeFlightVisual, prepareCombatRenderer, animationPhaserMelee, isPhaserMeleeAttack } from "./animations.js";
+import { animationProjectile, animationMelee, getMeleeFlightVisual, prepareCombatRenderer } from "./animations.js";
 import { normArr, getAttackResolutionFlags } from "../combat/attackResolution.js";
 import { attackEffects } from '../data/attackEffects.js';
 
 export function prepareAttackTransport(attack) {
-  if (getAttackResolutionFlags(attack).isRange || isPhaserMeleeAttack(attack)) prepareCombatRenderer(getProjectileEffectClasses(attack));
+  const flags = getAttackResolutionFlags(attack);
+  if (flags.isRange || flags.isMelee) prepareCombatRenderer(getProjectileEffectClasses(attack));
 }
 
 function getProjectileEffectClasses(attack = {}) {
@@ -30,9 +31,9 @@ export async function presentAttackTransport(flight, impact, { duration, isRange
     return impact;
   }
   const controller = (restored && getMeleeFlightVisual(flight.id))
-    || (isPhaserMeleeAttack(attack) && !options.secondHit
-      ? animationPhaserMelee(attacker, target, { duration, flightId: flight.id, flight })
-      : animationMelee(attacker, target, Boolean(options.secondHit), { duration, flightId: flight.id }));
+    || animationMelee(attacker, target, Boolean(options.secondHit), {
+      duration, flightId: flight.id, flight, effectClasses: getProjectileEffectClasses(attack),
+    });
   controller?.bindFlight?.(flight);
   const status = await impact;
   // Display completion must not delay the next gameplay phase.

@@ -5742,7 +5742,9 @@ async function runEventMeleeAttackVisual({
     return applyDamage();
   }
 
-  const controller = animationMelee(attacker, target, false, { duration });
+  const attack = attacker.currentAttack || {};
+  const controller = animationMelee(attacker, target, false, { duration, attack,
+    effectClasses: eventAttackProjectileVisualClasses(attack) });
   controller?.resolveImpact?.(true);
 
   await new Promise((resolve) => setTimeout(resolve, duration));

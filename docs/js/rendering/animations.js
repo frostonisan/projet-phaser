@@ -1,7 +1,7 @@
 import { applyMovementDestabilisation, wakeFromMovement } from "../combat/effects.js";
 import {
   setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
-  clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow, isCombatPaused,
+  clearTimeout, setInterval, clearInterval, requestAnimationFrame, cancelAnimationFrame, clockNow, isCombatPaused, combatReference, combatTarget,
 } from "../combat/clock.js";
 import { playCachedGif, cachedResourceUrl, loadSpriteAtlas, PROJECTILE_ASSETS } from "../data/loaderList.js";
 import { QuitCurrentLevel } from "../app/stages.js";
@@ -190,8 +190,6 @@ const activeMeleeAnimations = new Map();
 const meleeOriginalVisibilityLocks = new Map();
 const meleeOriginalRecoveryAnimations = new Map();
 const meleePostRecoveryOpacityLocks = new WeakMap();
-let meleeAnimationSequence = 0;
-const meleeTrailPool = [];
 const MELEE_ORIGINAL_RECOVERY_DURATION = 750;
 
 // Courbes position/temps dérivées de vitesses continues. La deuxième colonne
@@ -300,151 +298,6 @@ export function createSpeedTrail(parent = null, options = {}) {
   return trail;
 }
 
-function acquireMeleeTrail(parent) {
-  const pooledTrail = meleeTrailPool.pop();
-  const trail = pooledTrail
-    ? configureSpeedTrail(pooledTrail)
-    : createSpeedTrail();
-
-  parent.appendChild(trail);
-  return trail;
-}
-
-function releaseMeleeTrail(trail, animationsCancelled = false) {
-  if (!trail) return;
-  if (!animationsCancelled) trail.getAnimations().forEach(animation => animation.cancel());
-  trail.classList.remove("ambidextry-melee-trail");
-  trail.style.boxShadow = "";
-  trail.style.filter = "";
-  trail.remove();
-  if (meleeTrailPool.length < 12) meleeTrailPool.push(trail);
-}
-
-function acquireMeleeImpactFx(parent) {
-  const layer = document.createElement("div");
-  layer.className = "melee-impact-fx";
-  Object.assign(layer.style, {
-    position: "absolute",
-    width: "0",
-    height: "0",
-    zIndex: "10001",
-    pointerEvents: "none",
-  });
-
-  const ring = document.createElement("div");
-  ring.className = "melee-impact-ring";
-  Object.assign(ring.style, {
-    position: "absolute",
-    left: "-26px",
-    top: "-26px",
-    width: "52px",
-    height: "52px",
-    border: "4px solid rgba(255, 238, 155, 1)",
-    borderRadius: "50%",
-    background: "radial-gradient(circle, rgba(255, 250, 205, 0.55) 0%, rgba(255, 224, 120, 0.18) 42%, rgba(255, 224, 120, 0) 70%)",
-    opacity: "0",
-    willChange: "transform, opacity",
-  });
-  layer.appendChild(ring);
-
-  const particles = [];
-  for (let index = 0; index < 6; index += 1) {
-    const particle = document.createElement("i");
-    Object.assign(particle.style, {
-      position: "absolute",
-      left: "-4px",
-      top: "-2px",
-      width: "8px",
-      height: "5px",
-      borderRadius: "2px",
-      background: "rgba(255, 248, 200, 1)",
-      opacity: "0",
-      willChange: "transform, opacity",
-    });
-    layer.appendChild(particle);
-    particles.push(particle);
-  }
-
-  layer._ring = ring;
-  layer._particles = particles;
-  layer._animations = [];
-  layer.style.display = "block";
-  parent.appendChild(layer);
-  return layer;
-}
-
-function releaseMeleeImpactFx(layer) {
-  if (!layer) return;
-  layer._animations?.splice(0).forEach(animation => animation.cancel());
-  layer.remove();
-}
-
-function playMeleeImpactFx(parent, targetElement, x, y, unitX, unitY, duration, elapsed = 0) {
-  const layer = acquireMeleeImpactFx(parent);
-  layer.style.left = `${x}px`;
-  layer.style.top = `${y}px`;
-
-  const animations = layer._animations;
-  animations.push(layer._ring.animate(
-    [
-      { opacity: 1, transform: "scale(0.12)" },
-      { opacity: 0.92, transform: "scale(0.48)", offset: 0.16 },
-      { opacity: 0, transform: "scale(2.8)" },
-    ],
-    { duration: duration * 0.92, easing: "cubic-bezier(0.1, 0.6, 0.2, 1)" }
-  ));
-
-  const baseAngle = Math.atan2(unitY, unitX);
-  layer._particles.forEach((particle, index) => {
-    const spread = -1.15 + (index / (layer._particles.length - 1)) * 2.3;
-    const angle = baseAngle + spread;
-    const distance = 34 + (index % 3) * 12;
-    const particleX = Math.cos(angle) * distance;
-    const particleY = Math.sin(angle) * distance;
-
-    animations.push(particle.animate(
-      [
-        { opacity: 1, transform: "translate3d(0, 0, 0) rotate(0deg)" },
-        { opacity: 0.92, offset: 0.48 },
-        {
-          opacity: 0,
-          transform: `translate3d(${particleX}px, ${particleY}px, 0) rotate(${150 + index * 37}deg)`,
-        },
-      ],
-      {
-        duration: duration * (0.96 + (index % 2) * 0.12),
-        easing: "cubic-bezier(0.1, 0.55, 0.25, 1)",
-      }
-    ));
-  });
-
-  if (targetElement?.animate) {
-    targetElement._damageImpactVibration?.cancel();
-    const computedTransform = getComputedStyle(targetElement).transform;
-    const baseTransform = computedTransform === "none" ? "" : computedTransform;
-    const shakeX = Math.max(3, Math.abs(unitX) * 8);
-    const shakeY = Math.max(2, Math.abs(unitY) * 5);
-    const transformAt = (xOffset, yOffset) =>
-      `${baseTransform} translate3d(${xOffset}px, ${yOffset}px, 0)`.trim();
-
-    animations.push(trackImpactVibration(targetElement, targetElement.animate(
-      [
-        { transform: transformAt(0, 0) },
-        { transform: transformAt(unitX * shakeX, unitY * shakeY), offset: 0.12 },
-        { transform: transformAt(-unitX * shakeX * 0.8, -unitY * shakeY * 0.8), offset: 0.34 },
-        { transform: transformAt(unitX * shakeX * 0.5, unitY * shakeY * 0.5), offset: 0.58 },
-        { transform: transformAt(-unitX * shakeX * 0.2, -unitY * shakeY * 0.2), offset: 0.78 },
-        { transform: transformAt(0, 0) },
-      ],
-      { duration: duration * 0.86, easing: "ease-out" }
-    )));
-  }
-
-  // A congested frame must not restart an already elapsed portion of the hit.
-  if (elapsed > 0) animations.forEach(animation => { animation.currentTime = elapsed; });
-  return layer;
-}
-
 function registerActiveMeleeAnimation(attackerId, controller) {
   const key = String(attackerId);
   let controllers = activeMeleeAnimations.get(key);
@@ -507,10 +360,6 @@ function unlockMeleePostRecoveryOpacity(attackerId, sprite) {
     currentSprite.style.removeProperty("opacity");
   }
   return true;
-}
-
-function isMeleePostRecoveryOpacityLocked(sprite) {
-  return Boolean(sprite && meleePostRecoveryOpacityLocks.has(sprite));
 }
 
 function cancelMeleeOriginalRecovery(attackerId, forceVisible = false) {
@@ -2209,35 +2058,6 @@ export function animateRecuperation(entity, attack) {
     return stopRecuperation;
 }
 
-const projectileTargetFollowers = new Map();
-
-function refreshProjectileFollowers(record) {
-    for (const follower of record.followers) {
-        follower.refreshTargetPosition(clockNow());
-    }
-}
-
-function registerProjectileFollower(key, targetId, follower) {
-    let record = projectileTargetFollowers.get(key);
-    if (!record) {
-        record = { key, targetId, followers: new Set() };
-        projectileTargetFollowers.set(key, record);
-    }
-
-    record.followers.add(follower);
-    follower.refreshTargetPosition(clockNow());
-}
-
-function unregisterProjectileFollower(key, follower) {
-    const record = projectileTargetFollowers.get(key);
-    if (!record) return;
-
-    record.followers.delete(follower);
-    if (record.followers.size > 0) return;
-
-    projectileTargetFollowers.delete(key);
-}
-
 // One shared Phaser scene projects combat time; it never resolves an attack.
 const phaserFlights = new Map(), phaserEffects = new Map(), phaserMelees = new Map();
 let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
@@ -2404,7 +2224,7 @@ function drawProjectileSprite(entry, property, scene, asset, elapsed, x, y, angl
   if (!texture?.atlas) return false;
   let time = Math.max(0, elapsed) % texture.atlas.total, frame = 0;
   while (frame < texture.atlas.count - 1 && time >= texture.atlas.durations[frame]) time -= texture.atlas.durations[frame++];
-  const sprite = entry[property] ||= scene.add.image(0, 0, texture.key, frame).setName(entry.record?.id || entry.projectileId);
+  const sprite = entry[property] ||= scene.add.image(0, 0, texture.key, frame).setName(entry.record?.id || entry.projectileId || entry.id);
   sprite.setFrame(frame).setPosition(x, y + (asset.offsetY || 0)).setRotation(angle).setAlpha(alpha).setScale(scale);
   const remnant = entry.record?.visual.remnantNature || entry.visual?.remnantNature;
   sprite.setTint(remnant ? (remnant === 'piercing' ? 0xffda24 : 0xf00000) : 0xffffff);
@@ -2415,7 +2235,7 @@ function drawProjectile(entry, scene) {
   if (visual.phase === 'hidden') return;
   const { width, height } = viewport(), profile = visual.profile || entry.profile;
   const elapsed = clockNow() - visual.startTime;
-  const graphic = entry.graphic ||= scene.add.graphics().setName(entry.record?.id || entry.projectileId);
+  const graphic = entry.graphic ||= scene.add.graphics().setName(entry.record?.id || entry.projectileId || entry.id);
   let x = visual.x * width, y = visual.y * height, alpha = 1;
   graphic.clear();
   if (visual.kind === 'burst') {
@@ -2556,7 +2376,7 @@ registerCombatState('projectile-effects', () => [...phaserEffects.values()].map(
   for (const entry of [...phaserEffects.values()]) removePhaserEffect(entry);
   for (const effect of effects || []) addPhaserEffect(effect.visual, effect.profile, effect.projectileId);
 });
-// Movement notifications also drive the existing melee target followers.
+// Movement feedback remains in the combat system; Phaser samples visible targets.
 export function notifyProjectileTargetMoved(targetOrId, movementEffect = null, movementOrigin = 'automatic') {
   if (targetOrId && typeof targetOrId === 'object') {
     applyMovementDestabilisation(targetOrId, movementEffect, movementOrigin);
@@ -2567,31 +2387,21 @@ export function notifyProjectileTargetMoved(targetOrId, movementEffect = null, m
     ? domId.match(/^(?:Box_Entite_|sbire_|lord_)(.+)$/)?.[1] ?? targetOrId.dataset?.entityId ?? targetOrId.dataset?.position ?? domId
     : typeof targetOrId === 'object' ? targetOrId?.id : targetOrId;
   if (targetId == null) return 0;
-  let count = [...phaserFlights.values()].filter(entry => String(entry.target?.id) === String(targetId)).length;
-  for (const record of projectileTargetFollowers.values()) {
-    if (String(record.targetId) !== String(targetId)) continue;
-    refreshProjectileFollowers(record); count += record.followers.size;
-  }
+  const count = [...phaserFlights.values(), ...phaserMelees.values()]
+    .filter(entry => String(entry.target?.id) === String(targetId)).length;
   window.dispatchEvent(new CustomEvent('entityCombatInteraction', {
     detail: { entity: targetOrId?.stats ? targetOrId : null, entityId: targetId, kind: 'movement' },
   }));
   return count;
 }
 export function notifyAllProjectileTargetsMoved() {
-  let count = phaserFlights.size;
-  for (const record of projectileTargetFollowers.values()) {
-    refreshProjectileFollowers(record); count += record.followers.size;
-  }
-  return count;
+  return phaserFlights.size + phaserMelees.size;
 }
+
 document.addEventListener('projectileTargetsMoved', notifyAllProjectileTargetsMoved);
 
 export function clearProjectileEffects(entityList = []) {
     window.dispatchEvent(new Event('projectileVisualsCleared'));
-    projectileTargetFollowers.clear();
-
-    document.querySelectorAll('.projectile-parent, .projectile-impacte, .magic-projectile-dispersion, .melee-clone-death-blood')
-        .forEach(element => element.remove());
 
     [...activeMeleeAnimations.values()]
         .flatMap(controllers => [...controllers])
@@ -2600,20 +2410,6 @@ export function clearProjectileEffects(entityList = []) {
     meleeOriginalVisibilityLocks.clear();
     [...meleeOriginalRecoveryAnimations.keys()]
         .forEach(key => cancelMeleeOriginalRecovery(key, true));
-
-    document.querySelectorAll(
-        '.BattleFX > .melee-impact-fx, .BattleFX > .melee-motion-trail, .BattleFX > canvas[id^="meleeClone_"]'
-    )
-        .forEach(element => {
-            element.getAnimations?.().forEach(animation => animation.cancel());
-            element.remove();
-        });
-
-    document.querySelectorAll('.BattleFX').forEach(container => {
-        container.getAnimations?.({ subtree: true }).forEach(animation => animation.cancel());
-        container.replaceChildren();
-        container.remove();
-    });
 
     if (!Array.isArray(entityList)) return;
 
@@ -2645,49 +2441,17 @@ function cleanupOldProjectiles(attackerObj) {
         return false;
     });
 }
-export async function finishMeleeCloneOnDeath(clone, frozenTransform) {
-    if (!clone?.isConnected) return;
-    const transform = frozenTransform && frozenTransform !== 'none' ? frozenTransform : clone.style.transform;
-    clone.style.transform = transform;
-    clone.style.opacity = '1';
-    clone.classList.add('melee-clone-death');
-    const context = clone.getContext?.('2d');
-    if (context) {
-        context.save();
-        context.globalCompositeOperation = 'source-atop';
-        context.fillStyle = 'rgba(220, 0, 0, 0.75)';
-        context.fillRect(0, 0, clone.width, clone.height);
-        context.restore();
-    }
-    const shake = clone.animate([
-        { transform: `${transform} translate(0, 0)` },
-        { transform: `${transform} translate(-2px, 1px)` },
-        { transform: `${transform} translate(2px, -1px)` },
-        { transform: `${transform} translate(0, 0)` },
-    ], { duration: 100, iterations: 10 });
-    try { await shake.finished; } catch { return; }
-    if (!clone.isConnected) return;
-    const rect = clone.getBoundingClientRect();
-    const blood = document.createElement('img');
-    playCachedGif(blood, `./media/assets/effects/death-blood.gif`);
-    blood.className = 'melee-clone-death-blood';
-    Object.assign(blood.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
-    document.body.appendChild(blood);
-    clone.remove();
-    removeCombatVisualAfter(blood, 700);
-}
-
-// First melee pilot: the physical primary shot-p-c. Its scheduled impact remains
-// in attackExecution, and the existing melee section saves the visual controller.
-export function isPhaserMeleeAttack(attack = {}) {
-  const flags = getAttackResolutionFlags(attack);
-  return attack.functionName === 'shot-p-c' && flags.isMelee && !flags.isRange && flags.isPurePhysical;
-}
+// All melee visuals share the projectile scene and the combat clock.
+const MELEE_DEATH_ASSET = { file: '../effects/death-blood.gif', width: 110, height: 93 };
 // Use the board's rendered frame, with one scale for both axes. The UI can
 // scale inside a tall mobile viewport; viewport height must not stretch the copy.
 function meleeViewFrame(root) {
   const rect = root?.getBoundingClientRect();
   return rect?.width > 0 ? rect : { left: 0, top: 0, width: viewport().width };
+}
+function meleeTargetView(target) {
+  return target?.nodeType === 1 ? target : document.getElementById(`spriteCanvas_${target?.id}`)
+    || getBattleEntityElement(target);
 }
 function meleeViewCenter(element, frame) {
   if (!element?.isConnected) return null;
@@ -2710,7 +2474,7 @@ function returnPhaserMeleeOriginal(entry, forceVisible = false) {
 function removePhaserMelee(entry) {
   if (phaserMelees.get(entry.id) !== entry) return;
   phaserMelees.delete(entry.id);
-  clearTimeout(entry.returnTimer); clearTimeout(entry.endTimer);
+  clearTimeout(entry.returnTimer); clearTimeout(entry.endTimer); clearTimeout(entry.impactTimer);
   const dead = entry.attacker.isDEAD || entry.attacker.hasFled;
   returnPhaserMeleeOriginal(entry, dead);
   unregisterActiveMeleeAnimation(entry.attacker.id, entry.controller);
@@ -2727,7 +2491,7 @@ function abortPhaserMelee(entry) {
   entry.visual.phaseAt = clockNow();
   returnPhaserMeleeOriginal(entry, true);
   clearTimeout(entry.endTimer);
-  entry.endTimer = setTimeout(() => removePhaserMelee(entry), 180);
+  entry.endTimer = setTimeout(() => removePhaserMelee(entry), 1700);
 }
 function samplePhaserMelee(entry, arriving = false) {
   const visual = entry.visual;
@@ -2737,7 +2501,7 @@ function samplePhaserMelee(entry, arriving = false) {
     abortPhaserMelee(entry); return;
   }
   const frame = meleeViewFrame(entry.root);
-  const target = meleeViewCenter(document.getElementById(`spriteCanvas_${entry.target.id}`), frame);
+  const target = meleeViewCenter(meleeTargetView(entry.target), frame);
   if (target) visual.to = target;
   const progress = arriving ? 1 : Math.min(1, Math.max(0, (clockNow() - visual.startedAt) / visual.duration));
   const travel = interpolateMeleeMotionValue(progress, entry.motion);
@@ -2750,11 +2514,31 @@ function samplePhaserMelee(entry, arriving = false) {
   visual.x += dx * step; visual.y += dy * step;
   visual.progress = progress; visual.travel = travel;
 }
+function settlePhaserMeleeImpact(entry) {
+  const visual = entry.visual;
+  if (phaserMelees.get(entry.id) !== entry || visual.phase !== 'flight' || visual.impactOutcome === null) return;
+  const arrival = visual.startedAt + visual.duration, remaining = arrival - clockNow();
+  clearTimeout(entry.impactTimer);
+  if (remaining > 0) {
+    entry.impactTimer = setTimeout(() => settlePhaserMeleeImpact(entry), remaining);
+    return;
+  }
+  // Early event confirmations wait for arrival; late damage never replays an
+  // already expired visual, including after a stalled browser frame.
+  if (clockNow() >= arrival + 180) { removePhaserMelee(entry); return; }
+  samplePhaserMelee(entry, true);
+  if (phaserMelees.get(entry.id) !== entry || visual.phase !== 'flight') return;
+  visual.phase = visual.impactOutcome ? 'hit' : 'miss'; visual.phaseAt = arrival;
+  returnPhaserMeleeOriginal(entry);
+  clearTimeout(entry.endTimer);
+  entry.endTimer = setTimeout(() => removePhaserMelee(entry), Math.max(0, arrival + 180 - clockNow()));
+  phaserLayer?.game?.loop.wake();
+}
 function drawPhaserMelee(entry) {
   if (!entry.sprite) return;
   const visual = entry.visual, frame = meleeViewFrame(entry.root);
   const elapsed = Math.max(0, clockNow() - visual.phaseAt);
-  const tail = visual.phase === 'flight' ? 0 : Math.min(1, elapsed / 180);
+  const tail = visual.phase === 'flight' || visual.phase === 'cancelled' ? 0 : Math.min(1, elapsed / 180);
   // A late combat result must not leave a clone parked over the target.
   const alpha = visual.phase === 'flight'
     ? 1 - Math.min(1, Math.max(0, clockNow() - visual.startedAt - visual.duration) / 180)
@@ -2768,6 +2552,19 @@ function drawPhaserMelee(entry) {
     .setAlpha(alpha).setTint(visual.phase === 'cancelled' ? 0xff4545 : 0xffffff);
   const graphic = entry.graphic;
   graphic.clear().setPosition(x, y).setRotation(visual.angle).setScale(effectScale).setAlpha(alpha);
+  if (visual.phase === 'cancelled') {
+    if (elapsed < 1000) entry.sprite.setPosition(x + Math.sin(elapsed * .15) * 2 * effectScale, y);
+    else {
+      entry.sprite.setAlpha(0);
+      drawProjectileSprite(entry, 'impactSprite', entry.scene, MELEE_DEATH_ASSET, elapsed - 1000,
+        x, y, 0, 1, visual.width * frame.width / MELEE_DEATH_ASSET.width);
+    }
+    return;
+  }
+  if (visual.isAmbidextry) {
+    graphic.lineStyle(7, 0xedff00, .2).strokeCircle(0, 0, 28);
+    graphic.lineStyle(2, 0xedff00, .7).strokeCircle(0, 0, 30);
+  }
   if (!visual.closeRange && visual.phase !== 'cancelled') {
     graphic.lineStyle(12, visual.color, .12).lineBetween(-65, 0, -10, 0);
     graphic.lineStyle(3, visual.color, .6).lineBetween(-50, 0, -8, 0);
@@ -2782,7 +2579,7 @@ function drawPhaserMelee(entry) {
     }
   }
 }
-export function animationPhaserMelee(attacker, target, options = {}) {
+export function animationMelee(attacker, target, isAmbidextry = false, options = {}) {
   if (globalThis.__combatSimulation) return null;
   const saved = options.resume;
   const source = document.getElementById(`spriteCanvas_${attacker.id}`);
@@ -2790,16 +2587,20 @@ export function animationPhaserMelee(attacker, target, options = {}) {
   const root = source?.closest('#game-container');
   const frame = meleeViewFrame(root);
   const from = saved?.from || meleeViewCenter(source, frame);
-  const to = saved?.to || meleeViewCenter(document.getElementById(`spriteCanvas_${target.id}`), frame);
+  const to = saved?.to || meleeViewCenter(meleeTargetView(target), frame);
   if (!source || !body || !from || !to) return null;
-  cancelActiveMeleeAnimations(attacker.id);
-  if (!saved) {
+  if (!isAmbidextry && !saved) cancelActiveMeleeAnimations(attacker.id);
+  if (!saved && !isAmbidextry) {
     cancelMeleeOriginalRecovery(attacker.id, true);
     unlockMeleePostRecoveryOpacity(attacker.id, body);
   }
   const rect = source.getBoundingClientRect();
   const distance = Math.hypot(to.x - from.x, to.y - from.y) * frame.width;
-  const duration = Math.max(200, Number(options.duration) || 1000);
+  const duration = Math.max(isAmbidextry ? 120 : 200,
+    Number(options.duration) || Number(attacker.executionTime) || Number(attacker.currentAttack?.executionTime) || 1000);
+  const attack = options.flight?.attack || options.attack || attacker.currentAttack || {};
+  const profile = projectileProfile(attacker, { ...attack, effectProjectileClasses: options.effectClasses,
+    aura: isAmbidextry ? 'ambidextry' : null });
   // Capture the neutral pixels once, including their exact appearance for F5.
   // The original stays visible until the Phaser texture is actually ready.
   const neutral = saved ? null : createCanvasSnapshot(getNeutralMeleeCloneSource(source));
@@ -2808,42 +2609,40 @@ export function animationPhaserMelee(attacker, target, options = {}) {
     renderer: 'phaser', phase: 'flight', phaseAt: clockNow(), startedAt: clockNow(), duration,
     from, to, x: from.x, y: from.y, angle: 0, progress: 0, travel: 0,
     width: rect.width / frame.width, height: rect.height / frame.width,
+    isAmbidextry, profile, impactOutcome: null,
     longTravel: Math.min(1, Math.max(0, (distance - 220) / 520)),
     closeRange: distance <= Math.min(64, Math.max(28, rect.width * .42)),
     flipX: String(attacker.side).toUpperCase() === 'B', pixels: neutral.toDataURL(),
-    previousOpacity: body.style.getPropertyValue('opacity'), previousPriority: body.style.getPropertyPriority('opacity'),
-    released: false, color: options.flight?.attack.isLaunchedUnderMysticism ? 0xd2ebff : 0xffd6b0,
+    previousOpacity: meleeOriginalVisibilityLocks.get(String(attacker.id))?.originalOpacity ?? body.style.getPropertyValue('opacity'),
+    previousPriority: body.style.getPropertyPriority('opacity'),
+    released: false, color: isAmbidextry ? 0xedff00 : profile.mysticism ? 0xd2ebff : profile.glow,
   };
   if (saved && !visual.released) {
     if (visual.previousOpacity) body.style.setProperty('opacity', visual.previousOpacity, visual.previousPriority);
     else body.style.removeProperty('opacity');
   }
-  const entry = { id: options.flightId, root, attacker, target, flight: options.flight, visual,
+  const entry = { id: options.flightId || `melee-${crypto.randomUUID()}`, root, attacker, target, flight: options.flight, visual,
     motion: MELEE_CHARGE_MOTION_SAMPLES.map(([at, short, long]) => [at, short + (long - short) * visual.longTravel]) };
   const controller = entry.controller = {
     flightId: entry.id, renderer: 'phaser', get ready() { return Boolean(entry.sprite); },
     bindFlight(flight) { entry.flight = flight; },
-    snapshot: () => ({ renderer: 'phaser', attacker: attacker.id, target: target.id, isAmbidextry: false,
+    snapshot: () => ({ renderer: 'phaser', attacker: attacker.id, target: combatReference(target), isAmbidextry,
       options: { duration: visual.duration, flightId: entry.id }, resume: visual }),
     cancel: () => removePhaserMelee(entry), abortOnDeath: () => abortPhaserMelee(entry),
     showOriginalForImpact() { returnPhaserMeleeOriginal(entry); return true; },
     resolveImpact(didHit) {
       if (phaserMelees.get(entry.id) !== entry || visual.phase !== 'flight') return;
-      samplePhaserMelee(entry, true);
-      if (phaserMelees.get(entry.id) !== entry || visual.phase !== 'flight') return;
-      visual.phase = didHit ? 'hit' : 'miss'; visual.phaseAt = clockNow();
-      returnPhaserMeleeOriginal(entry);
-      clearTimeout(entry.endTimer);
-      entry.endTimer = setTimeout(() => removePhaserMelee(entry), 180);
-      phaserLayer?.game?.loop.wake();
+      visual.impactOutcome = Boolean(didHit);
+      settlePhaserMeleeImpact(entry);
     },
   };
   phaserMelees.set(entry.id, entry);
   registerActiveMeleeAnimation(attacker.id, controller);
   if (!visual.released) entry.returnTimer = setTimeout(() => returnPhaserMeleeOriginal(entry),
-    Math.max(0, visual.startedAt + visual.duration * .35 - clockNow()));
+    Math.max(0, visual.startedAt + visual.duration * (visual.isAmbidextry ? .18 : .35) - clockNow()));
   entry.endTimer = setTimeout(() => removePhaserMelee(entry), Math.max(0,
-    (visual.phase === 'flight' ? visual.startedAt + visual.duration + 2000 : visual.phaseAt + 180) - clockNow()));
+    (visual.phase === 'flight' ? visual.startedAt + visual.duration + 2000 : visual.phaseAt + (visual.phase === 'cancelled' ? 1700 : 180)) - clockNow()));
+  if (visual.impactOutcome !== null) settlePhaserMeleeImpact(entry);
   void ensurePhaserLayer().then(async layer => {
     if (phaserMelees.get(entry.id) !== entry) return;
     let canvas = neutral;
@@ -2853,6 +2652,7 @@ export function animationPhaserMelee(attacker, target, options = {}) {
       canvas.getContext('2d').drawImage(bitmap, 0, 0);
     }
     if (phaserMelees.get(entry.id) !== entry) return;
+    requestProjectileTexture(layer.scene, MELEE_DEATH_ASSET);
     entry.scene = layer.scene; entry.textureKey = `melee:${entry.id}`;
     layer.scene.textures.addCanvas(entry.textureKey, canvas);
     entry.graphic = layer.scene.add.graphics().setName(entry.id);
@@ -2866,1184 +2666,6 @@ export function animationPhaserMelee(attacker, target, options = {}) {
   return controller;
 }
 
-export function animationMelee(attacker, target, isAmbidextry = false, timingOptions = {}) {
-    const readPositiveDuration = (value) => {
-        const duration = Number(value);
-        return Number.isFinite(duration) && duration > 0 ? duration : null;
-    };
-    const options = timingOptions && typeof timingOptions === "object"
-        ? timingOptions
-        : {};
-    const saved = options.resume || null;
-    const visualStartedAt = saved?.startedAt ?? clockNow();
-    const elapsed = saved ? Math.max(0, clockNow() - visualStartedAt) : 0;
-    let replaying = Boolean(saved), replayTime = 0;
-    const replayQueue = [];
-    const animate = (node, frames, timing) => {
-        const animation = node.animate(frames, timing);
-        if (replaying) animation.currentTime = Math.max(0, elapsed - replayTime);
-        return animation;
-    };
-    const entityExecutionDuration = readPositiveDuration(attacker.executionTime);
-    const currentAttackDuration = readPositiveDuration(attacker.currentAttack?.executionTime);
-    const standardDuration = entityExecutionDuration ?? currentAttackDuration ?? 1000;
-
-    let activeAmbidextryProjectileDuration = null;
-    if (isAmbidextry && Array.isArray(attacker.projectiles)) {
-        for (let index = attacker.projectiles.length - 1; index >= 0; index -= 1) {
-            const projectile = attacker.projectiles[index];
-            if (projectile?.aura !== "ambidextry") continue;
-            if (projectile.status && projectile.status !== "in-flight") continue;
-
-            activeAmbidextryProjectileDuration = readPositiveDuration(
-                projectile.executionTime
-                ?? projectile.travelDuration
-                ?? projectile.duration
-            );
-            if (activeAmbidextryProjectileDuration !== null) break;
-        }
-    }
-
-    const requestedDuration = readPositiveDuration(
-        options.duration ?? options.executionTime
-    );
-    const configuredAmbidextryDuration = readPositiveDuration(
-        options.ambidextryDuration
-        ?? attacker.currentAttack?.ambidextryExecutionTime
-        ?? attacker.ambidextryExecutionTime
-    );
-    const configuredSpeedMultiplier = Number(
-        options.ambidextrySpeedMultiplier
-        ?? attacker.currentAttack?.ambidextrySpeedMultiplier
-        ?? attacker.ambidextrySpeedMultiplier
-        ?? 0.6
-    );
-    const ambidextrySpeedMultiplier = Number.isFinite(configuredSpeedMultiplier)
-        ? Math.min(1, Math.max(0.15, configuredSpeedMultiplier))
-        : 0.6;
-    const currentAttackAlreadyAccelerated =
-        currentAttackDuration !== null
-        && entityExecutionDuration !== null
-        && currentAttackDuration < entityExecutionDuration;
-
-    const synchronizedAmbidextryDuration =
-        requestedDuration
-        ?? activeAmbidextryProjectileDuration
-        ?? configuredAmbidextryDuration
-        ?? (currentAttackAlreadyAccelerated ? currentAttackDuration : null)
-        ?? standardDuration * ambidextrySpeedMultiplier;
-    const baseDuration = Math.max(
-        isAmbidextry ? 120 : 200,
-        isAmbidextry
-            ? synchronizedAmbidextryDuration
-            : (requestedDuration ?? standardDuration)
-    );
-    const attackerTrackingId = String(attacker.id);
-    if (!isAmbidextry) cancelActiveMeleeAnimations(attackerTrackingId);
-    const chargeDuration = baseDuration * (isAmbidextry ? 0.18 : 0.35);
-    const voidDuration = baseDuration * (isAmbidextry ? 0.02 : 0.05);
-    const cloneDuration = baseDuration - chargeDuration - voidDuration;
-    const originalRecoveryDuration = MELEE_ORIGINAL_RECOVERY_DURATION;
-    const impactDuration = Math.min(180, Math.max(120, baseDuration * 0.14));
-    // Bake the disappearance into the browser animation. The damage callback
-    // may be delayed by the combat queue; holding the last travel frame until
-    // that callback used to stack opaque clones on crowded targets.
-    const animateCloneTravel = (node, frames, duration, easing) => {
-        const totalDuration = duration + impactDuration;
-        const travelFraction = duration / totalDuration;
-        return animate(node, [
-            ...frames.map((frame, index) => ({
-                ...frame,
-                offset: (frame.offset ?? index / (frames.length - 1)) * travelFraction,
-                easing: frame.easing ?? easing,
-            })),
-            { ...frames[frames.length - 1], opacity: "0", offset: 1, easing: "linear" },
-        ], { duration: totalDuration, easing: "linear", fill: "forwards" });
-    };
-    const cloneStartDelay = chargeDuration + voidDuration;
-    const impactResolutionGrace = isAmbidextry
-        ? Math.min(140, Math.max(60, baseDuration * 0.2))
-        : 2000;
-    const scaleBase = 1;
-
-    const sprite = document.getElementById(`DragSprite_${attacker.id}`);
-    if (!sprite) {
-        console.warn(`⚠️ DragSprite_${attacker.id} introuvable`);
-        return;
-    }
-
-    // Une nouvelle attaque CAC est le seul moment où l'on libère le verrou
-    // post-restauration. On retire d'abord .iddle pour ne jamais lire une
-    // éventuelle frame CSS d'opacité comme opacité de départ de la charge.
-    sprite.classList.remove("iddle");
-    unlockMeleePostRecoveryOpacity(attackerTrackingId, sprite);
-
-    const originalRecoveryWasActive = meleeOriginalRecoveryAnimations.has(
-        attackerTrackingId
-    );
-    const previousSpriteTransform = saved?.previousSpriteTransform ?? sprite.style.transform;
-    const previousSpriteTransition = saved?.previousSpriteTransition ?? sprite.style.transition;
-    const previousSpriteWillChange = saved?.previousSpriteWillChange ?? sprite.style.willChange;
-    const previousSpriteOpacity = saved?.previousSpriteOpacity ?? (originalRecoveryWasActive
-        ? "1"
-        : sprite.style.opacity);
-    let visibleSpriteOpacity = saved?.visibleSpriteOpacity ?? (originalRecoveryWasActive
-        ? 1
-        : (Number.parseFloat(getComputedStyle(sprite).opacity) || 1));
-
-    sprite.style.willChange = "transform, opacity";
-
-    const spriteContainer = document.getElementById(`spriteContainer_${attacker.id}`);
-    const isSideB =
-        String(attacker.side ?? "").toUpperCase() === "B" ||
-        sprite.classList.contains("side-B") ||
-        sprite.classList.contains("sideB") ||
-        sprite.classList.contains("B") ||
-        spriteContainer?.classList.contains("side-B") ||
-        spriteContainer?.classList.contains("sideB") ||
-        spriteContainer?.classList.contains("B");
-
-    let fxContainer = document.querySelector(".BattleFX");
-
-    if (!fxContainer) {
-        fxContainer = document.createElement("div");
-        fxContainer.className = "BattleFX";
-        Object.assign(fxContainer.style, {
-            position: "absolute",
-            top: "0",
-            left: "0",
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-        });
-        document.body.appendChild(fxContainer);
-    }
-
-    Object.assign(fxContainer.style, {
-        zIndex: "9998",
-        overflow: "visible",
-        pointerEvents: "none",
-    });
-
-    const attackerCanvas = document.querySelector(`#spriteCanvas_${attacker.id}`);
-    const getCurrentMeleeTargetCanvas = () =>
-        document.querySelector(`#spriteCanvas_${target.id}`);
-    const targetCanvas = getCurrentMeleeTargetCanvas();
-
-    if (!attackerCanvas || !targetCanvas) {
-        console.warn("Canvas introuvable pour animationMelee.");
-
-        sprite.style.transform = previousSpriteTransform || "";
-        sprite.style.transition = previousSpriteTransition || "";
-        sprite.style.willChange = previousSpriteWillChange || "";
-        sprite.classList.add("iddle");
-
-        return;
-    }
-
-    const attackerRect = saved?.attackerRect ?? attackerCanvas.getBoundingClientRect();
-    const initialTargetRect = saved?.initialTargetRect ?? targetCanvas.getBoundingClientRect();
-    const startX = attackerRect.left + attackerRect.width / 2;
-    const startY = attackerRect.top + attackerRect.height / 2;
-    const initialDeltaX = initialTargetRect.left + initialTargetRect.width / 2 - startX;
-    const initialDeltaY = initialTargetRect.top + initialTargetRect.height / 2 - startY;
-    const initialDistance = Math.hypot(initialDeltaX, initialDeltaY);
-    const longTravelFactor = Math.min(
-        1,
-        Math.max(0, (initialDistance - 220) / 520)
-    );
-    const cruiseSpriteOpacity = 1 - longTravelFactor * 0.36;
-    const speedTrailPeakOpacity = 0.72 + longTravelFactor * 0.12;
-    const speedTrailPeakStretch = 1.1 + longTravelFactor * 0.38;
-    const configuredCloseRangeThreshold = Number(options.closeRangeThreshold);
-    const automaticCloseRangeThreshold = Math.min(
-        64,
-        Math.max(
-            28,
-            Math.min(attackerRect.width, initialTargetRect.width) * 0.42
-        )
-    );
-    const closeRangeThreshold = Number.isFinite(configuredCloseRangeThreshold)
-        && configuredCloseRangeThreshold >= 0
-        ? configuredCloseRangeThreshold
-        : automaticCloseRangeThreshold;
-    const isCloseRangeCharge = saved?.isCloseRangeCharge ?? (options.closeRangeCharge !== false
-        && initialDistance <= closeRangeThreshold
-        && !hasMeleeOriginalVisibilityLock(attackerTrackingId)
-        && !(activeMeleeAnimations.get(attackerTrackingId)?.size));
-
-    if (isCloseRangeCharge && originalRecoveryWasActive) {
-        cancelMeleeOriginalRecovery(attackerTrackingId, true);
-        visibleSpriteOpacity = 1;
-    }
-
-    let clone = null;
-    let trail = null;
-    if (!isCloseRangeCharge) {
-        const meleeAnimationId = ++meleeAnimationSequence;
-        const neutralCloneSource = getNeutralMeleeCloneSource(attackerCanvas);
-        clone = saved?.cloneId && document.getElementById(saved.cloneId) || document.createElement("canvas");
-        clone.getAnimations().forEach(a => a.cancel());
-        clone.width = attackerCanvas.width;
-        clone.height = attackerCanvas.height;
-        clone.id = saved?.cloneId || `meleeClone_${attacker.id}_${target.id}_${meleeAnimationId}`;
-
-        if (isAmbidextry) {
-            clone.classList.add("ambidextry-aura", "ambidextry-melee-clone");
-        }
-
-        Object.assign(clone.style, {
-            position: "absolute",
-            left: `${startX - attackerRect.width / 2}px`,
-            top: `${startY - attackerRect.height / 2}px`,
-            width: `${attackerRect.width}px`,
-            height: `${attackerRect.height}px`,
-            zIndex: "9999",
-            pointerEvents: "none",
-            transform: "translate3d(0, 0, 0) scale(1)",
-            opacity: "0",
-            willChange: "transform, opacity",
-            filter: isAmbidextry
-                ? "drop-shadow(0 0 7px rgba(237,255,0,0.9)) drop-shadow(0 0 15px rgba(237,255,0,0.55)) brightness(1.22)"
-                : "none",
-            mixBlendMode: "normal",
-            animation: "none",
-            transition: "none",
-            imageRendering: getComputedStyle(attackerCanvas).imageRendering || "auto",
-        });
-
-        fxContainer.appendChild(clone);
-
-        try {
-            const ctx = clone.getContext("2d");
-            ctx.clearRect(0, 0, clone.width, clone.height);
-
-            if (isSideB) {
-                ctx.save();
-                ctx.translate(clone.width, 0);
-                ctx.scale(-1, 1);
-                ctx.drawImage(neutralCloneSource, 0, 0, clone.width, clone.height);
-                ctx.restore();
-            } else {
-                ctx.drawImage(neutralCloneSource, 0, 0, clone.width, clone.height);
-            }
-        } catch (error) {
-            console.error("Erreur dessin sprite :", error);
-        }
-
-        // Apparition instantanée : le clone passe de 0 à 1 sans fondu.
-        clone.style.opacity = "1";
-
-        trail = saved?.trailId && document.getElementById(saved.trailId) || acquireMeleeTrail(fxContainer);
-        trail.id ||= `meleeTrail_${clone.id}`;
-        // Only restored DOM can carry animations not owned by this run.
-        if (saved?.trailId) trail.getAnimations().forEach(a => a.cancel());
-        if (isAmbidextry) {
-            trail.classList.add("ambidextry-melee-trail");
-            trail.style.background = "linear-gradient(90deg, rgba(237,255,0,0) 0%, rgba(237,255,0,0.18) 34%, rgba(255,248,118,0.68) 78%, rgba(255,255,210,0.9) 100%)";
-            trail.style.boxShadow = "0 0 14px rgba(237,255,0,0.42)";
-        }
-        trail.style.zIndex = String(
-            Math.max(0, (Number.parseInt(clone.style.zIndex, 10) || 9999) - 1)
-        );
-        const trailWidth = Math.min(
-            176,
-            Math.max(
-                60,
-                attackerRect.width * (1.1 + longTravelFactor * 0.55)
-            )
-        );
-        const trailHeight = Math.min(
-            20,
-            Math.max(
-                8,
-                attackerRect.height * (0.14 + longTravelFactor * 0.04)
-            )
-        );
-        Object.assign(trail.style, {
-            left: `${startX - trailWidth}px`,
-            top: `${startY - trailHeight / 2}px`,
-            width: `${trailWidth}px`,
-            height: `${trailHeight}px`,
-        });
-    }
-    let deltaX = 0;
-    let deltaY = 0;
-    let chargeAnimation = null;
-    let cloneAnimation = null;
-    let cloneFadeAnimation = null;
-    let trailAnimation = null;
-    let trailFadeAnimation = null;
-    let impactRevealAnimation = null;
-    let impactFxLayer = null;
-    let chargeAnimationEndAt = 0;
-    let cloneAnimationEndAt = 0;
-    let originalVisibilityToken = null;
-    let deathObserver = null;
-    let deathWatchFrame = 0;
-    let deathAbortInProgress = false;
-    let cleaned = false;
-    let trajectoryActive = true;
-    let impactArrivalReady = false;
-    let impactOutcome = saved?.impactOutcome ?? null;
-    let impactPlayed = false;
-    let meleeController = null;
-    let impactStartSettled = false;
-    let resolveImpactStart = null;
-    const impactStartPromise = new Promise((resolve) => {
-        resolveImpactStart = resolve;
-    });
-    const scheduledTimeouts = new Set();
-    const targetPrefix = getBattleEntityDomPrefix(target);
-    const targetTrackingKey = `${targetPrefix}:${String(target.id)}`;
-
-    const settleImpactStart = (value = false) => {
-        if (impactStartSettled) return;
-        impactStartSettled = true;
-        resolveImpactStart?.(value);
-    };
-
-    const getCloseRangeTransform = (
-        progress,
-        scaleX = 1,
-        scaleY = 1,
-        rotation = 0
-    ) => {
-        const localX = isSideB ? -deltaX : deltaX;
-        const localRotation = isSideB ? -rotation : rotation;
-        return `translate3d(${localX * progress}px, ${deltaY * progress}px, 0) rotate(${localRotation}deg) scaleX(${scaleX}) scaleY(${scaleY})`;
-    };
-    const getChargeEndTransform = () => isCloseRangeCharge
-        ? getCloseRangeTransform(0.18, 1.035, 1.02)
-        : `translate3d(${(isSideB ? -deltaX : deltaX) * 0.4}px, ${deltaY * 0.4}px, 0) scale(1.06)`;
-    const getCloseRangeImpactTransform = () =>
-        getCloseRangeTransform(0.62, 1.08, 0.96);
-    const getCloneTravelTransform = (progress, scale = scaleBase) => {
-        return `translate3d(${deltaX * progress}px, ${deltaY * progress}px, 0) scale(${scale})`;
-    };
-    const getCloneEndTransform = () =>
-        `translate3d(${deltaX}px, ${deltaY}px, 0) scale(${scaleBase * 1.1})`;
-    const getTrailTransform = (progress, stretch = 1) => {
-        const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
-        return `translate3d(${deltaX * progress}px, ${deltaY * progress}px, 0) rotate(${angle}deg) scaleX(${stretch})`;
-    };
-
-    const schedule = (callback, delay) => {
-        if (replaying) {
-            const at = replayTime + delay;
-            if (at <= elapsed) { replayQueue.push({ callback, at }); return null; }
-            delay = at - elapsed;
-        }
-        const timeoutId = setTimeout(() => {
-            scheduledTimeouts.delete(timeoutId);
-            callback();
-        }, delay);
-        scheduledTimeouts.add(timeoutId);
-        return timeoutId;
-    };
-
-    const attackerBox = document.getElementById(`Box_Entite_${attacker.id}`);
-    const getCurrentAttackerSprite = () =>
-        document.getElementById(`DragSprite_${attacker.id}`)
-        || (sprite.isConnected ? sprite : null);
-    const getCurrentAttackerCanvas = () =>
-        document.getElementById(`spriteCanvas_${attacker.id}`)
-        || (attackerCanvas.isConnected ? attackerCanvas : null);
-    const attackerIsDead = () => {
-        const currentBox = document.getElementById(`Box_Entite_${attacker.id}`)
-            || attackerBox;
-        const currentSprite = getCurrentAttackerSprite();
-        const currentCanvas = getCurrentAttackerCanvas();
-        const currentSpriteContainer = document.getElementById(
-            `spriteContainer_${attacker.id}`
-        );
-
-        return Boolean(
-            attacker.isDEAD
-            || currentBox?.dataset.dead === "true"
-            || currentSprite?.dataset.dead === "true"
-            || currentCanvas?.dataset.dead === "true"
-            || currentSprite?.classList.contains("dead-sprite")
-            || currentCanvas?.classList.contains("dead-sprite")
-            || currentCanvas?.classList.contains("dead")
-            || currentSpriteContainer?.querySelector?.(".dead-sprite, canvas.dead")
-        );
-    };
-
-    const forceDeadMeleeVisualVisible = () => {
-        const currentSprite = getCurrentAttackerSprite();
-        const currentCanvas = getCurrentAttackerCanvas();
-
-        for (const element of [currentSprite, currentCanvas]) {
-            if (!element?.isConnected) continue;
-            element.hidden = false;
-            element.style.opacity = "1";
-            element.style.visibility = "visible";
-            if (element.style.display === "none") element.style.display = "";
-        }
-    };
-
-    const startOriginalRecoveryAfterPreparation = () => {
-        trajectoryActive = false;
-        if (isCloseRangeCharge || !originalVisibilityToken) return false;
-
-        // Même ordre que dans la version de référence : aucune animation
-        // précédente ne doit rester propriétaire de l’opacité au retour.
-        chargeAnimation?.cancel();
-        chargeAnimation = null;
-        chargeAnimationEndAt = 0;
-        impactRevealAnimation?.cancel();
-        impactRevealAnimation = null;
-
-        const originalStillHidden = releaseMeleeOriginalVisibility(
-            attackerTrackingId,
-            originalVisibilityToken,
-            false,
-            true
-        );
-        originalVisibilityToken = null;
-
-        if (originalStillHidden) return false;
-
-        const currentSprite = getCurrentAttackerSprite();
-        if (currentSprite === sprite) {
-            sprite.style.transform = previousSpriteTransform || "";
-            sprite.style.transition = previousSpriteTransition || "";
-            sprite.style.willChange = previousSpriteWillChange || "";
-        }
-
-        if (attackerIsDead()) {
-            cancelMeleeOriginalRecovery(attackerTrackingId, true);
-            forceDeadMeleeVisualVisible();
-        } else if (currentSprite?.isConnected) {
-            startMeleeOriginalRecovery(
-                attackerTrackingId,
-                currentSprite,
-                originalRecoveryDuration,
-                replaying ? { startTime: visualStartedAt + replayTime } : null
-            );
-        }
-        return true;
-    };
-
-    const cleanup = (restoreOriginal = true) => {
-        if (cleaned) return;
-        cleaned = true;
-        settleImpactStart(false);
-
-        for (const timeoutId of scheduledTimeouts) clearTimeout(timeoutId);
-        scheduledTimeouts.clear();
-
-        chargeAnimation?.cancel();
-        cloneAnimation?.cancel();
-        cloneFadeAnimation?.cancel();
-        trailAnimation?.cancel();
-        trailFadeAnimation?.cancel();
-        impactRevealAnimation?.cancel();
-        releaseMeleeImpactFx(impactFxLayer);
-        impactFxLayer = null;
-
-        unregisterActiveMeleeAnimation(attackerTrackingId, meleeController);
-
-        unregisterProjectileFollower(targetTrackingKey, meleeFollower);
-        deathObserver?.disconnect();
-        deathObserver = null;
-        if (deathWatchFrame && typeof cancelAnimationFrame === "function") {
-            cancelAnimationFrame(deathWatchFrame);
-            deathWatchFrame = 0;
-        }
-
-        const dead = attackerIsDead();
-        let originalStillHidden = hasMeleeOriginalVisibilityLock(attackerTrackingId);
-        if (dead) {
-            originalStillHidden = releaseMeleeOriginalVisibility(
-                attackerTrackingId,
-                originalVisibilityToken,
-                true
-            );
-        } else if (originalVisibilityToken) {
-            originalStillHidden = releaseMeleeOriginalVisibility(
-                attackerTrackingId,
-                originalVisibilityToken
-            );
-        }
-        originalVisibilityToken = null;
-
-        // Restore the current DOM sprite, not only the node captured before a
-        // possible death rerender. This keeps replacement corpse canvases visible.
-        const currentSprite = getCurrentAttackerSprite();
-        const originalRecoveryActive =
-            meleeOriginalRecoveryAnimations.has(attackerTrackingId);
-        if (currentSprite?.isConnected) {
-            if (currentSprite === sprite) {
-                sprite.style.transform = previousSpriteTransform || "";
-                // Ne surtout pas réactiver une transition CSS pendant le 0 -> 1 CAC.
-                // startMeleeOriginalRecovery la restaurera lui-même APRES avoir verrouillé opacity à 1.
-                if (!originalRecoveryActive) {
-                    sprite.style.transition = previousSpriteTransition || "";
-                }
-                sprite.style.willChange = previousSpriteWillChange || "";
-            }
-
-            if (dead) currentSprite.style.setProperty("opacity", "1", "important");
-            else if (!isCloseRangeCharge && !originalStillHidden) {
-                // Ne jamais couper le fondu de 350 ms sur une attaque rapide.
-                // Sans fondu actif, la sortie reste malgré tout garantie à 1.
-                if (
-                    !meleeOriginalRecoveryAnimations.has(attackerTrackingId)
-                    && !isMeleePostRecoveryOpacityLocked(currentSprite)
-                ) {
-                    currentSprite.style.opacity = "1";
-                }
-            } else if (isCloseRangeCharge && !originalStillHidden) {
-                currentSprite.style.opacity = previousSpriteOpacity || "";
-            }
-
-            if (!dead) {
-                if (restoreOriginal && !originalStillHidden && !originalRecoveryActive) {
-                    currentSprite.classList.add("iddle");
-                } else {
-                    currentSprite.classList.remove("iddle");
-                }
-            }
-        }
-
-        clone?.remove();
-        releaseMeleeTrail(trail, true);
-
-        if (dead) {
-            forceDeadMeleeVisualVisible();
-            if (typeof requestAnimationFrame === "function") {
-                requestAnimationFrame(forceDeadMeleeVisualVisible);
-            }
-            setTimeout(forceDeadMeleeVisualVisible, 50);
-        }
-    };
-
-    const abortMeleeCloneOnDeath = () => {
-        if (cleaned || deathAbortInProgress) return;
-        const frozenTransform = clone?.isConnected ? getComputedStyle(clone).transform : null;
-        deathAbortInProgress = true;
-        trajectoryActive = false;
-        settleImpactStart(false);
-
-        for (const timeoutId of scheduledTimeouts) clearTimeout(timeoutId);
-        scheduledTimeouts.clear();
-        unregisterProjectileFollower(targetTrackingKey, meleeFollower);
-
-        chargeAnimation?.cancel();
-        chargeAnimation = null;
-        cloneAnimation?.cancel();
-        cloneAnimation = null;
-        trailAnimation?.cancel();
-        trailAnimation = null;
-        trailFadeAnimation?.cancel();
-        trailFadeAnimation = null;
-        impactRevealAnimation?.cancel();
-        impactRevealAnimation = null;
-
-        if (trail) {
-            trail.style.opacity = "0";
-            releaseMeleeTrail(trail, true);
-            trail = null;
-        }
-
-        if (clone?.isConnected && !isCloseRangeCharge) {
-            cloneFadeAnimation?.cancel();
-            forceDeadMeleeVisualVisible();
-            finishMeleeCloneOnDeath(clone, frozenTransform).finally(() => cleanup(false));
-            return;
-        }
-        cleanup(false);
-    };
-
-    meleeController = {
-        flightId: options.flightId,
-        snapshot: () => ({ attacker: attacker.id, target: target.id, isAmbidextry,
-            options: { duration: baseDuration, flightId: options.flightId },
-            resume: { startedAt: visualStartedAt, cloneId: clone?.id, trailId: trail?.id,
-                previousSpriteTransform, previousSpriteTransition, previousSpriteWillChange,
-                previousSpriteOpacity, visibleSpriteOpacity, isCloseRangeCharge, impactOutcome,
-                attackerRect: { left: attackerRect.left, top: attackerRect.top, width: attackerRect.width, height: attackerRect.height },
-                initialTargetRect: { left: initialTargetRect.left, top: initialTargetRect.top, width: initialTargetRect.width, height: initialTargetRect.height } } }),
-        cancel: () => cleanup(!attackerIsDead()),
-        abortOnDeath: abortMeleeCloneOnDeath,
-        resolveImpact(didHit) {
-            if (cleaned) {
-                settleImpactStart(false);
-                return impactStartPromise;
-            }
-            if (impactPlayed) return impactStartPromise;
-            impactOutcome = Boolean(didHit);
-            if (impactArrivalReady) playResolvedImpact();
-            return impactStartPromise;
-        },
-        waitForImpactStart: () => impactStartPromise,
-        showOriginalForImpact(duration = 800) {
-            if (!trajectoryActive || cleaned || attackerIsDead() || !sprite.isConnected) return false;
-            if (isCloseRangeCharge) return false;
-
-            impactRevealAnimation?.cancel();
-
-            const safeDuration = Math.max(120, Number(duration) || 800);
-            const translucentOpacity = Math.min(0.45, visibleSpriteOpacity * 0.45);
-            const currentOpacity = Number.parseFloat(getComputedStyle(sprite).opacity) || 0;
-            const startingOpacity = Math.min(translucentOpacity, currentOpacity);
-            const originalTransform = previousSpriteTransform || "none";
-
-            impactRevealAnimation = animate(sprite,
-                [
-                    {
-                        transform: originalTransform,
-                        opacity: String(startingOpacity),
-                        offset: 0,
-                    },
-                    {
-                        transform: originalTransform,
-                        opacity: String(translucentOpacity),
-                        offset: 0.12,
-                    },
-                    {
-                        transform: originalTransform,
-                        opacity: String(translucentOpacity),
-                        offset: 0.72,
-                    },
-                    {
-                        transform: originalTransform,
-                        opacity: "0",
-                        offset: 1,
-                    },
-                ],
-                {
-                    duration: safeDuration,
-                    easing: "linear",
-                }
-            );
-
-            const revealAnimation = impactRevealAnimation;
-            const releaseReveal = () => {
-                if (impactRevealAnimation === revealAnimation) {
-                    impactRevealAnimation = null;
-                }
-            };
-            revealAnimation.addEventListener("finish", releaseReveal, { once: true });
-            revealAnimation.addEventListener("cancel", releaseReveal, { once: true });
-            return true;
-        }
-    };
-
-    registerActiveMeleeAnimation(attackerTrackingId, meleeController);
-
-    const meleeFollower = {
-        getTargetElement: getCurrentMeleeTargetCanvas,
-        refreshTargetPosition(timestamp = clockNow()) {
-            const currentTargetCanvas = getCurrentMeleeTargetCanvas();
-            if (!currentTargetCanvas) return false;
-
-            const currentTargetRect = currentTargetCanvas.getBoundingClientRect();
-            const nextDeltaX = (
-                currentTargetRect.left + currentTargetRect.width / 2 - startX
-            );
-            const nextDeltaY = (
-                currentTargetRect.top + currentTargetRect.height / 2 - startY
-            );
-
-            const targetMoved =
-                Math.abs(nextDeltaX - deltaX) > 0.5 ||
-                Math.abs(nextDeltaY - deltaY) > 0.5;
-
-            deltaX = nextDeltaX;
-            deltaY = nextDeltaY;
-
-            if (targetMoved && chargeAnimation && chargeAnimationEndAt > timestamp) {
-                const currentStyle = getComputedStyle(sprite);
-                const remainingDuration = Math.max(16, chargeAnimationEndAt - timestamp);
-
-                chargeAnimation.cancel();
-                chargeAnimation = animate(sprite,
-                    [
-                        {
-                            transform: currentStyle.transform,
-                            opacity: currentStyle.opacity,
-                        },
-                        {
-                            transform: getChargeEndTransform(),
-                            opacity: isCloseRangeCharge
-                                ? String(visibleSpriteOpacity)
-                                : "0",
-                        },
-                    ],
-                    {
-                        duration: remainingDuration,
-                        easing: "cubic-bezier(0.8, 0, 0.2, 1)",
-                        fill: "forwards",
-                    }
-                );
-            }
-
-            if (targetMoved && cloneAnimation && cloneAnimationEndAt > timestamp) {
-                const trajectoryElement = isCloseRangeCharge ? sprite : clone;
-                if (!trajectoryElement) return false;
-                const currentStyle = getComputedStyle(trajectoryElement);
-                const remainingDuration = Math.max(16, cloneAnimationEndAt - timestamp);
-
-                cloneAnimation.cancel();
-                const frames =
-                    [
-                        {
-                            transform: currentStyle.transform,
-                            opacity: currentStyle.opacity,
-                        },
-                        {
-                            transform: isCloseRangeCharge
-                                ? getCloseRangeImpactTransform()
-                                : getCloneEndTransform(),
-                            opacity: isCloseRangeCharge
-                                ? String(visibleSpriteOpacity)
-                                : "1",
-                        },
-                    ];
-                cloneAnimation = isCloseRangeCharge
-                    ? animate(trajectoryElement, frames, {
-                        duration: remainingDuration,
-                        easing: "cubic-bezier(0.12, 0.7, 0.18, 1)",
-                        fill: "forwards",
-                    })
-                    : animateCloneTravel(trajectoryElement, frames, remainingDuration,
-                        "cubic-bezier(0.12, 0.7, 0.18, 1)");
-
-                if (trailAnimation) {
-                    const currentTrailStyle = getComputedStyle(trail);
-                    trailAnimation.cancel();
-                    trailAnimation = animateCloneTravel(trail,
-                        [
-                            {
-                                transform: currentTrailStyle.transform,
-                                opacity: currentTrailStyle.opacity,
-                            },
-                            {
-                                transform: getTrailTransform(1, 0.82),
-                                opacity: "0.42",
-                            },
-                        ],
-                        remainingDuration, "cubic-bezier(0.12, 0.7, 0.18, 1)"
-                    );
-                }
-
-            }
-            return true;
-        }
-    };
-
-    meleeFollower.refreshTargetPosition();
-    registerProjectileFollower(targetTrackingKey, target.id, meleeFollower);
-
-    if (attackerIsDead()) {
-        abortMeleeCloneOnDeath();
-        return meleeController;
-    }
-
-    if (isCloseRangeCharge) {
-        chargeAnimationEndAt = clockNow() + chargeDuration - (replaying ? elapsed - replayTime : 0);
-        chargeAnimation = animate(sprite,
-            [
-                {
-                    transform: previousSpriteTransform || "none",
-                    opacity: String(visibleSpriteOpacity),
-                    offset: 0,
-                },
-                {
-                    transform: getChargeEndTransform(),
-                    opacity: String(visibleSpriteOpacity),
-                    offset: 0.72,
-                },
-                {
-                    transform: getChargeEndTransform(),
-                    opacity: String(visibleSpriteOpacity),
-                    offset: 1,
-                },
-            ],
-            {
-                duration: chargeDuration,
-                easing: "cubic-bezier(0.8, 0, 0.2, 1)",
-                fill: "forwards",
-            }
-        );
-
-        schedule(() => {
-            if (cleaned || attackerIsDead() || !sprite.isConnected) {
-                cleanup(false);
-                return;
-            }
-
-            cloneAnimationEndAt = clockNow() + cloneDuration - (replaying ? elapsed - replayTime : 0);
-            cloneAnimation = animate(sprite,
-                [
-                    {
-                        transform: getChargeEndTransform(),
-                        opacity: String(visibleSpriteOpacity),
-                        offset: 0,
-                    },
-                    {
-                        transform: getCloseRangeTransform(0.3, 1.04, 1),
-                        opacity: String(visibleSpriteOpacity),
-                        offset: 0.25,
-                    },
-                    {
-                        transform: getCloseRangeTransform(0.5, 1.08, 0.96),
-                        opacity: String(visibleSpriteOpacity),
-                        offset: 0.7,
-                    },
-                    {
-                        transform: getCloseRangeImpactTransform(),
-                        opacity: String(visibleSpriteOpacity),
-                        offset: 1,
-                    },
-                ],
-                {
-                    duration: cloneDuration,
-                    easing: "cubic-bezier(0.2, 0.55, 0.55, 1)",
-                    fill: "forwards",
-                }
-            );
-        }, cloneStartDelay);
-    } else {
-        const tractionOpacity = 1 - longTravelFactor * 0.1;
-        const burstEntryOpacity = Math.min(1, cruiseSpriteOpacity + 0.12);
-        const decelerationMidOpacity = Math.min(1, cruiseSpriteOpacity + 0.06);
-        const decelerationLateOpacity = Math.min(1, cruiseSpriteOpacity + 0.13);
-        const settleOpacity = Math.min(1, cruiseSpriteOpacity + 0.22);
-        const finalTrailOpacity = Math.min(0.92, speedTrailPeakOpacity * 1.06);
-        const adaptiveMotionSamples = MELEE_CHARGE_MOTION_SAMPLES.map(
-            ([offset, compactProgress, longProgress]) => [
-                offset,
-                compactProgress
-                    + (longProgress - compactProgress) * longTravelFactor,
-            ]
-        );
-
-        const cloneScaleStops = [
-            [0, 1],
-            [0.14, 1.045],
-            [0.28, 0.96],
-            [0.58, 1.04],
-            [0.72, 1],
-            [0.86, 0.97],
-            [0.94, 0.94],
-            [1, 1.1],
-        ];
-        const cloneOpacityStops = [
-            [0, 1],
-            [0.14, tractionOpacity],
-            [0.28, cruiseSpriteOpacity],
-            [0.58, settleOpacity],
-            [0.72, decelerationMidOpacity],
-            [0.86, burstEntryOpacity],
-            [0.94, decelerationLateOpacity],
-            [1, 1],
-        ];
-        const trailStretchStops = [
-            [0, 0.42],
-            [0.14, 0.75],
-            [0.28, speedTrailPeakStretch],
-            [0.58, 0.62],
-            [0.72, 0.86],
-            [0.86, speedTrailPeakStretch * 0.9],
-            [0.94, speedTrailPeakStretch * 1.08],
-            [0.97, speedTrailPeakStretch * 1.18],
-            [1, 0.62],
-        ];
-        const trailOpacityStops = [
-            [0, 0.18],
-            [0.14, 0.45],
-            [0.28, speedTrailPeakOpacity * 0.9],
-            [0.58, 0.36],
-            [0.72, 0.52],
-            [0.86, speedTrailPeakOpacity * 0.86],
-            [0.94, speedTrailPeakOpacity],
-            [0.97, finalTrailOpacity],
-            [1, 0.32],
-        ];
-
-        const cloneMotionKeyframes = adaptiveMotionSamples.map(
-            ([offset, progress]) => ({
-                transform: getCloneTravelTransform(
-                    progress,
-                    interpolateMeleeMotionValue(offset, cloneScaleStops)
-                ),
-                opacity: String(
-                    interpolateMeleeMotionValue(offset, cloneOpacityStops)
-                ),
-                offset,
-                easing: "linear",
-            })
-        );
-        const trailMotionKeyframes = adaptiveMotionSamples.map(
-            ([offset, progress]) => ({
-                transform: getTrailTransform(
-                    progress,
-                    interpolateMeleeMotionValue(offset, trailStretchStops)
-                ),
-                opacity: String(
-                    interpolateMeleeMotionValue(offset, trailOpacityStops)
-                ),
-                offset,
-                easing: "linear",
-            })
-        );
-
-        cloneAnimationEndAt = clockNow() + baseDuration - (replaying ? elapsed - replayTime : 0);
-        cloneAnimation = animateCloneTravel(clone,
-            cloneMotionKeyframes,
-            baseDuration, "linear"
-        );
-
-        trailAnimation = animateCloneTravel(trail,
-            trailMotionKeyframes,
-            baseDuration, "linear"
-        );
-
-        originalVisibilityToken = acquireMeleeOriginalVisibility(
-            attackerTrackingId,
-            sprite
-        );
-
-        schedule(() => {
-            if (cleaned || attackerIsDead()) {
-                cleanup(false);
-                return;
-            }
-            startOriginalRecoveryAfterPreparation();
-        }, chargeDuration);
-    }
-
-    function playResolvedImpact() {
-        if (cleaned || impactPlayed || !impactArrivalReady || impactOutcome === null) return;
-        impactPlayed = true;
-        settleImpactStart(impactOutcome);
-        trajectoryActive = false;
-        unregisterProjectileFollower(targetTrackingKey, meleeFollower);
-        const resolvedImpactDuration = impactOutcome
-            ? impactDuration
-            : Math.max(90, impactDuration * 0.75);
-        const impactElapsed = Math.max(0, clockNow() - visualStartedAt - baseDuration);
-        if (impactElapsed >= resolvedImpactDuration) {
-            // Damage has its own lifetime. A late result still applies in the
-            // engine, but must not replay an expired visual over newer attacks.
-            cleanup(!attackerIsDead());
-            return;
-        }
-
-        if (!isCloseRangeCharge) {
-            sprite.style.transform = previousSpriteTransform || "";
-        }
-        chargeAnimation?.cancel();
-        chargeAnimation = null;
-
-        const distance = Math.hypot(deltaX, deltaY) || 1;
-        const unitX = deltaX / distance;
-        const unitY = deltaY / distance;
-        if (impactOutcome) {
-            const sideRotation = unitX < 0 ? 1 : -1;
-            const targetImpactElement = document.getElementById(`Animationsprite_${target.id}`)
-                || document.getElementById(`spriteContainer_${target.id}`)
-                || getCurrentMeleeTargetCanvas();
-
-            impactFxLayer = playMeleeImpactFx(
-                fxContainer,
-                targetImpactElement,
-                startX + deltaX,
-                startY + deltaY,
-                unitX,
-                unitY,
-                impactDuration,
-                impactElapsed
-            );
-
-            if (isCloseRangeCharge) {
-                cloneFadeAnimation = animate(sprite,
-                    [
-                        {
-                            transform: getCloseRangeImpactTransform(),
-                            opacity: String(visibleSpriteOpacity),
-                            offset: 0,
-                        },
-                        {
-                            transform: getCloseRangeTransform(0.68, 0.68, 1.22),
-                            opacity: String(visibleSpriteOpacity),
-                            offset: 0.14,
-                        },
-                        {
-                            transform: getCloseRangeTransform(0.24, 1.12, 0.9, -5),
-                            opacity: String(visibleSpriteOpacity),
-                            offset: 0.46,
-                        },
-                        {
-                            transform: getCloseRangeTransform(0.08, 0.98, 1.03, 2),
-                            opacity: String(visibleSpriteOpacity),
-                            offset: 0.8,
-                        },
-                        {
-                            transform: previousSpriteTransform || "none",
-                            opacity: String(visibleSpriteOpacity),
-                            offset: 1,
-                        },
-                    ],
-                    {
-                        duration: impactDuration,
-                        easing: "cubic-bezier(0.17, 0.67, 0.22, 1.25)",
-                        fill: "forwards",
-                    }
-                );
-            } else {
-                cloneFadeAnimation = animate(clone,
-                    [
-                        { transform: getCloneEndTransform(), opacity: "1", offset: 0 },
-                        {
-                            transform: `translate3d(${deltaX + unitX * 10}px, ${deltaY + unitY * 10}px, 0) scaleX(${scaleBase * 0.25}) scaleY(${scaleBase * 1.55})`,
-                            opacity: "1",
-                            offset: 0.14,
-                        },
-                        {
-                            transform: `translate3d(${deltaX - unitX * 28}px, ${deltaY - unitY * 28}px, 0) rotate(${sideRotation * 12}deg) scaleX(${scaleBase * 1.18}) scaleY(${scaleBase * 0.85})`,
-                            opacity: "1",
-                            offset: 0.46,
-                        },
-                        {
-                            transform: `translate3d(${deltaX - unitX * 10}px, ${deltaY - unitY * 10}px, 0) rotate(${sideRotation * -3}deg) scale(${scaleBase})`,
-                            opacity: "0.9",
-                            offset: 0.8,
-                        },
-                        {
-                            transform: `translate3d(${deltaX - unitX * 9}px, ${deltaY - unitY * 9}px, 0) scale(${scaleBase})`,
-                            opacity: "0",
-                            offset: 1,
-                        },
-                    ],
-                    {
-                        duration: impactDuration,
-                        easing: "cubic-bezier(0.17, 0.67, 0.22, 1.25)",
-                        fill: "forwards",
-                    }
-                );
-            }
-        } else {
-            if (isCloseRangeCharge) {
-                cloneFadeAnimation = animate(sprite,
-                    [
-                        {
-                            transform: getCloseRangeImpactTransform(),
-                            opacity: String(visibleSpriteOpacity),
-                        },
-                        {
-                            transform: getCloseRangeTransform(0.28, 1.02, 0.98),
-                            opacity: String(visibleSpriteOpacity),
-                            offset: 0.45,
-                        },
-                        {
-                            transform: previousSpriteTransform || "none",
-                            opacity: String(visibleSpriteOpacity),
-                        },
-                    ],
-                    {
-                        duration: resolvedImpactDuration,
-                        easing: "ease-out",
-                        fill: "forwards",
-                    }
-                );
-            } else {
-                cloneFadeAnimation = animate(clone,
-                    [
-                        { transform: getCloneEndTransform(), opacity: "1" },
-                        {
-                            transform: `translate3d(${deltaX + unitX * 26}px, ${deltaY + unitY * 26}px, 0) scale(${scaleBase})`,
-                            opacity: "0",
-                        },
-                    ],
-                    {
-                        duration: resolvedImpactDuration,
-                        easing: "linear",
-                        fill: "forwards",
-                    }
-                );
-            }
-        }
-
-        if (trail) {
-            const trailStyleAtImpact = getComputedStyle(trail);
-            trailAnimation?.cancel();
-            trailFadeAnimation = animate(trail,
-                [
-                    {
-                        transform: trailStyleAtImpact.transform,
-                        opacity: trailStyleAtImpact.opacity,
-                    },
-                    {
-                        transform: getTrailTransform(1, 0.45),
-                        opacity: "0",
-                    },
-                ],
-                {
-                    duration: Math.max(80, impactDuration * 0.7),
-                    easing: "ease-out",
-                    fill: "forwards",
-                }
-            );
-        }
-        if (impactElapsed > 0) {
-            cloneFadeAnimation.currentTime = impactElapsed;
-            if (trailFadeAnimation) trailFadeAnimation.currentTime = impactElapsed;
-        }
-        schedule(() => cleanup(!attackerIsDead()), replaying
-            ? resolvedImpactDuration
-            : resolvedImpactDuration - impactElapsed);
-    }
-
-    schedule(() => {
-        if (cleaned || attackerIsDead()) {
-            cleanup(false);
-            return;
-        }
-        impactArrivalReady = true;
-        playResolvedImpact();
-    }, baseDuration);
-
-    schedule(() => {
-        if (!impactPlayed && !cleaned) {
-            impactOutcome = false;
-            impactArrivalReady = true;
-            playResolvedImpact();
-        }
-    }, baseDuration + impactResolutionGrace);
-
-    if (attackerBox && typeof MutationObserver !== "undefined") {
-        deathObserver = new MutationObserver(() => {
-            if (attackerIsDead()) abortMeleeCloneOnDeath();
-        });
-        deathObserver.observe(attackerBox, {
-            attributes: true,
-            attributeFilter: ["data-dead"]
-        });
-    }
-
-    if (typeof requestAnimationFrame === "function") {
-        const watchAttackerDeath = () => {
-            if (cleaned || deathAbortInProgress) return;
-            if (attackerIsDead()) {
-                abortMeleeCloneOnDeath();
-                return;
-            }
-            deathWatchFrame = requestAnimationFrame(watchAttackerDeath);
-        };
-        deathWatchFrame = requestAnimationFrame(watchAttackerDeath);
-    }
-    while (replayQueue.length) {
-        replayQueue.sort((a, b) => a.at - b.at);
-        const next = replayQueue.shift(); replayTime = next.at; next.callback();
-    }
-    replaying = false;
-    return meleeController;
-}
 export function RunawayAnimation(entite) {
     const imgContainer = document.getElementById(`imgContainer_${entite.id}`);
     const sprite = document.getElementById(`DragSprite_${entite.id}`);
@@ -4583,10 +3205,8 @@ registerCombatState('melee', () => ({
     for (const entry of [...phaserMelees.values()]) removePhaserMelee(entry);
     activeMeleeAnimations.clear(); meleeOriginalRecoveryAnimations.clear();
     for (const entry of saved.active) {
-        const attacker = entities.find(e => e.id === entry.attacker), target = entities.find(e => e.id === entry.target);
-        if (!attacker || !target) continue;
-        if (entry.renderer === 'phaser') animationPhaserMelee(attacker, target, { ...entry.options, resume: entry.resume });
-        else animationMelee(attacker, target, entry.isAmbidextry, { ...entry.options, resume: entry.resume });
+        const attacker = entities.find(e => e.id === entry.attacker), target = combatTarget(entry.target, entities);
+        if (attacker && target) animationMelee(attacker, target, entry.isAmbidextry, { ...entry.options, resume: entry.resume });
     }
     for (const entry of saved.recoveries) {
         const sprite = document.getElementById(`DragSprite_${entry.id}`);

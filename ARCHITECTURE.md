@@ -816,3 +816,33 @@ Tests complétés dans les suites existantes : égalité des dégâts sans rendu
 cible mobile, mort du lanceur, nettoyage, ambidextrie, pause/F5 et reprise sans
 double impact, moteur lent/indisponible et déterminisme du simulateur. Sorties
 et captures : `outputs/phaser-melee/`, `outputs/combat-tests/`, `outputs/paused-combat/`.
+
+## Toutes les mêlées Phaser — v0.93.0-dev
+
+`animationMelee` devient le point d’entrée unique des mêlées et reprend la scène
+commune de la première attaque. `attackTransport` transmet le vol, sa durée,
+les effets visuels et le statut de second coup, puis observe la promesse d’impact
+du combat. Les événements appellent le même rendu avec leur échéance existante.
+Aucune règle ni définition d’attaque n’est modifiée.
+
+Une frappe primaire remplace son ancienne animation ; une frappe secondaire
+garde sa propre copie et son verrou de visibilité. Chaque copie a une texture
+libérée au nettoyage et un identifiant unique. Les effets de mort gèlent la
+trajectoire, colorent la copie en rouge pendant une seconde puis utilisent
+le GIF de sang existant, décodé une seule fois dans le cache de textures partagé.
+Les couleurs de nature/effets et l’aura jaune d’ambidextrie restent décoratives
+et ne consomment pas les tirages aléatoires du combat.
+
+La section de pause `melee` stocke la référence de cible commune (`combatReference`),
+la phase, la confirmation d’impact et les échéances de chaque copie. Elle
+reconstitue directement le modèle courant, sans conversion des anciens états
+HTML. Les coordonnées suivent le cadre du jeu et une échelle uniforme sur mobile.
+Le simulateur sort avant toute création visuelle ou chargement de Phaser.
+
+L’ancienne implémentation DOM, les allocations de traînées/impacts et le registre
+de suivi privé ont été supprimés. `createSpeedTrail` reste utilisé par les charges
+d’événements ; le retour du sprite original conserve les helpers partagés.
+Les tests existants couvrent les définitions de mêlée, les dégâts comparés sans
+rendu, les impacts tardifs, les événements, les cases, la pause/F5, l’ambidextrie
+et les textures après quatre rafales de cent copies. Diagnostics :
+`outputs/phaser-melee-all/`. Aucune promesse de gain de FPS.

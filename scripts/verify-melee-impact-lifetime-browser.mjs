@@ -55,15 +55,16 @@ try {
       B.rebuildBoardOccupancy(host);
       window.sleep = ms => new Promise(done => setTimeout(done, ms));
       window.visuals = () => {
-        const clones = [...document.querySelectorAll('canvas[id^="meleeClone_"]')];
-        return { nodes: clones.length, visible: clones.filter(node => Number(getComputedStyle(node).opacity) > 0.01).length,
-          trails: [...document.querySelectorAll('.melee-motion-trail')].filter(node => Number(getComputedStyle(node).opacity) > 0.01).length,
-          impacts: document.querySelectorAll('.melee-impact-fx').length };
+        const copies = C.captureCombatState().melee.active, now=C.clockNow();
+        const visible=copies.filter(c=>M.getMeleeFlightVisual(c.options.flightId)?.ready && now<c.resume.startedAt+c.resume.duration+180);
+        return {nodes:copies.length,visible:visible.length,trails:visible.length,impacts:visible.filter(c=>c.resume.phase==='hit').length};
       };
+      M.prepareCombatRenderer();
       window.attack = { functionName: 'melee-lifetime', displayName: 'Impact', combatFunction: 'Attaquant',
         attacknature: ['physicalDamage'], attackRange: ['melee'], attackTarget: ['enemy'], deadTarget: ['no'],
         effets: [], selfEffects: [], type: [], executionTime: 400, physicalRatio: 1, magicalRatio: 0, piercingRatio: 0 };
     });
+    await page.waitForSelector('#phaser-projectiles canvas',{state:'attached'});
     const burst = await page.evaluate(async () => {
       const target = entities[0], hp = target.stats.HP.current;
       const pending = entities.slice(1).map((entity, i) => {

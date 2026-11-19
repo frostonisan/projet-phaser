@@ -30,7 +30,7 @@ try {
   const reports = await page.evaluate(async () => {
     const { entites, enrichEntityStats, recomputeEntityStats } = await import("/js/entities/runtime.js");
     const { createAttackFlight, acceptsImpactTarget, acceptsSelectedTarget, getFlightMode } = await import("/js/combat/attacks.js");
-    const { animationProjectile, finishMeleeCloneOnDeath, animationMelee, clearProjectileEffects, getMeleeFlightVisual, isPhaserMeleeAttack } = await import("/js/rendering/animations.js");
+    const { animationProjectile, animationMelee, clearProjectileEffects, getMeleeFlightVisual } = await import("/js/rendering/animations.js");
     const { executeAttack, resolveAttackImpact } = await import('/js/combat/attacks.js');
     const { makeRoomForSummon, createEntityIngame } = await import("/js/entities/spawn.js");
     const { consommationSummon, summonEntite } = await import("/js/combat/summons.js");
@@ -204,8 +204,6 @@ try {
       };
       Math.random = () => .999999;
       try {
-        check(isPhaserMeleeAttack(pilot) && !isPhaserMeleeAttack({...pilot, functionName:'another-melee'})
-          && !isPhaserMeleeAttack({...pilot, attacknature:['magicalDamage']}), 'Only the selected physical melee attack uses the pilot');
         const first = launchMelee(1600);
         await waitForVisual(() => first.visual()?.ready);
         check(first.visual()?.renderer === 'phaser' && first.visual().ready, 'Physical melee boots in the shared Phaser scene');
@@ -235,7 +233,7 @@ try {
         const cancelled = launchMelee();
         await sleep(100); attacker.isDEAD = true;
         check(await cancelled.done !== 'hit' && target.stats.HP.current === initialHp, 'Caster death cancels melee damage under existing rules');
-        await sleep(220);
+        await sleep(1800);
         check(!cancelled.visual() && Number(getComputedStyle(original).opacity) === 1, 'Death removes the melee copy and releases original visibility');
         attacker.isDEAD = false;
         const cleared = launchMelee(1600);
@@ -266,12 +264,54 @@ try {
         check(await close.done === 'hit', 'Close melee still resolves the existing impact');
         hexes[3].style.left = oldLeft; target.stats.HP.current = initialHp;
         const secondary = launchMelee(500, {secondHit:true});
-        check(secondary.visual()?.renderer !== 'phaser', 'The secondary strike keeps its existing melee renderer');
+        check(secondary.visual()?.renderer === 'phaser' && secondary.visual().snapshot().resume.isAmbidextry, 'The secondary strike uses Phaser with its ambidextry aura');
         await secondary.done; target.stats.HP.current = initialHp;
         clearProjectileEffects(entites);
         check(document.querySelectorAll('#phaser-projectiles canvas').length === 1 && document.querySelector('#phaser-projectiles').hidden,
           'Projectiles and melee reuse one canvas and hide it when idle');
       } finally { Math.random = random; attacker.isDEAD = false; target.isDEAD = false; replacement.side = 'A'; target.stats.HP.current = initialHp; move(target,hexes[3]); clearProjectileEffects(entites); }
+    }
+    // Every current melee definition uses the same renderer without applying rules.
+    for (const definition of attackDetails.filter(a => {const f=getAttackResolutionFlags(a);return f.isMelee&&!f.isRange;})) {
+      const hp = target.stats.HP.current;
+      const visual = animationMelee(attacker, target, false, {duration:250,attack:definition});
+      await waitForVisual(() => visual?.ready);
+      check(visual?.renderer === 'phaser' && visual.ready, definition.functionName + ' has a Phaser melee copy');
+      visual.resolveImpact(true);
+      await sleep(460);
+      check(target.stats.HP.current === hp && !getMeleeFlightVisual(visual.flightId), definition.functionName + ' visual never applies damage and cleans up');
+    }
+    {
+      const Transport = await import('/js/rendering/attackTransport.js'), random=Math.random;
+      const hp=target.stats.HP.current;
+      Math.random=()=>.999999;
+      try {
+        for (const natures of [['physicalDamage'],['magicalDamage'],['hybridalDamage'],['piercingDamage'],['hybridalDamage','piercingDamage']]) {
+          const definition=attack(natures,{attackRange:['melee'],executionTime:300});
+          const sources={physical:12,magical:9,piercingDamage:6};
+          const flight=createAttackFlight(attacker,target,definition,sources);
+          const impact=resolveAttackImpact(flight,{at:combatNow()+300});
+          const result=await Transport.presentAttackTransport(flight,impact,{duration:300,isRange:false,options:{}});
+          const loss=hp-target.stats.HP.current; target.stats.HP.current=hp;
+          const direct=await resolveAttackImpact(createAttackFlight(attacker,target,definition,sources));
+          check(result===direct && hp-target.stats.HP.current===loss, natures.join('+')+' has identical melee damage with and without Phaser');
+          target.stats.HP.current=hp; await sleep(220);
+        }
+        const primary=animationMelee(attacker,target,false,{duration:1200});
+        await waitForVisual(()=>primary.ready);
+        const secondary=animationMelee(attacker,target,true,{duration:400});
+        await waitForVisual(()=>secondary.ready);
+        check(getMeleeFlightVisual(primary.flightId)===primary && primary.flightId!==secondary.flightId, 'Ambidextry keeps both simultaneous copies alive');
+        check(secondary.snapshot().resume.color===0xedff00, 'Ambidextry keeps its yellow aura');
+        secondary.cancel();
+        check(getMeleeFlightVisual(primary.flightId)===primary, 'Removing the second copy does not cancel the first');
+        primary.cancel();
+        const cell=animationMelee(attacker,hexes[2],false,{duration:350});
+        await waitForVisual(()=>cell.ready);
+        check(cell.snapshot().target.hex===hexes[2].dataset.position, 'A cell-targeted melee saves the logical cell reference');
+        cell.resolveImpact(true); await sleep(550);
+        check(!getMeleeFlightVisual(cell.flightId), 'Cell melee completes without an entity sprite target');
+      } finally {Math.random=random;target.stats.HP.current=hp;clearProjectileEffects(entites);}
     }
     const beforeAvoidance = getEntityCombatDetails(target).physicalProjectilesAvoided;
     const avoided = createAttackFlight(attacker, target, physical, { physical: 40 });
@@ -725,17 +765,17 @@ try {
     await sleep(600);
     attacker.isDEAD = true;
     await sleep(80);
-    const interruptedClone = document.querySelector(`[id^="meleeClone_${attacker.id}_"].melee-clone-death`);
-    check(!!interruptedClone, 'Live melee controller freezes clone on attacker death: ' + JSON.stringify({phase:attacker.currentPhase,action:attacker._combatAction?.stage,clones:[...document.querySelectorAll('canvas[id^=meleeClone_]')].map(c=>({id:c.id,classes:c.className}))}));
+    const interruptedState = captureCombatState().melee.active.find(e => e.attacker === attacker.id && e.resume.phase === 'cancelled');
+    check(!!interruptedState, 'Live Phaser melee freezes its copy on attacker death');
     await window.captureCombatTest('melee-death');
-    const frozenRect = interruptedClone.getBoundingClientRect();
+    const frozenPoint = {x:interruptedState.resume.x,y:interruptedState.resume.y};
     await sleep(180);
-    const laterRect = interruptedClone.getBoundingClientRect();
-    check(Math.abs(laterRect.left - frozenRect.left) < 12, 'Interrupted clone stops its approach immediately');
+    const later = getMeleeFlightVisual(interruptedState.options.flightId).snapshot().resume;
+    check(later.x === frozenPoint.x && later.y === frozenPoint.y, 'Interrupted copy stops its approach immediately');
     await interrupted;
     check(target.stats.HP.current === target.stats.HP.max, 'Interrupted melee never applies damage');
-    await sleep(950);
-    check(!interruptedClone.isConnected, 'Interrupted melee clone cleans up');
+    await waitForVisual(() => !getMeleeFlightVisual(interruptedState.options.flightId));
+    check(!getMeleeFlightVisual(interruptedState.options.flightId), 'Interrupted melee copy cleans up');
     attacker.isDEAD = false;
 
     const pending = createAttackFlight(attacker, target, physical, { physical: 10 });
@@ -981,14 +1021,17 @@ try {
     attacker.baseStats.intelligence = savedCasterBaseIntelligence;
     attacker.stats.intelligence = savedCasterIntelligence;
 
-    const clone = document.createElement('div'); clone.style.cssText = 'position:fixed;left:200px;top:180px;width:70px;height:70px;background:#ccc;transform:translate(40px,20px)';
-    document.body.appendChild(clone);
-    const deathVfx = finishMeleeCloneOnDeath(clone, getComputedStyle(clone).transform);
+    const deathVisual = animationMelee(attacker, attacker, false, {duration:1000});
+    await waitForVisual(() => deathVisual.ready);
+    deathVisual.abortOnDeath();
     await sleep(300);
-    check(clone.isConnected && clone.classList.contains('melee-clone-death'), 'Death clone remains frozen and red during one-second shake');
-    await deathVfx;
-    check(!clone.isConnected && document.querySelector('.melee-clone-death-blood'), 'Death clone replaced by blood burst');
-    check(!document.getElementById(`DragSprite_${attacker.id}`).classList.contains('melee-clone-death'), 'Real body never receives clone death tint');
+    check(deathVisual.snapshot().resume.phase === 'cancelled', 'Death copy remains frozen and red during one-second shake');
+    await sleep(800);
+    check(!!getMeleeFlightVisual(deathVisual.flightId), 'Death blood stays in the shared scene after the shake');
+    await window.captureCombatTest('phaser-melee-death-blood');
+    await sleep(700);
+    check(!getMeleeFlightVisual(deathVisual.flightId), 'Death copy and blood clean up');
+    check(!document.getElementById(`DragSprite_${attacker.id}`).classList.contains('melee-clone-death'), 'Real body never receives copy death tint');
 
     clearProjectileEffects(entites);
     const { startGame, StopGame } = await import("/js/app/state.js");

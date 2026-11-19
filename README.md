@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.92.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.93.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -156,3 +156,20 @@ Les dégâts, les délais, la cible et l’occupation du plateau restent décid�
 le combat. Pause et F5 conservent le trajet, l’impact et le retour du sprite.
 Les fichiers de transport, d’animations et de tests existants sont réutilisés,
 sans nouveau module, média, dépendance ou moteur de collisions.
+
+## Toutes les mêlées Phaser — v0.93.0-dev
+
+Les attaques de corps à corps physiques, magiques, hybrides et perforantes,
+les seconds coups d’ambidextrie et les animations de mêlée des événements
+utilisent maintenant la même scène Phaser que les projectiles. Les sprites
+et le GIF de sang existants sont réutilisés ; les coups secondaires gardent
+leur aura jaune. Les attaques dirigées vers une case utilisent sa vue actuelle.
+
+Les calculs, cibles, délais, dégâts et effets de combat restent dans leur moteur
+actuel. Les événements conservent leurs dégâts programmés ; une confirmation
+d’impact anticipée attend l’arrivée visuelle, et une confirmation tardive ne
+rejoue pas une animation expirée. Pause/F5 conserve les deux coups, la charge,
+l’impact, le retour de l’original et la disparition de la copie à la mort.
+
+L’ancienne animation de mêlée HTML et ses helpers privés ont été retirés.
+Aucun nouveau fichier de jeu, média ou dépendance.

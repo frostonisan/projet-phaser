@@ -1941,18 +1941,6 @@ opacity:1;
             }
         }
 
-.melee-clone-death {
-    filter: drop-shadow(0 0 6px #a00000) !important;
-    pointer-events: none;
-}
-
-.melee-clone-death-blood {
-    position: fixed;
-    object-fit: contain;
-    pointer-events: none;
-    z-index: 10000;
-}
-
 .attack-details.Attaquant { --glow-slow-color: #ff3b477d; }
 
 .attack-details.Support { --glow-slow-color: #3f8cff7d; }

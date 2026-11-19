@@ -10,7 +10,15 @@ await mkdir(output, { recursive: true });
 const server = createServer(async (req, res) => {
   const file = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
-  try { res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' })[extname(file)] || 'application/octet-stream'); res.end(await readFile(file)); }
+  try { res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' })[extname(file)] || 'application/octet-stream'); let data = await readFile(file);
+    if (file === resolve(root, 'js/combat/vitals.js')) {
+      // The player journal omits flight ids. Expose the existing id only in
+      // this test server, to distinguish saved hits from nature effects or later turns.
+      const source = data.toString(), marker = /attack: \{\r?\n  functionName: attackDetail/;
+      assert.match(source, marker);
+      data = source.replace(marker, 'attack: {\n  launchContextId: attackDetail?.launchContextId,\n  functionName: attackDetail');
+    }
+    res.end(data); }
   catch { res.writeHead(404).end(); }
 });
 await new Promise(done => server.listen(0, '127.0.0.1', done));
@@ -24,6 +32,8 @@ async function fixture(config = {}) {
   page.on('console', message => { if (message.type()==='error' && !message.text().includes('Failed to load resource')) console.error(message.text()); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.evaluate(async config => {
+    // Ambidextry's base chance caps at 50%; force a successful roll in its fixture.
+    if (config.double) Math.random = () => .25;
     window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
     window.Clock = await import("/js/combat/clock.js");
     const { loadResource } = await import('/js/data/loaderList.js');
@@ -55,17 +65,23 @@ async function fixture(config = {}) {
       const entity = E.enrichEntityStats({ ...structuredClone(template), id: 999820 + i, name: `Simultané ${side}`, side,
         type: 'sbire', role: 'gueux', position: String(i+1), level: 1, awakening: 1, stuff: {}, stats: {}, modifierStats: {},
         baseStats: { HP: 1000, strength: 0, intelligence: 0, agility: 0, physicalDamage: 40, magicalDamage: 40,
-          speed: config.speed ?? 100, extraLife: own.extraLife || 0 },
+          speed: config.speed ?? 100, ambidextry: config.double ? 100000 : 0, extraLife: own.extraLife || 0 },
         attacks: [{ functionName: config.phaserMelee ? 'shot-p-c' : config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
           combatFunction: own.support ? 'Support' : 'Attaquant', attacknature: own.natures || [magic ? 'magicalDamage' : 'physicalDamage'],
           attackRange: [own.range || 'melee'], attackTarget: [own.support ? 'ally' : 'enemy'], deadTarget: ['no'], type: [], effets: own.effects || (own.support ? ['heal'] : []), selfEffects: [],
           preparationTime: own.preparation ?? 500, executionTime: own.execution ?? 1800, recoveryTime: own.recovery ?? 300, cooldown: 20000,
+          ...(config.double ? {essenceSlots:['red','yellow','yellow','yellow'].map(color=>({color}))} : {}),
           physicalRatio: magic ? 0 : 1, magicalRatio: magic ? 1 : 0, piercingRatio: 0 }] });
       entity.statut = ['alive']; entity.isDEAD = false; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
     const boardController = await import('/js/board/controller.js');
     boardController.invalidateFootprintGeometry(grid); boardController.rebuildBoardOccupancy(grid);
+    if (config.double) {
+      const S = await import('/js/combat/statistics.js');
+      if (E.entites.some(e=>S.calculateAmbidextryTotalChance(S.createAttackStatView(e,e.attackDetails[0])) <= 25))
+        throw Error('Double-hit fixture needs compatible yellow essences and a successful proc roll');
+    }
     window.E = E; window.G = await import("/js/app/state.js"); window.F = await import("/js/combat/loop.js");
     G.configureBattleActionManager({ createStartButton: container=>container, createFleeButton: container=>container, createQuitButton: container=>container });
     window.Timeline = await import("/js/combat/timeline.js"); window.Attacks = await import('/js/combat/attacks.js');
@@ -81,20 +97,29 @@ async function fixture(config = {}) {
 
 try {
   if (!process.env.PAUSE_EXTRA_ONLY) {
-  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple'])) {
-  const natures = mode === 'magical' ? ['magicalDamage'] : mode === 'mixed' ? ['hybridalDamage']
-    : mode === 'triple' ? ['hybridalDamage', 'piercingDamage'] : ['physicalDamage'];
+  for (const mode of (process.env.PAUSE_TEST_MODE ? process.env.PAUSE_TEST_MODE.split(',') : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple', 'melee-magical', 'melee-mixed', 'melee-triple', 'melee-double-pending', 'melee-double-active'])) {
+  const natures = mode.endsWith('magical') ? ['magicalDamage'] : mode.endsWith('mixed') ? ['hybridalDamage']
+    : mode.endsWith('triple') ? ['hybridalDamage', 'piercingDamage'] : ['physicalDamage'];
   const own = { range: mode.includes('melee') ? 'melee' : 'range', natures,
-    execution: mode.startsWith('phaser') ? 6000 : 1800, magic: mode === 'magical' };
-  const page = await fixture({ phaser: mode === 'phaser', phaserMelee: mode === 'phaser-melee', A: own, B: own });
-  await page.evaluate(async () => {
+    execution: mode.startsWith('phaser') || mode.includes('melee') ? 4000 : 1800, magic: mode.endsWith('magical') };
+  const page = await fixture({ phaser: mode === 'phaser', phaserMelee: mode === 'phaser-melee', double:mode.includes('double'), A: own, B: own });
+  await page.evaluate(async mode => {
+    if (mode === 'melee-double-pending') {
+      const watch = setInterval(() => {
+        if (Clock.captureCombatState().flights.delayed.length !== 2) return;
+        clearInterval(watch); void P.pauseCombat();
+      }, 1);
+    }
     G.startGame();
     const {poison} = await import("/js/combat/effects.js");
     poison(E.entites[0], { effectDot: 9, effectDuration: 4, type: ['alteration'] }, E.entites[1]);
-  });
-  await page.waitForSelector(mode !== 'melee' ? '#phaser-projectiles:not([hidden]) canvas' : 'canvas[id^=meleeClone_]');
-  await page.waitForTimeout(150);
-  await page.keyboard.press('Space');
+  }, mode);
+  await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+  if (mode === 'melee-double-active') await page.waitForFunction(() => Clock.captureCombatState().melee.active.filter(e=>e.isAmbidextry).length===2);
+  if (mode !== 'melee-double-pending') {
+    await page.waitForTimeout(150);
+    await page.keyboard.press('Space');
+  }
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
   const read = () => page.evaluate(async () => {
     const { entites } = await import("/js/entities/runtime.js");
@@ -106,6 +131,7 @@ try {
       projectiles:[...document.querySelectorAll('.projectile-parent')].map(el=>({id:el.id,transform:el.style.transform})),
       phaser: entites.flatMap(entity => (entity.projectiles || []).filter(p => p.status === 'in-flight' && p.visual?.renderer === 'phaser').map(p => ({id:p.id, visual:p.visual}))),
       phaserMelee: clock.captureCombatState().melee.active.filter(entry => entry.renderer === 'phaser'),
+      flightIds: [...clock.captureCombatState().flights.active.map(e=>e.flight.id),...clock.captureCombatState().flights.delayed.map(e=>e.id)].sort(),
       effects: [...document.querySelectorAll('.effect-vfx')].map(el=>el.id),
       melee: [...document.querySelectorAll('canvas[id^=meleeClone_]')].map(el=>({id:el.id, transform:getComputedStyle(el).transform,opacity:getComputedStyle(el).opacity})),
     };
@@ -117,9 +143,10 @@ try {
     assert.equal(await page.locator('.projectile-parent').count(), 0);
     await page.screenshot({path:resolve(output,'phaser-paused.png')});
   }
-  if (mode === 'phaser-melee') {
-    assert.equal(before.phaserMelee.length, 2);
-    assert.ok(before.phaserMelee.every(entry => entry.resume.progress > 0 && entry.resume.progress < 1));
+  if (mode.includes('melee')) {
+    assert.equal(before.phaserMelee.length, mode === 'melee-double-active' ? 4 : 2);
+    if(mode === 'melee-double-pending') assert.equal(await page.evaluate(()=>Clock.captureCombatState().flights.delayed.length),2);
+    assert.ok(before.phaserMelee.every(entry => entry.resume.progress >= (mode === 'melee-double-pending' ? 0 : Number.EPSILON) && entry.resume.progress < 1));
     assert.equal(before.melee.length, 0);
     await page.screenshot({path:resolve(output,'phaser-melee-paused.png')});
   }
@@ -150,7 +177,7 @@ try {
   });
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
-  if (mode !== 'melee') await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+  await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
   const restored = await read();
   const compare=(actual,expected,message)=>{
     const {melee:am,...a}=actual,{melee:bm,...b}=expected;assert.deepEqual(a,b,message);
@@ -166,22 +193,22 @@ try {
   await page.waitForTimeout(1800);
   compare(await read(),before,'reload does not restart timers');
   await page.screenshot({path:resolve(output,'restored-paused.png')});
-  await page.evaluate(() => {
+  await page.evaluate(savedIds => {
     window.resumedImpacts = [];
     window.addEventListener('combatLogEntry', event => {
-      if (event.detail.type === 'damage_resolution' && ['simultaneous-test','shot-p-r','shot-p-c'].includes(event.detail.data.attack?.functionName))
-        resumedImpacts.push(event.detail.data.attacker.id);
+      if (event.detail.type === 'damage_resolution' && savedIds.includes(event.detail.data.attack?.launchContextId))
+        resumedImpacts.push(event.detail.data.attack.launchContextId);
     });
-  });
+  }, before.flightIds);
   await page.keyboard.press('Space');
   await page.waitForFunction(async () => !(await import("/js/combat/clock.js")).isCombatPaused());
-  await page.waitForFunction(() => resumedImpacts.length >= 2, null, {timeout:10000});
+  await page.waitForFunction(count => resumedImpacts.length >= count, before.flightIds.length, {timeout:10000});
   await page.waitForTimeout(100);
   // Freeze before an ordinary next turn can resolve another legitimate attack.
   await page.evaluate(async () => (await import('/js/combat/pause.js')).pauseCombat());
   const after = await read();
   assert.ok(after.e.every((e,i)=>e.hp<before.e[i].hp),'both saved impacts apply after resume: '+JSON.stringify({mode,before:before.e,after:after.e,impacts:await page.evaluate(()=>resumedImpacts)}));
-  assert.deepEqual(await page.evaluate(()=>resumedImpacts.sort()), before.e.map(e=>e.id).sort(), 'Each saved attack resolves exactly once, for every nature');
+  assert.deepEqual(await page.evaluate(()=>resumedImpacts.sort()), before.flightIds, 'Each saved attack resolves exactly once, for every nature');
   await page.evaluate(async () => (await import("/js/combat/pause.js")).pauseCombat());
   const pausedAgain = await read();
   await page.reload();
@@ -402,6 +429,50 @@ try {
     assert.equal(result.before,result.hp,'Event damage waits for the configured deadline');
     assert.equal(result.after,result.hp*.9,'Event keeps exactly its requested damage, without triggering healing');
     await page.close();console.log('PASS Phaser: scripted ranged event keeps its visual and cosmetic-only combat contract');
+  }
+  {
+    const page=await fixture({speed:20000});
+    const result=await page.evaluate(async()=>{
+      G.startGame();
+      const {eventEntityAttack}=await import('/js/events/runtime.js');
+      (await import('/js/combat/attackResolution.js')).setEntityAttackDefinitions(E.entites[0],['shot-p-c'],(await import('/js/data/attackList.js')).attackDetails);
+      const target=E.entites[1],hp=target.stats.HP.current;
+      const done=eventEntityAttack({side:'B',attackerSide:'A',targetId:target.id,attackerId:E.entites[0].id,attackFunction:'shot-p-c',percent:10,executionTime:600,shakescreen:false});
+      // Freeze immediately: a cold Phaser import can stall wall-clock timers.
+      // The early confirmation must retain the charge even beyond its wall deadline.
+      Clock.freezeCombatClock();
+      await new Promise(r=>setTimeout(r,700));
+      const visual=Clock.captureCombatState().melee.active[0],before=target.stats.HP.current;
+      const renderer=visual?.renderer,phase=visual?.resume.phase;
+      Clock.resumeCombatClock();
+      await done;
+      return {hp,before,after:target.stats.HP.current,renderer,phase};
+    });
+    assert.equal(result.renderer,'phaser');assert.equal(result.phase,'flight','Early event confirmation keeps the full charge');
+    assert.equal(result.before,result.hp);assert.equal(result.after,result.hp*.9,'Event applies only its requested damage');
+    await page.close();console.log('PASS melee event: Phaser charge waits for the existing damage deadline');
+  }
+  for (const phase of ['cancelled','blood']) {
+    const page=await fixture({speed:20000});
+    await page.evaluate(async()=>{
+      window.An=await import('/js/rendering/animations.js');G.startGame();
+      window.copy=An.animationMelee(E.entites[0],E.entites[1],true,{duration:2500});
+    });
+    await page.waitForFunction(()=>copy.ready);
+    await page.evaluate(()=>copy.abortOnDeath());
+    await page.waitForTimeout(phase==='blood'?1100:120);
+    await page.evaluate(()=>P.pauseCombat());
+    const read=()=>page.evaluate(async()=>(await import('/js/combat/clock.js')).captureCombatState().melee);
+    const before=await read();assert.equal(before.active[0].resume.phase,'cancelled');
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre'&&!document.querySelector('#combat-pause-control').disabled);
+    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+    assert.deepEqual(await read(),before,'Death effect restores its exact phase and time');
+    await page.waitForTimeout(900);assert.deepEqual(await read(),before);
+    await page.keyboard.press('Space');
+    await page.evaluate(async()=>{window.RestoredClock=await import('/js/combat/clock.js');});
+    await page.waitForFunction(()=>RestoredClock.captureCombatState().melee.active.length===0);
+    await page.close();console.log('PASS melee '+phase+': frozen copy and blood survive F5 without duplicate damage');
   }
   for (const range of ['range','melee']) for (const mode of ['slow','unavailable']) {
     const page = await fixture({phaser:range==='range',phaserMelee:range==='melee',A:{range,preparation:100,execution:500},B:{range,preparation:100,execution:500}});
