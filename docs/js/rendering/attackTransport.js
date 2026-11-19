@@ -1,9 +1,9 @@
-import { animationProjectile, animationMelee, getMeleeFlightVisual, prepareProjectileRenderer } from "./animations.js";
+import { animationProjectile, animationMelee, getMeleeFlightVisual, prepareCombatRenderer, animationPhaserMelee, isPhaserMeleeAttack } from "./animations.js";
 import { normArr, getAttackResolutionFlags } from "../combat/attackResolution.js";
 import { attackEffects } from '../data/attackEffects.js';
 
 export function prepareAttackTransport(attack) {
-  if (getAttackResolutionFlags(attack).isRange) prepareProjectileRenderer(getProjectileEffectClasses(attack));
+  if (getAttackResolutionFlags(attack).isRange || isPhaserMeleeAttack(attack)) prepareCombatRenderer(getProjectileEffectClasses(attack));
 }
 
 function getProjectileEffectClasses(attack = {}) {
@@ -30,7 +30,10 @@ export async function presentAttackTransport(flight, impact, { duration, isRange
     return impact;
   }
   const controller = (restored && getMeleeFlightVisual(flight.id))
-    || animationMelee(attacker, target, Boolean(options.secondHit), { duration, flightId: flight.id });
+    || (isPhaserMeleeAttack(attack) && !options.secondHit
+      ? animationPhaserMelee(attacker, target, { duration, flightId: flight.id, flight })
+      : animationMelee(attacker, target, Boolean(options.secondHit), { duration, flightId: flight.id }));
+  controller?.bindFlight?.(flight);
   const status = await impact;
   // Display completion must not delay the next gameplay phase.
   void controller?.resolveImpact?.(status === 'hit');

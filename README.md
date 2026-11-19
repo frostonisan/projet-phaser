@@ -9,7 +9,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.91.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.92.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -144,3 +144,15 @@ Le simulateur utilise les mêmes règles sans charger Phaser. La dépendance loc
 reste Phaser 3.90.0 avec sa licence MIT dans `docs/vendor/`, sans CDN à l’exécution.
 Cette étape n’introduit pas de collisions physiques ni de changement des formules
 et ne revendique pas de gain de FPS.
+
+## Première mêlée Phaser — v0.92.0-dev
+
+L’attaque physique **Tir cp** (`shot-p-c`), utilisée par **TEST Porc physic cac**
+(serial 7), affiche sa charge et son impact dans la même scène que les projectiles.
+Le sprite existant est réutilisé ; le retour de l’original conserve le fondu actuel.
+Les autres mêlées et le second coup d’ambidextrie gardent leur animation existante.
+
+Les dégâts, les délais, la cible et l’occupation du plateau restent décidés par
+le combat. Pause et F5 conservent le trajet, l’impact et le retour du sprite.
+Les fichiers de transport, d’animations et de tests existants sont réutilisés,
+sans nouveau module, média, dépendance ou moteur de collisions.

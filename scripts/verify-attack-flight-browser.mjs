@@ -30,7 +30,7 @@ try {
   const reports = await page.evaluate(async () => {
     const { entites, enrichEntityStats, recomputeEntityStats } = await import("/js/entities/runtime.js");
     const { createAttackFlight, acceptsImpactTarget, acceptsSelectedTarget, getFlightMode } = await import("/js/combat/attacks.js");
-    const { animationProjectile, finishMeleeCloneOnDeath, animationMelee, clearProjectileEffects } = await import("/js/rendering/animations.js");
+    const { animationProjectile, finishMeleeCloneOnDeath, animationMelee, clearProjectileEffects, getMeleeFlightVisual, isPhaserMeleeAttack } = await import("/js/rendering/animations.js");
     const { executeAttack, resolveAttackImpact } = await import('/js/combat/attacks.js');
     const { makeRoomForSummon, createEntityIngame } = await import("/js/entities/spawn.js");
     const { consommationSummon, summonEntite } = await import("/js/combat/summons.js");
@@ -190,6 +190,89 @@ try {
       await done; check(calls === 1, effect + ' completes exactly once');
     }
     await sleep(100);
+    // First melee pilot: the combat flight still owns the hit and damage.
+    {
+      const Transport = await import('/js/rendering/attackTransport.js');
+      const pilot = attack(['physicalDamage'], { functionName: 'shot-p-c', attackRange: ['melee'], executionTime: 800 });
+      const initialHp = target.stats.HP.current, random = Math.random;
+      const original = document.getElementById(`DragSprite_${attacker.id}`);
+      const launchMelee = (duration = 800, options = {}) => {
+        const flight = createAttackFlight(attacker, target, { ...pilot, executionTime: duration }, { physical: 20 });
+        const impact = resolveAttackImpact(flight, { at: combatNow() + duration });
+        const done = Transport.presentAttackTransport(flight, impact, { duration, isRange: false, options });
+        return { flight, done, visual: () => getMeleeFlightVisual(flight.id) };
+      };
+      Math.random = () => .999999;
+      try {
+        check(isPhaserMeleeAttack(pilot) && !isPhaserMeleeAttack({...pilot, functionName:'another-melee'})
+          && !isPhaserMeleeAttack({...pilot, attacknature:['magicalDamage']}), 'Only the selected physical melee attack uses the pilot');
+        const first = launchMelee(1600);
+        await waitForVisual(() => first.visual()?.ready);
+        check(first.visual()?.renderer === 'phaser' && first.visual().ready, 'Physical melee boots in the shared Phaser scene');
+        await sleep(100);
+        check(document.querySelectorAll('canvas[id^=meleeClone_]').length === 0, 'The pilot creates no duplicate HTML melee clone');
+        check(Number(getComputedStyle(original).opacity) === 0, 'The source is hidden only while its ready Phaser copy leaves');
+        check(first.visual().snapshot().resume.progress > 0, 'Phaser melee follows combat time');
+        await window.captureCombatTest('phaser-melee-charge');
+        check(await first.done === 'hit', 'The pilot completes its canonical melee hit');
+        const loss = initialHp - target.stats.HP.current;
+        check(loss > 0, 'The melee pilot applies damage');
+        await window.captureCombatTest('phaser-melee-impact');
+        target.stats.HP.current = initialHp;
+        await resolveAttackImpact(createAttackFlight(attacker,target,{...pilot,executionTime:1600},{physical:20}));
+        check(initialHp - target.stats.HP.current === loss, 'Melee damage is identical with and without Phaser');
+        target.stats.HP.current = initialHp;
+        await sleep(850);
+        check(!first.visual() && Number(getComputedStyle(original).opacity) === 1, 'After impact the copy is removed and the original is visible');
+        const moving = launchMelee();
+        await sleep(100); move(target, hexes[4]);
+        await sleep(100);
+        const v = moving.visual().snapshot().resume, rect = document.getElementById(`spriteCanvas_${target.id}`).getBoundingClientRect();
+        check(Math.abs(v.to.x - (rect.left + rect.width/2)/innerWidth) < .001, 'The melee copy follows the moving target');
+        check(await moving.done === 'hit' && target.stats.HP.current < initialHp, 'A moving melee target is still hit by the existing rules');
+        check(attacker.position === hexes[0].dataset.position && target.position === hexes[4].dataset.position, 'The visual charge never moves logical board occupants');
+        target.stats.HP.current = initialHp; move(target, hexes[3]); await sleep(250);
+        const cancelled = launchMelee();
+        await sleep(100); attacker.isDEAD = true;
+        check(await cancelled.done !== 'hit' && target.stats.HP.current === initialHp, 'Caster death cancels melee damage under existing rules');
+        await sleep(220);
+        check(!cancelled.visual() && Number(getComputedStyle(original).opacity) === 1, 'Death removes the melee copy and releases original visibility');
+        attacker.isDEAD = false;
+        const cleared = launchMelee(1600);
+        await waitForVisual(() => cleared.visual()?.ready);
+        clearProjectileEffects(entites);
+        check(!cleared.visual(), 'Clearing effects removes the Phaser melee controller');
+        check(await cleared.done === 'hit' && initialHp - target.stats.HP.current === loss, 'Clearing the melee visual does not cancel or duplicate scheduled damage');
+        target.stats.HP.current = initialHp;
+        // Cosmetic projectile and real melee must coexist in one scene.
+        const alongside = animationProjectile(replacement, target, () => 'hit', {
+          id: 'alongside-melee', executionTime: 1000, attacknature: ['magicalDamage'],
+        });
+        const together = launchMelee();
+        await sleep(120);
+        check(together.visual()?.ready && replacement.projectiles.some(p => p.id === 'alongside-melee' && p.status === 'in-flight'),
+          'A projectile and melee copy coexist in the same scene');
+        await Promise.all([alongside, together.done]); target.stats.HP.current = initialHp;
+        replacement.side = 'B'; // Keep an enemy alive while the target disappears.
+        const missed = launchMelee();
+        await sleep(120); target.isDEAD = true;
+        check(await missed.done !== 'hit' && target.stats.HP.current === initialHp, 'A lost melee target receives no damage');
+        await sleep(220); check(!missed.visual(), 'A missed melee copy disappears after its short tail');
+        target.isDEAD = false; replacement.side = 'A';
+        // The same cell geometry can put two sprites almost together.
+        const oldLeft = hexes[3].style.left; hexes[3].style.left = '120px';
+        const close = launchMelee(500);
+        check(close.visual().snapshot().resume.closeRange, 'Very close melee uses the short visual lunge');
+        check(await close.done === 'hit', 'Close melee still resolves the existing impact');
+        hexes[3].style.left = oldLeft; target.stats.HP.current = initialHp;
+        const secondary = launchMelee(500, {secondHit:true});
+        check(secondary.visual()?.renderer !== 'phaser', 'The secondary strike keeps its existing melee renderer');
+        await secondary.done; target.stats.HP.current = initialHp;
+        clearProjectileEffects(entites);
+        check(document.querySelectorAll('#phaser-projectiles canvas').length === 1 && document.querySelector('#phaser-projectiles').hidden,
+          'Projectiles and melee reuse one canvas and hide it when idle');
+      } finally { Math.random = random; attacker.isDEAD = false; target.isDEAD = false; replacement.side = 'A'; target.stats.HP.current = initialHp; move(target,hexes[3]); clearProjectileEffects(entites); }
+    }
     const beforeAvoidance = getEntityCombatDetails(target).physicalProjectilesAvoided;
     const avoided = createAttackFlight(attacker, target, physical, { physical: 40 });
     move(target, hexes[4]);

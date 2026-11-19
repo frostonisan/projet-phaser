@@ -56,7 +56,7 @@ async function fixture(config = {}) {
         type: 'sbire', role: 'gueux', position: String(i+1), level: 1, awakening: 1, stuff: {}, stats: {}, modifierStats: {},
         baseStats: { HP: 1000, strength: 0, intelligence: 0, agility: 0, physicalDamage: 40, magicalDamage: 40,
           speed: config.speed ?? 100, extraLife: own.extraLife || 0 },
-        attacks: [{ functionName: config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
+        attacks: [{ functionName: config.phaserMelee ? 'shot-p-c' : config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
           combatFunction: own.support ? 'Support' : 'Attaquant', attacknature: own.natures || [magic ? 'magicalDamage' : 'physicalDamage'],
           attackRange: [own.range || 'melee'], attackTarget: [own.support ? 'ally' : 'enemy'], deadTarget: ['no'], type: [], effets: own.effects || (own.support ? ['heal'] : []), selfEffects: [],
           preparationTime: own.preparation ?? 500, executionTime: own.execution ?? 1800, recoveryTime: own.recovery ?? 300, cooldown: 20000,
@@ -81,12 +81,12 @@ async function fixture(config = {}) {
 
 try {
   if (!process.env.PAUSE_EXTRA_ONLY) {
-  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee', 'phaser', 'magical', 'mixed', 'triple'])) {
+  for (const mode of (process.env.PAUSE_TEST_MODE ? [process.env.PAUSE_TEST_MODE] : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple'])) {
   const natures = mode === 'magical' ? ['magicalDamage'] : mode === 'mixed' ? ['hybridalDamage']
     : mode === 'triple' ? ['hybridalDamage', 'piercingDamage'] : ['physicalDamage'];
-  const own = { range: mode === 'melee' ? 'melee' : 'range', natures,
-    execution: mode === 'phaser' ? 6000 : 1800, magic: mode === 'magical' };
-  const page = await fixture({ phaser: mode === 'phaser', A: own, B: own });
+  const own = { range: mode.includes('melee') ? 'melee' : 'range', natures,
+    execution: mode.startsWith('phaser') ? 6000 : 1800, magic: mode === 'magical' };
+  const page = await fixture({ phaser: mode === 'phaser', phaserMelee: mode === 'phaser-melee', A: own, B: own });
   await page.evaluate(async () => {
     G.startGame();
     const {poison} = await import("/js/combat/effects.js");
@@ -105,6 +105,7 @@ try {
       e: entites.map(e => ({ id:e.id,hp:e.stats.HP.current,turn:e.turnCount,prep:e.preparationTime,speed:e.speedTimer,action:e._combatAction,cooldowns:e.attackSelection?.readyAt })),
       projectiles:[...document.querySelectorAll('.projectile-parent')].map(el=>({id:el.id,transform:el.style.transform})),
       phaser: entites.flatMap(entity => (entity.projectiles || []).filter(p => p.status === 'in-flight' && p.visual?.renderer === 'phaser').map(p => ({id:p.id, visual:p.visual}))),
+      phaserMelee: clock.captureCombatState().melee.active.filter(entry => entry.renderer === 'phaser'),
       effects: [...document.querySelectorAll('.effect-vfx')].map(el=>el.id),
       melee: [...document.querySelectorAll('canvas[id^=meleeClone_]')].map(el=>({id:el.id, transform:getComputedStyle(el).transform,opacity:getComputedStyle(el).opacity})),
     };
@@ -115,6 +116,12 @@ try {
     assert.ok(before.phaser.every(p => p.visual.progress > 0 && p.visual.progress < 1));
     assert.equal(await page.locator('.projectile-parent').count(), 0);
     await page.screenshot({path:resolve(output,'phaser-paused.png')});
+  }
+  if (mode === 'phaser-melee') {
+    assert.equal(before.phaserMelee.length, 2);
+    assert.ok(before.phaserMelee.every(entry => entry.resume.progress > 0 && entry.resume.progress < 1));
+    assert.equal(before.melee.length, 0);
+    await page.screenshot({path:resolve(output,'phaser-melee-paused.png')});
   }
   assert.equal(before.paused,true); if (mode === 'range') assert.equal(before.phaser.length,2);
   await page.waitForTimeout(2600);
@@ -162,7 +169,7 @@ try {
   await page.evaluate(() => {
     window.resumedImpacts = [];
     window.addEventListener('combatLogEntry', event => {
-      if (event.detail.type === 'damage_resolution' && ['simultaneous-test','shot-p-r'].includes(event.detail.data.attack?.functionName))
+      if (event.detail.type === 'damage_resolution' && ['simultaneous-test','shot-p-r','shot-p-c'].includes(event.detail.data.attack?.functionName))
         resumedImpacts.push(event.detail.data.attacker.id);
     });
   });
@@ -173,7 +180,7 @@ try {
   // Freeze before an ordinary next turn can resolve another legitimate attack.
   await page.evaluate(async () => (await import('/js/combat/pause.js')).pauseCombat());
   const after = await read();
-  assert.ok(after.e.every((e,i)=>e.hp<before.e[i].hp),'both saved impacts apply after resume');
+  assert.ok(after.e.every((e,i)=>e.hp<before.e[i].hp),'both saved impacts apply after resume: '+JSON.stringify({mode,before:before.e,after:after.e,impacts:await page.evaluate(()=>resumedImpacts)}));
   assert.deepEqual(await page.evaluate(()=>resumedImpacts.sort()), before.e.map(e=>e.id).sort(), 'Each saved attack resolves exactly once, for every nature');
   await page.evaluate(async () => (await import("/js/combat/pause.js")).pauseCombat());
   const pausedAgain = await read();
@@ -317,29 +324,30 @@ try {
     assert.equal(await page.locator('#Box_Entite_999821').count(),0,'saved departure visual finishes');
     await page.close();console.log('PASS departed caster: poison continues and partial retreat is retained');
   }
-  {
-    const page = await fixture({phaser:true,A:{range:'range',execution:4000},B:{range:'range',execution:4000}});
+  for (const range of ['range','melee']) {
+    const page = await fixture({phaser:range==='range',phaserMelee:range==='melee',A:{range,execution:4000},B:{range,execution:4000}});
     await page.evaluate(() => G.startGame());
     await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
     await page.waitForTimeout(120);
     await page.evaluate(() => P.pauseCombat());
-    const before = await page.evaluate(() => E.entites.flatMap(e => e.projectiles.map(p => p.visual)));
+    const readVisuals = () => page.evaluate(() => ({projectiles:E.entites.flatMap(e => (e.projectiles || []).map(p => p.visual)),melee:Clock.captureCombatState().melee}));
+    const before = await readVisuals();
     await page.setViewportSize({width:390,height:844});
     await page.waitForFunction(() => document.querySelector('#phaser-projectiles canvas')?.width === 390);
-    assert.deepEqual(await page.evaluate(() => E.entites.flatMap(e => e.projectiles.map(p => p.visual))), before,
+    assert.deepEqual(await readVisuals(), before,
       'Resizing the paused viewport does not advance the flight');
     assert.equal(await page.locator('#phaser-projectiles').evaluate(node => getComputedStyle(node).pointerEvents), 'none');
     assert.equal(await page.evaluate(() => !!document.elementFromPoint(20,20)?.closest('#phaser-projectiles')), false);
-    await page.screenshot({path:resolve(output,'phaser-mobile-paused.png')});
+    await page.screenshot({path:resolve(output,`phaser-${range}-mobile-paused.png`)});
     await page.evaluate(() => G.StopGame({preserveScene:true}));
     assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true);
-    await page.close(); console.log('PASS Phaser: paused mobile resize, transparent input and stop cleanup');
+    await page.close(); console.log('PASS Phaser '+range+': paused mobile resize, transparent input and stop cleanup');
   }
   {
     const page = await fixture({speed:20000});
     await page.evaluate(async () => {
       window.An = await import('/js/rendering/animations.js');
-      An.prepareProjectileRenderer();
+      An.prepareCombatRenderer();
     });
     await page.waitForSelector('#phaser-projectiles canvas', {state:'attached'});
     await page.evaluate(() => G.startGame());
@@ -395,8 +403,8 @@ try {
     assert.equal(result.after,result.hp*.9,'Event keeps exactly its requested damage, without triggering healing');
     await page.close();console.log('PASS Phaser: scripted ranged event keeps its visual and cosmetic-only combat contract');
   }
-  for (const mode of ['slow','unavailable']) {
-    const page = await fixture({phaser:true,A:{range:'range',preparation:100,execution:500},B:{range:'range',preparation:100,execution:500}});
+  for (const range of ['range','melee']) for (const mode of ['slow','unavailable']) {
+    const page = await fixture({phaser:range==='range',phaserMelee:range==='melee',A:{range,preparation:100,execution:500},B:{range,preparation:100,execution:500}});
     let release;
     const gate = new Promise(resolve => { release = resolve; });
     await page.route('**/vendor/phaser-3.90.0.esm.min.js', async route => {
@@ -407,6 +415,7 @@ try {
     await page.waitForFunction(() => E.entites.every(e => e.stats.HP.current < 1000), null, {timeout:5000});
     assert.equal(await page.locator('#phaser-projectiles canvas').count(), 0,
       'Damage completes even when the renderer cannot load');
+    assert.ok(await page.evaluate(() => E.entites.every(e => Number(getComputedStyle(document.getElementById(`DragSprite_${e.id}`)).opacity) > 0)), 'Unavailable renderer never hides the original fighters');
     await page.evaluate(() => G.StopGame({preserveScene:true}));
     release();
     if (mode === 'slow') {
@@ -414,7 +423,7 @@ try {
       assert.equal(await page.locator('#phaser-projectiles').evaluate(node => node.hidden), true,
         'A late boot cannot revive cleared projectiles');
     }
-    await page.close(); console.log('PASS Phaser: '+mode+' renderer cannot delay combat or survive stop');
+    await page.close(); console.log('PASS Phaser '+range+': '+mode+' renderer cannot delay combat or survive stop');
   }
   assert.deepEqual(errors,[]);
   console.log('PASS: space, frozen ranged flights and poison, F5 exact paused restoration, resume with no duplicate damage, repeated checkpoint, stop.');

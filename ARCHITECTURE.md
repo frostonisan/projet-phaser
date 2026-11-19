@@ -788,3 +788,31 @@ Validation et captures : `outputs/phaser-all/`, `outputs/combat-tests/`,
 `outputs/paused-combat/`. Les suites existantes couvrent règles de vol, dégâts,
 soins/résurrection, guidage, perte du lanceur/cible, ambidextrie, récupération,
 arrêt, pause/F5, redimensionnement, ressources animées, simulateur et imports.
+
+## Première mêlée Phaser — v0.92.0-dev
+
+`isPhaserMeleeAttack` sélectionne uniquement la frappe primaire physique `shot-p-c`.
+`attackTransport` prépare la scène commune et relie `animationPhaserMelee` à la
+promesse d’impact existante. Le second coup et les autres mêlées restent dans
+`animationMelee`. Les règles, définitions d’attaques et échéances ne changent pas.
+
+`animations.js` réutilise la scène, les courbes de charge, les pixels neutres du
+sprite et les fonctions de visibilité/récupération de la mêlée. Phaser affiche
+la copie en mouvement, une brève trace et l’impact ; l’original réapparaît avec
+le fondu existant. Une annulation efface brièvement la copie en rouge, tandis que
+la mort de l’entité conserve son affichage habituel. Les coordonnées visuelles
+ne déplacent jamais l’occupant logique du plateau.
+
+Les contrôleurs rejoignent le registre `activeMeleeAnimations` et sa section
+de pause `melee`, sans section ni version de sauvegarde supplémentaires.
+Leur état conserve la trajectoire normalisée dans le cadre du jeu, la phase,
+les pixels neutres et le retour de l’original. Les deux axes suivent la même
+échelle du plateau, y compris pendant un redimensionnement en pause. Les vols restaurés rattachent ensuite l’impact au même
+contrôleur. Aucune référence Phaser ou DOM n’est sérialisée. Les textures créées
+pour les copies sont supprimées au nettoyage ; arrêt et chargement tardif ne
+peuvent pas recréer une copie supprimée. Le simulateur ne charge pas le moteur.
+
+Tests complétés dans les suites existantes : égalité des dégâts sans rendu,
+cible mobile, mort du lanceur, nettoyage, ambidextrie, pause/F5 et reprise sans
+double impact, moteur lent/indisponible et déterminisme du simulateur. Sorties
+et captures : `outputs/phaser-melee/`, `outputs/combat-tests/`, `outputs/paused-combat/`.

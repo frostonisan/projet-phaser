@@ -77,15 +77,16 @@ try {
     window.before = JSON.stringify(E.entites, (k, v) => typeof v === 'function' || v instanceof Node ? undefined : v);
     window.beforeStorage = JSON.stringify(Object.entries(localStorage));
   });
-  for (const nature of ['physicalDamage', 'magicalDamage', 'hybridalDamage', 'piercingDamage', 'triple']) {
+  for (const nature of ['physicalDamage', 'magicalDamage', 'hybridalDamage', 'piercingDamage', 'triple', 'melee-pilot']) {
     const result = await page.evaluate(async nature => {
       const board = structuredClone(snapshot);
       let count = 0;
       for (const entity of board.entities) for (const key of ['attacks', 'attackDetails', 'nativeAttacks']) {
         if (!Array.isArray(entity[key])) continue;
         for (const attack of entity[key]) if (attack && typeof attack === 'object') {
-          attack.attackRange = ['range'];
-          attack.attacknature = nature === 'triple' ? ['hybridalDamage','piercingDamage'] : [nature];
+          attack.attackRange = [nature === 'melee-pilot' ? 'melee' : 'range'];
+          if (nature === 'melee-pilot') attack.functionName = 'shot-p-c';
+          attack.attacknature = nature === 'triple' ? ['hybridalDamage','piercingDamage'] : [nature === 'melee-pilot' ? 'physicalDamage' : nature];
           count++;
         }
       }

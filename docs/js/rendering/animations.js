@@ -2239,7 +2239,7 @@ function unregisterProjectileFollower(key, follower) {
 }
 
 // One shared Phaser scene projects combat time; it never resolves an attack.
-const phaserFlights = new Map(), phaserEffects = new Map();
+const phaserFlights = new Map(), phaserEffects = new Map(), phaserMelees = new Map();
 let phaserLayer = null, phaserReady = null, projectileEffectSequence = 0;
 const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
 function viewCenter(element) {
@@ -2268,7 +2268,7 @@ function projectileProfile(attacker, data) {
 }
 function hideIdlePhaser() {
   if (!phaserLayer?.game) return;
-  const visible = phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
+  const visible = phaserMelees.size || phaserEffects.size || [...phaserFlights.values()].some(entry => entry.record.visual.phase !== 'hidden');
   phaserLayer.host.hidden = !visible;
   if (!visible) phaserLayer.game.loop.sleep();
 }
@@ -2289,10 +2289,17 @@ function removePhaserEffect(entry) {
 function clearPhaserProjectiles() {
   for (const entry of [...phaserFlights.values()]) removePhaserFlight(entry);
   for (const entry of [...phaserEffects.values()]) removePhaserEffect(entry);
+  for (const entry of [...phaserMelees.values()]) removePhaserMelee(entry);
 }
 for (const event of ['projectileVisualsCleared', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearPhaserProjectiles);
 for (const event of ['combatResumed', 'resize']) window.addEventListener(event, () => {
-  if (phaserFlights.size || phaserEffects.size) phaserLayer?.game?.loop.wake();
+  const wake = () => {
+    if (phaserFlights.size || phaserEffects.size || phaserMelees.size) phaserLayer?.game?.loop.wake();
+  };
+  // Resize handlers also rescale the HTML board. Draw after those handlers,
+  // including when the combat clock is paused and the scene draws only once.
+  if (event === 'resize') globalThis.requestAnimationFrame(wake);
+  else wake();
 });
 function wakeProjectileRenderer() {
   void ensurePhaserLayer().then(layer => {
@@ -2300,7 +2307,7 @@ function wakeProjectileRenderer() {
     if (!layer.host.hidden) layer.game.loop.wake();
   }).catch(error => console.warn('[PhaserProjectile]', error));
 }
-export function prepareProjectileRenderer(effectClasses = []) {
+export function prepareCombatRenderer(effectClasses = []) {
   if (globalThis.__combatSimulation) return;
   void ensurePhaserLayer().then(layer => {
     for (const effect of effectClasses) {
@@ -2477,6 +2484,10 @@ async function ensurePhaserLayer() {
               for (const entry of [...phaserFlights.values()]) {
                 if (!isCombatPaused()) sampleProjectile(entry);
                 if (phaserFlights.get(entry.record.id) === entry) drawProjectile(entry, this);
+              }
+              for (const entry of [...phaserMelees.values()]) {
+                if (!isCombatPaused()) samplePhaserMelee(entry);
+                if (phaserMelees.get(entry.id) === entry) drawPhaserMelee(entry);
               }
               for (const entry of phaserEffects.values()) drawProjectile(entry, this);
               hideIdlePhaser();
@@ -2664,6 +2675,195 @@ export async function finishMeleeCloneOnDeath(clone, frozenTransform) {
     document.body.appendChild(blood);
     clone.remove();
     removeCombatVisualAfter(blood, 700);
+}
+
+// First melee pilot: the physical primary shot-p-c. Its scheduled impact remains
+// in attackExecution, and the existing melee section saves the visual controller.
+export function isPhaserMeleeAttack(attack = {}) {
+  const flags = getAttackResolutionFlags(attack);
+  return attack.functionName === 'shot-p-c' && flags.isMelee && !flags.isRange && flags.isPurePhysical;
+}
+// Use the board's rendered frame, with one scale for both axes. The UI can
+// scale inside a tall mobile viewport; viewport height must not stretch the copy.
+function meleeViewFrame(root) {
+  const rect = root?.getBoundingClientRect();
+  return rect?.width > 0 ? rect : { left: 0, top: 0, width: viewport().width };
+}
+function meleeViewCenter(element, frame) {
+  if (!element?.isConnected) return null;
+  const rect = element.getBoundingClientRect();
+  return { x: (rect.left + rect.width / 2 - frame.left) / frame.width,
+    y: (rect.top + rect.height / 2 - frame.top) / frame.width };
+}
+function returnPhaserMeleeOriginal(entry, forceVisible = false) {
+  const visual = entry.visual;
+  if (visual.released && !forceVisible) return;
+  visual.released = true;
+  const token = entry.visibilityToken;
+  entry.visibilityToken = null;
+  const stillHidden = releaseMeleeOriginalVisibility(entry.attacker.id, token, forceVisible, Boolean(token) && !forceVisible);
+  const sprite = document.getElementById(`DragSprite_${entry.attacker.id}`);
+  if (token && !stillHidden && !forceVisible && sprite?.isConnected) {
+    startMeleeOriginalRecovery(entry.attacker.id, sprite, MELEE_ORIGINAL_RECOVERY_DURATION);
+  }
+}
+function removePhaserMelee(entry) {
+  if (phaserMelees.get(entry.id) !== entry) return;
+  phaserMelees.delete(entry.id);
+  clearTimeout(entry.returnTimer); clearTimeout(entry.endTimer);
+  const dead = entry.attacker.isDEAD || entry.attacker.hasFled;
+  returnPhaserMeleeOriginal(entry, dead);
+  unregisterActiveMeleeAnimation(entry.attacker.id, entry.controller);
+  destroyProjectileDisplay(entry);
+  if (entry.textureKey) entry.scene?.textures.remove(entry.textureKey);
+  const sprite = document.getElementById(`DragSprite_${entry.attacker.id}`);
+  if (sprite && !dead && !hasMeleeOriginalVisibilityLock(entry.attacker.id)
+    && !meleeOriginalRecoveryAnimations.has(String(entry.attacker.id))) sprite.classList.add('iddle');
+  hideIdlePhaser();
+}
+function abortPhaserMelee(entry) {
+  if (entry.visual.phase !== 'flight') return;
+  entry.visual.phase = 'cancelled';
+  entry.visual.phaseAt = clockNow();
+  returnPhaserMeleeOriginal(entry, true);
+  clearTimeout(entry.endTimer);
+  entry.endTimer = setTimeout(() => removePhaserMelee(entry), 180);
+}
+function samplePhaserMelee(entry, arriving = false) {
+  const visual = entry.visual;
+  if (visual.phase !== 'flight') return;
+  if (entry.flight?.expired()) { removePhaserMelee(entry); return; }
+  if (entry.flight?.cancelled() || !entry.flight && (entry.attacker.isDEAD || entry.attacker.hasFled)) {
+    abortPhaserMelee(entry); return;
+  }
+  const frame = meleeViewFrame(entry.root);
+  const target = meleeViewCenter(document.getElementById(`spriteCanvas_${entry.target.id}`), frame);
+  if (target) visual.to = target;
+  const progress = arriving ? 1 : Math.min(1, Math.max(0, (clockNow() - visual.startedAt) / visual.duration));
+  const travel = interpolateMeleeMotionValue(progress, entry.motion);
+  const step = arriving ? 1 : Math.max(0, travel - visual.travel) / Math.max(.000001, 1 - visual.travel);
+  const destination = visual.closeRange
+    ? { x: visual.from.x + (visual.to.x - visual.from.x) * .62, y: visual.from.y + (visual.to.y - visual.from.y) * .62 }
+    : visual.to;
+  const dx = destination.x - visual.x, dy = destination.y - visual.y;
+  if (dx || dy) visual.angle = Math.atan2(dy, dx);
+  visual.x += dx * step; visual.y += dy * step;
+  visual.progress = progress; visual.travel = travel;
+}
+function drawPhaserMelee(entry) {
+  if (!entry.sprite) return;
+  const visual = entry.visual, frame = meleeViewFrame(entry.root);
+  const elapsed = Math.max(0, clockNow() - visual.phaseAt);
+  const tail = visual.phase === 'flight' ? 0 : Math.min(1, elapsed / 180);
+  // A late combat result must not leave a clone parked over the target.
+  const alpha = visual.phase === 'flight'
+    ? 1 - Math.min(1, Math.max(0, clockNow() - visual.startedAt - visual.duration) / 180)
+    : 1 - tail;
+  const x = frame.left + visual.x * frame.width, y = frame.top + visual.y * frame.width;
+  const scale = 1 + .06 * Math.sin(visual.progress * Math.PI) + .1 * visual.progress ** 4;
+  const effectScale = visual.width * frame.width / 70;
+  const offset = visual.phase === 'miss' ? tail * 38 * effectScale : 0;
+  entry.sprite.setPosition(x + Math.cos(visual.angle) * offset, y + Math.sin(visual.angle) * offset)
+    .setDisplaySize(visual.width * frame.width * scale, visual.height * frame.width * scale)
+    .setAlpha(alpha).setTint(visual.phase === 'cancelled' ? 0xff4545 : 0xffffff);
+  const graphic = entry.graphic;
+  graphic.clear().setPosition(x, y).setRotation(visual.angle).setScale(effectScale).setAlpha(alpha);
+  if (!visual.closeRange && visual.phase !== 'cancelled') {
+    graphic.lineStyle(12, visual.color, .12).lineBetween(-65, 0, -10, 0);
+    graphic.lineStyle(3, visual.color, .6).lineBetween(-50, 0, -8, 0);
+  }
+  if (visual.phase === 'hit') {
+    graphic.lineStyle(3, visual.color, 1 - tail).strokeCircle(0, 0, 8 + 30 * tail);
+    graphic.lineStyle(2, 0xffffff, 1 - tail);
+    for (let i = 0; i < 6; i++) {
+      const angle = i * Math.PI / 3, distance = 12 + tail * 40;
+      graphic.lineBetween(Math.cos(angle) * distance, Math.sin(angle) * distance,
+        Math.cos(angle) * (distance + 12), Math.sin(angle) * (distance + 12));
+    }
+  }
+}
+export function animationPhaserMelee(attacker, target, options = {}) {
+  if (globalThis.__combatSimulation) return null;
+  const saved = options.resume;
+  const source = document.getElementById(`spriteCanvas_${attacker.id}`);
+  const body = document.getElementById(`DragSprite_${attacker.id}`);
+  const root = source?.closest('#game-container');
+  const frame = meleeViewFrame(root);
+  const from = saved?.from || meleeViewCenter(source, frame);
+  const to = saved?.to || meleeViewCenter(document.getElementById(`spriteCanvas_${target.id}`), frame);
+  if (!source || !body || !from || !to) return null;
+  cancelActiveMeleeAnimations(attacker.id);
+  if (!saved) {
+    cancelMeleeOriginalRecovery(attacker.id, true);
+    unlockMeleePostRecoveryOpacity(attacker.id, body);
+  }
+  const rect = source.getBoundingClientRect();
+  const distance = Math.hypot(to.x - from.x, to.y - from.y) * frame.width;
+  const duration = Math.max(200, Number(options.duration) || 1000);
+  // Capture the neutral pixels once, including their exact appearance for F5.
+  // The original stays visible until the Phaser texture is actually ready.
+  const neutral = saved ? null : createCanvasSnapshot(getNeutralMeleeCloneSource(source));
+  if (!saved && !neutral) return null;
+  const visual = saved || {
+    renderer: 'phaser', phase: 'flight', phaseAt: clockNow(), startedAt: clockNow(), duration,
+    from, to, x: from.x, y: from.y, angle: 0, progress: 0, travel: 0,
+    width: rect.width / frame.width, height: rect.height / frame.width,
+    longTravel: Math.min(1, Math.max(0, (distance - 220) / 520)),
+    closeRange: distance <= Math.min(64, Math.max(28, rect.width * .42)),
+    flipX: String(attacker.side).toUpperCase() === 'B', pixels: neutral.toDataURL(),
+    previousOpacity: body.style.getPropertyValue('opacity'), previousPriority: body.style.getPropertyPriority('opacity'),
+    released: false, color: options.flight?.attack.isLaunchedUnderMysticism ? 0xd2ebff : 0xffd6b0,
+  };
+  if (saved && !visual.released) {
+    if (visual.previousOpacity) body.style.setProperty('opacity', visual.previousOpacity, visual.previousPriority);
+    else body.style.removeProperty('opacity');
+  }
+  const entry = { id: options.flightId, root, attacker, target, flight: options.flight, visual,
+    motion: MELEE_CHARGE_MOTION_SAMPLES.map(([at, short, long]) => [at, short + (long - short) * visual.longTravel]) };
+  const controller = entry.controller = {
+    flightId: entry.id, renderer: 'phaser', get ready() { return Boolean(entry.sprite); },
+    bindFlight(flight) { entry.flight = flight; },
+    snapshot: () => ({ renderer: 'phaser', attacker: attacker.id, target: target.id, isAmbidextry: false,
+      options: { duration: visual.duration, flightId: entry.id }, resume: visual }),
+    cancel: () => removePhaserMelee(entry), abortOnDeath: () => abortPhaserMelee(entry),
+    showOriginalForImpact() { returnPhaserMeleeOriginal(entry); return true; },
+    resolveImpact(didHit) {
+      if (phaserMelees.get(entry.id) !== entry || visual.phase !== 'flight') return;
+      samplePhaserMelee(entry, true);
+      if (phaserMelees.get(entry.id) !== entry || visual.phase !== 'flight') return;
+      visual.phase = didHit ? 'hit' : 'miss'; visual.phaseAt = clockNow();
+      returnPhaserMeleeOriginal(entry);
+      clearTimeout(entry.endTimer);
+      entry.endTimer = setTimeout(() => removePhaserMelee(entry), 180);
+      phaserLayer?.game?.loop.wake();
+    },
+  };
+  phaserMelees.set(entry.id, entry);
+  registerActiveMeleeAnimation(attacker.id, controller);
+  if (!visual.released) entry.returnTimer = setTimeout(() => returnPhaserMeleeOriginal(entry),
+    Math.max(0, visual.startedAt + visual.duration * .35 - clockNow()));
+  entry.endTimer = setTimeout(() => removePhaserMelee(entry), Math.max(0,
+    (visual.phase === 'flight' ? visual.startedAt + visual.duration + 2000 : visual.phaseAt + 180) - clockNow()));
+  void ensurePhaserLayer().then(async layer => {
+    if (phaserMelees.get(entry.id) !== entry) return;
+    let canvas = neutral;
+    if (!canvas) {
+      const bitmap = new Image(); bitmap.src = visual.pixels; await bitmap.decode();
+      canvas = document.createElement('canvas'); canvas.width = bitmap.naturalWidth; canvas.height = bitmap.naturalHeight;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    }
+    if (phaserMelees.get(entry.id) !== entry) return;
+    entry.scene = layer.scene; entry.textureKey = `melee:${entry.id}`;
+    layer.scene.textures.addCanvas(entry.textureKey, canvas);
+    entry.graphic = layer.scene.add.graphics().setName(entry.id);
+    entry.sprite = layer.scene.add.image(0, 0, entry.textureKey).setName(entry.id).setFlipX(visual.flipX);
+    if (!visual.released && visual.phase === 'flight' && !attacker.isDEAD) {
+      body.classList.remove('iddle');
+      entry.visibilityToken = acquireMeleeOriginalVisibility(attacker.id, body);
+    }
+    hideIdlePhaser(); layer.game.loop.wake();
+  }).catch(error => { removePhaserMelee(entry); console.warn('[PhaserMelee]', error); });
+  return controller;
 }
 
 export function animationMelee(attacker, target, isAmbidextry = false, timingOptions = {}) {
@@ -4380,10 +4580,13 @@ registerCombatState('melee', () => ({
     recoveries: [...meleeOriginalRecoveryAnimations].map(([id, r]) => ({ id, startTime: r.startTime,
         duration: r.duration, previousTransition: r.previousTransition, previousTransitionPriority: r.previousTransitionPriority })),
 }), (saved, { entities }) => {
+    for (const entry of [...phaserMelees.values()]) removePhaserMelee(entry);
     activeMeleeAnimations.clear(); meleeOriginalRecoveryAnimations.clear();
     for (const entry of saved.active) {
         const attacker = entities.find(e => e.id === entry.attacker), target = entities.find(e => e.id === entry.target);
-        if (attacker && target) animationMelee(attacker, target, entry.isAmbidextry, { ...entry.options, resume: entry.resume });
+        if (!attacker || !target) continue;
+        if (entry.renderer === 'phaser') animationPhaserMelee(attacker, target, { ...entry.options, resume: entry.resume });
+        else animationMelee(attacker, target, entry.isAmbidextry, { ...entry.options, resume: entry.resume });
     }
     for (const entry of saved.recoveries) {
         const sprite = document.getElementById(`DragSprite_${entry.id}`);
