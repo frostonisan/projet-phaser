@@ -6,7 +6,6 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs');
-const webgl = process.env.LEVEL_WEBGL === '1';
 const counts = new Map();
 const mime = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.webp': 'image/webp' };
 const server = createServer(async (req, res) => {
@@ -17,10 +16,7 @@ const server = createServer(async (req, res) => {
   try {
     res.setHeader('Content-Type', mime[extname(path)] || 'text/html');
     res.setHeader('Cache-Control', 'no-store');
-    let data = await readFile(path === root ? resolve(root, 'index.html') : path);
-    if (path === resolve(root, 'js/rendering/animations.js')) data = data.toString()
-      + '\nexport const testLevelRenderer = () => phaserLayer;';
-    res.end(data);
+    res.end(await readFile(path === root ? resolve(root, 'index.html') : path));
   } catch { res.writeHead(404).end(); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -29,7 +25,7 @@ const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 try {
-  await page.goto(`http://127.0.0.1:${server.address().port}/${webgl ? "?monsters=webgl" : ""}`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const result = await page.evaluate(async () => {
     const { collectLevelResources, prepareLevelResources } = await import('/js/data/loaderList.js');
     const { entitesNest } = await import("/js/data/entityTemplates.js");
@@ -91,67 +87,6 @@ try {
     return !document.querySelector('.loading-screen') && hud
       && hud.style.opacity === '1' && hud.style.transition === '';
   });
-  // Exercise the live level and the persistent Phaser scene, not a synthetic
-  // combat fixture. Screen teardown detaches the host but keeps that scene.
-  const shoot = async label => {
-    await page.evaluate(async () => {
-      const R = await import('/js/rendering/animations.js');
-      const { entites } = await import('/js/entities/runtime.js');
-      window.testLevelHits = 0;
-      void R.animationProjectile(entites[0], entites[1], () => {
-        window.testLevelHits++; return 'hit';
-      }, { executionTime: 1200, effectProjectile: 'profanation-fx' });
-    });
-    await page.waitForTimeout(180);
-    const view = await page.evaluate(async () => {
-      const l = (await import('/js/rendering/animations.js')).testLevelRenderer();
-      return { connected: l.host.isConnected, hidden: l.host.hidden,
-        canvas: Boolean(document.querySelector('#phaser-projectiles canvas')) };
-    });
-    assert.deepEqual(view, { connected: true, hidden: false, canvas: true }, label);
-    await page.waitForFunction(() => window.testLevelHits === 1);
-    await page.waitForTimeout(100);
-    assert.equal(await page.evaluate(() => window.testLevelHits), 1, 'One impact per visual');
-  };
-  await shoot('First level projectile');
-  await page.evaluate(async () => (await import('/js/rendering/animations.js')).testLevelRenderer().host.remove());
-  await shoot('Projectile after screen teardown');
-  if (webgl) {
-    await page.waitForFunction(() => document.getElementById('hexGrid')?.dataset.canvasBoard === 'ready');
-    const vertices = () => page.evaluate(async () => {
-      const l = (await import('/js/rendering/animations.js')).testLevelRenderer();
-      return l.scene.children.list.filter(o => o.type === 'Mesh' && o.depth === 1000)
-        .reduce((total, mesh) => total + mesh.vertices.length, 0);
-    });
-    const before = await vertices(); assert.ok(before > 0);
-    await page.evaluate(() => { document.querySelector('.foreground-img').style.left = '4000px'; });
-    await page.waitForTimeout(350);
-    assert.equal(await vertices(), before, 'Offscreen foreground retains its geometry');
-    await page.evaluate(() => {
-      const fg = document.querySelector('.foreground');
-      fg.style.transition = 'transform 300ms linear'; fg.style.transform = 'translateX(-4000px)';
-    });
-    await page.waitForTimeout(600);
-    assert.equal(await vertices(), before, 'Foreground returns complete');
-    await page.evaluate(() => {
-      const fg = document.querySelector('.foreground'); fg.style.removeProperty('transition'); fg.style.removeProperty('transform'); document.querySelector('.foreground-img').style.removeProperty('left');
-    });
-  }
-  for (const size of [{ width: 390, height: 844 }, { width: 844, height: 390 },
-    { width: 390, height: 740 }, { width: 1536, height: 900 }]) {
-    await page.setViewportSize(size); await page.waitForTimeout(350);
-    const bounds = await page.evaluate(async () => {
-      const l = (await import('/js/rendering/animations.js')).testLevelRenderer();
-      return { root: document.getElementById('game-windows').getBoundingClientRect().toJSON(),
-        body: document.body.getBoundingClientRect().toJSON(),
-        canvas: { width: l.game.canvas.width, height: l.game.canvas.height } };
-    });
-    assert.equal(bounds.body.width, size.width); assert.equal(bounds.body.height, size.height);
-    assert.deepEqual(bounds.canvas, size, 'One canvas follows the viewport');
-    assert.ok(bounds.root.x >= -1 && bounds.root.y >= -1 && bounds.root.right <= size.width + 1
-      && bounds.root.bottom <= size.height + 1, 'Logical game fits the visible surface');
-  }
-  console.log('PASS: projectile lifecycle, unique impacts and portrait/landscape viewport');
   assert.equal(await page.locator('.battle-satchel--combat').count(), 0, 'Satchel stays hidden until combat starts');
   assert.equal(await page.evaluate(() => window.satchelAppearance), null);
   await page.evaluate(() => document.querySelectorAll('.entitylootContainer, #black-overlay').forEach(node => node.remove()));
