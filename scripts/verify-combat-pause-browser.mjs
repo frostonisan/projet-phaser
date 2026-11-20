@@ -7,74 +7,6 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs'), output = resolve('outputs/paused-combat');
 await mkdir(output, { recursive: true });
-// Previous hierarchy composition, uncached and independent of the native graph.
-function referencePose(rect,chain,frame,box,boardScale){
-  let parent={a:1,b:0,c:0,d:1,tx:0,ty:0,sx:1,sy:1,angle:0,alpha:1,brightness:1,visible:true};
-  for(let i=chain.length-1;i>=0;i--){
-    const binding=chain[i];
-    const value=frame.get(binding),base=binding.base,m=value.transform,b=base.transform;
-    let sx=1,sy=1,angle=0,dx=0,dy=0;
-    if(binding.node!==box){
-      sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
-      sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
-      angle=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
-      dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
-      dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
-    }
-    const cos=Math.cos(angle),sin=Math.sin(angle),a=cos*sx,bv=sin*sx,c=-sin*sy,d=cos*sy;
-    const ox=binding.origin.x,oy=binding.origin.y,tx=ox-a*ox-c*oy+dx,ty=oy-bv*ox-d*oy+dy;
-    parent={a:parent.a*a+parent.c*bv,b:parent.b*a+parent.d*bv,c:parent.a*c+parent.c*d,d:parent.b*c+parent.d*d,
-      tx:parent.a*tx+parent.c*ty+parent.tx,ty:parent.b*tx+parent.d*ty+parent.ty,
-      sx:parent.sx*sx,sy:parent.sy*sy,angle:parent.angle+angle,alpha:parent.alpha*value.opacity[0],
-      brightness:parent.brightness*value.filter[0],visible:parent.visible&&binding.css.display!=='none'};
-  }
-  const x=rect.x+rect.w/2,y=rect.y+rect.h/2;
-  return {x:parent.a*x+parent.c*y+parent.tx,y:parent.b*x+parent.d*y+parent.ty,
-    w:rect.w*parent.sx,h:rect.h*parent.sy,angle:parent.angle,alpha:parent.alpha,brightness:parent.brightness,visible:parent.visible};
-}
-// Test-only readback compares atlas regions against separate original GPU textures.
-function checkTextAtlas(scene){
-  const gl=scene.game.renderer.gl,atlas=monsterTextAtlases.get(scene),entries=[];
-  const framebuffer=gl.createFramebuffer(),previous=gl.getParameter(gl.FRAMEBUFFER_BINDING);
-  const read=(texture,x,y,w,h)=>{
-    gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture.source[0].glTexture.webGLTexture,0);
-    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Atlas framebuffer incomplete');
-    const bytes=new Uint8Array(w*h*4);gl.readPixels(x,y,w,h,gl.RGBA,gl.UNSIGNED_BYTE,bytes);return bytes;
-  };
-  const verify=entry=>{
-    atlas.flush();
-    const {atlasSlot:slot,frame}=entry,f=slot.page.texture.get(frame);
-    const original=scene.textures.addImage('__atlas-reference',entry.canvas);
-    try{
-      const expected=read(original,0,0,f.width,f.height),actual=read(slot.page.texture,f.cutX,f.cutY,f.width,f.height);
-      if(actual.some((v,i)=>v!==expected[i]))throw Error('Atlas pixels differ from original standalone texture');
-      const backing=scene.textures.addImage('__atlas-restored',slot.page.context.canvas);
-      try{
-        const restored=read(backing,f.cutX,f.cutY,f.width,f.height);
-        if(restored.some((v,i)=>v!==expected[i]))throw Error('Context restoration GPU pixels differ from original text');
-      }finally{scene.textures.remove(backing.key);}
-    }finally{scene.textures.remove(original.key);}
-  };
-  const create=i=>{
-    const canvas=document.createElement('canvas');canvas.width=93;canvas.height=31;
-    const ctx=canvas.getContext('2d');ctx.font='bold 16px serif';ctx.fillStyle=i%2?'#abcdee':'#e83b19';
-    ctx.shadowColor='#000';ctx.shadowBlur=3;ctx.fillText('PV : '+i,2,21);
-    const entry={...storeMonsterText(scene,canvas),canvas};entries.push(entry);return entry;
-  };
-  try{
-    const first=create(100),neighbour=create(200);verify(first);verify(neighbour);
-    const oldFrame=first.frame,slot=first.atlasSlot;discardMonsterText(first,scene);entries.splice(entries.indexOf(first),1);
-    const reused=create(300);
-    if(reused.atlasSlot!==slot||slot.page.texture.has(oldFrame))throw Error('Released atlas slot was not safely recycled');
-    verify(reused);verify(neighbour);
-    if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error during partial text upload');
-    return {pixels:true,recycled:true,neighbour:true,contextBacking:true};
-  }finally{
-    gl.bindFramebuffer(gl.FRAMEBUFFER,previous);gl.deleteFramebuffer(framebuffer);
-    for(const entry of entries)discardMonsterText(entry,scene);
-  }
-}
 const server = createServer(async (req, res) => {
   const file = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
@@ -87,38 +19,15 @@ const server = createServer(async (req, res) => {
       data = source.replace(marker, 'attack: {\n  launchContextId: attackDetail?.launchContextId,\n  functionName: attackDetail');
     }
     if (file === resolve(root, 'js/rendering/entities.js')) {
-      data=data.toString();
-      if(process.env.MONSTER_WEBGL==='1'){
-        data+=`\n${referencePose.toString()}\n${checkTextAtlas.toString()}`;
-        assert.ok(data.includes('    const pose=(rect,chain,frame)=>{'));
-        data=data.replace('    const pose=(rect,chain,frame)=>{','    const optimizedPose=(rect,chain,frame)=>{')
-          .replace('    const update=(now,showHTML=false)=>{',`    const pose=(rect,chain,frame)=>{
-            const actual=optimizedPose(rect,chain,frame),expected=referencePose(rect,chain,frame,box,boardScale);
-            for(const key of Object.keys(expected))if(typeof expected[key]==='boolean'?actual[key]!==expected[key]:Math.abs(actual[key]-expected[key])>1e-7)
-              throw Error('Native pose differs from hierarchy: '+key+' '+actual[key]+' / '+expected[key]);
-            globalThis.__poseChecks=(globalThis.__poseChecks||0)+1;return actual;
-          };
-    const update=(now,showHTML=false)=>{`);
-      }
-      data=data.replace('return {command,update,capture,restore,destroy};',`return {command,update,capture,restore,destroy,
+      data=data.toString().replace('return {command,update,capture,restore,destroy};',`return {command,update,capture,restore,destroy,
         inspect:()=>records.map(r=>({kind:r.kind,packed:r.asset?.packed,texture:r.asset?.name,frame:r.image?.frame?.name,type:r.image?.type,visible:r.image?.visible}))};`)
-        .replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,inspectTextAtlas:()=>checkTextAtlas(scene),
+        .replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,
         inspectFX:()=>[...layers.values()].filter(l=>l.kind==='panel'||l.asset?.packed).map(l=>({kind:l.kind,
           packed:l.asset?.packed,texture:l.asset?.name,frame:l.image?.frame?.name,parts:l.image?.list?.length,roleIcons:l.image?.list?.filter(p=>p.updateMonsterIntro).length,
           type:l.image?.type,visible:l.image?.visible})).concat(presentation.inspect()),
         inspect:()=>[...layers.values()].filter(l=>l.kind==='body'||l.kind==='bar'||l.kind==='text').map(l=>({
           kind:l.kind,bar:l.bar,text:l.text,x:l.image?.x,y:l.image?.y,alpha:l.image?.alpha,
           width:l.image?.displayWidth,height:l.image?.displayHeight,visible:l.image?.visible}))}`);
-    }
-    if(file===resolve(root,'js/combat/pause.js')) {
-      // Rebuilding the view must neither reroll rewards nor replay random effects.
-      data=data.toString().replace('async function rebuildCombatScene(checkpoint) {',
-        `async function rebuildCombatScene(checkpoint) {
-          const random=Math.random;
-          Math.random=()=>{throw Error('Random draw during scene reconstruction');};
-          try { return await rebuildCombatSceneChecked(checkpoint); } finally { Math.random=random; }
-        }
-        async function rebuildCombatSceneChecked(checkpoint) {`);
     }
     if(process.env.CANVAS_BOARD_ONLY&&file===resolve(root,'js/rendering/boardAdapter.js'))data=data.toString().replace('  const now=paint.now','  globalThis.__boardRoots=roots;\n  const now=paint.now');
     res.end(data); }
@@ -128,15 +37,6 @@ await new Promise(done => server.listen(0, '127.0.0.1', done));
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge', headless: true });
 
 const errors = [];
-async function readPauseSnapshot(page) {
-  return page.evaluate(async () => {
-    const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('DarkPitPausedCombat',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-    try { return await new Promise((resolve,reject)=>{
-      const r=db.transaction('pause').objectStore('pause').get(sessionStorage.getItem('DarkPitPausedCombat'));
-      r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
-    }); } finally { db.close(); }
-  });
-}
 async function fixture(config = {}) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   page.setDefaultTimeout(15000);
@@ -155,11 +55,7 @@ async function fixture(config = {}) {
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html${process.env.MONSTER_WEBGL === "1" ? "?monsters=webgl" : ""}`);
   await page.evaluate(async config => {
     // Ambidextry's base chance caps at 50%; force a successful roll in its fixture.
-    if (config.double || config.successfulSpell) {
-      // Choose the branch under test without making generated IDs constant.
-      let seed = 1701;
-      Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return (config.double ? .2 : .9) + seed / 4294967296 * .05; };
-    }
+    if (config.double) Math.random = () => .25;
     window.P = await import("/js/combat/pause.js"); await P.restorePausedCombat();
     window.Clock = await import("/js/combat/clock.js");
     const { loadResource } = await import('/js/data/loaderList.js');
@@ -193,7 +89,7 @@ async function fixture(config = {}) {
         type: 'sbire', role: 'gueux', position: String(i+1), level: 1, awakening: 1, stuff: {}, stats: {}, modifierStats: {},
         baseStats: { HP: 1000, strength: 0, intelligence: 0, agility: 0, physicalDamage: 40, magicalDamage: 40,
           speed: config.speed ?? 100, ambidextry: config.double ? 100000 : 0, extraLife: own.extraLife || 0 },
-        attacks: [{ functionName: config.phaserMelee ? 'shot-p-c' : config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané', attackAsset: './media/assets/spells/tir',
+        attacks: [{ functionName: config.phaserMelee ? 'shot-p-c' : config.phaser ? 'shot-p-r' : 'simultaneous-test', attackId: 'simultaneous-test', displayName: 'Impact simultané',
           combatFunction: own.support ? 'Support' : 'Attaquant', attacknature: own.natures || [magic ? 'magicalDamage' : 'physicalDamage'],
           attackRange: [own.range || 'melee'], attackTarget: [own.support ? 'ally' : 'enemy'], deadTarget: ['no'], type: [], effets: own.effects || (own.support ? ['heal'] : []), selfEffects: [],
           preparationTime: own.preparation ?? 500, executionTime: own.execution ?? 1800, recoveryTime: own.recovery ?? 300, cooldown: 20000,
@@ -219,7 +115,7 @@ async function fixture(config = {}) {
       entries.push({ type, at: Timeline.combatNow(), side: data.attacker?.side || data.entity?.side, damage: data.damage });
     });
   }, config);
-  if (process.env.MONSTER_WEBGL === '1' && !config.rendererMode) await page.waitForFunction(() => document.querySelectorAll('[data-monster-webgl="ready"]').length === 2);
+  if (process.env.MONSTER_WEBGL === '1' && !config.rendererMode) await page.waitForFunction(() => document.querySelectorAll('[data-monster-webgl="ready"]').length > 0);
   return page;
 }
 
@@ -297,8 +193,6 @@ try {
     await page.waitForTimeout(700);await page.screenshot({path:resolve(output,'canvas-board-loot.png')});
     await page.evaluate(async()=>{(await import('/js/combat/summons.js')).releaseGroundItem('canvas-test-item');});await page.waitForTimeout(100);
     await page.evaluate(async()=>{const e=E.entites[0],V=await import('/js/rendering/vitalFeedback.js');e.stats.HP.current=200;e.stats.armor={current:200,max:200};V.presentEntityVitals(e);e.stats.armor.current=100;V.presentEntityVitals(e);G.startGame();await P.pauseCombat();});
-    const checkpoint=await readPauseSnapshot(page);
-    assert.ok(checkpoint.visuals.scene&&!('html' in checkpoint.visuals),'Full native board restores from data');
     const savedVitals=await page.evaluate(()=>Clock.captureCombatState().phaserPresentation.map(r=>({id:r.id,flash:r.state.armorFlashAt,blink:r.state.bindings.flatMap(b=>b.animations).filter(a=>a.vitalBlink)})));
     const saved=await page.evaluate(()=>({weather:Clock.captureCombatState().weather,board:Clock.captureCombatState().canvasBoard.map(rows=>rows.map(r=>({key:r.key,epoch:r.epoch})).sort((a,b)=>a.key.localeCompare(b.key)))}));
     await page.reload();await page.waitForFunction(()=>document.getElementById('hexGrid')?._canvasBoardView&&document.querySelectorAll('[data-monster-webgl="ready"]').length===2);
@@ -388,19 +282,15 @@ try {
     const poseBefore=await readPose();assert.equal(poseBefore.length,1);
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);
     assert.deepEqual(await readPose(),poseBefore,'Viewport calibration retains the paused native pose');
-    assert.ok(await page.evaluate(()=>__poseChecks>100),'Native poses were checked against the uncached hierarchy');
-    assert.deepEqual(await page.evaluate(()=>document.querySelector('[data-monster-webgl="ready"]')._monsterView.inspectTextAtlas()),
-      {pixels:true,recycled:true,neighbour:true,contextBacking:true});
-    await page.close();console.log('PASS native layered poses and text atlas: exact GPU pixels, recycling, neighbours, context backing, resize');
-    console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
+    await page.close();console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
   }
   if (!process.env.PAUSE_EXTRA_ONLY) {
   for (const mode of (process.env.PAUSE_TEST_MODE ? process.env.PAUSE_TEST_MODE.split(',') : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple', 'melee-magical', 'melee-mixed', 'melee-triple', 'melee-double-pending', 'melee-double-active'])) {
   const natures = mode.endsWith('magical') ? ['magicalDamage'] : mode.endsWith('mixed') ? ['hybridalDamage']
     : mode.endsWith('triple') ? ['hybridalDamage', 'piercingDamage'] : ['physicalDamage'];
   const own = { range: mode.includes('melee') ? 'melee' : 'range', natures,
-    execution: 4000, magic: mode.endsWith('magical') };
-  const page = await fixture({ phaser: mode === 'phaser', phaserMelee: mode === 'phaser-melee', double:mode.includes('double'), successfulSpell:mode==='magical', A: own, B: own });
+    execution: mode.startsWith('phaser') || mode.includes('melee') ? 4000 : 1800, magic: mode.endsWith('magical') };
+  const page = await fixture({ phaser: mode === 'phaser', phaserMelee: mode === 'phaser-melee', double:mode.includes('double'), A: own, B: own });
   await page.evaluate(async mode => {
     if (mode === 'melee-double-pending') {
       const watch = setInterval(() => {
@@ -412,17 +302,9 @@ try {
     const {poison} = await import("/js/combat/effects.js");
     poison(E.entites[0], { effectDot: 9, effectDuration: 4, type: ['alteration'] }, E.entites[1]);
   }, mode);
-  try {
-    await page.waitForFunction(mode => mode.includes('melee')
-      ? Clock.captureCombatState().melee.active.length >= 2
-      : E.entites.filter(e => e.projectiles?.some(p => p.status === 'in-flight')).length === 2, mode);
-  } catch (error) {
-    console.error('Missing simultaneous flights', mode, await page.evaluate(() => E.entites.map(e => ({
-      id:e.id, hp:e.stats.HP.current, action:e._combatAction, phase:e.currentPhase, attack:e.currentAttack,
-      flights:e.projectiles, paused:Clock.isCombatPaused(),
-    }))));
-    console.error(page.testLog.slice(-80).join('\n')); throw error;
-  }
+  await page.waitForFunction(mode => mode.includes('melee')
+    ? Clock.captureCombatState().melee.active.length >= 2
+    : E.entites.filter(e => e.projectiles?.some(p => p.status === 'in-flight')).length === 2, mode);
   if (mode === 'melee-double-active') await page.waitForFunction(() => Clock.captureCombatState().melee.active.filter(e=>e.isAmbidextry).length===2);
   if (mode !== 'melee-double-pending') {
     await page.waitForTimeout(150);
@@ -470,7 +352,7 @@ try {
   await page.waitForTimeout(2600);
   if(monsterPose)assert.deepEqual(await readMonsters(),monsterPose,'WebGL body, bars and text remain frozen during tactical pause');
   assert.deepEqual(await read(),before,'live pause freezes deadlines, positions, damage and phases');
-  await page.evaluate(async expectDataScene => {
+  await page.evaluate(async () => {
     const name = (await indexedDB.databases()).find(db => db.name?.toLowerCase().includes('pause'))?.name;
     if (!name) throw Error('Missing pause database');
     const db = await new Promise((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
@@ -480,11 +362,7 @@ try {
         const cursor = request.result; if (!cursor) return;
         const snapshot = cursor.value;
         if (!snapshot.board?.placements.length) throw Error('Checkpoint lacks combat board data');
-        if (expectDataScene && !snapshot.visuals.scene) throw Error('Native reload unexpectedly used the HTML checkpoint');
-        if (snapshot.visuals.scene) {
-          if ('html' in snapshot.visuals) throw Error('Native checkpoint must not serialize the scene HTML');
-          if (!snapshot.visuals.scene.properties.length) throw Error('Missing view properties');
-        } else snapshot.visuals.html = snapshot.visuals.html.map(html => {
+        snapshot.visuals.html = snapshot.visuals.html.map(html => {
           const doc = new DOMParser().parseFromString(html, 'text/html');
           const first = doc.querySelector('#hexGrid .hex');
           if (first) doc.querySelectorAll('#hexGrid .entite-box').forEach(box => { first.append(box); box.dataset.position = 'wrong'; });
@@ -495,7 +373,7 @@ try {
       tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
     });
     db.close();
-  }, process.env.MONSTER_WEBGL === '1');
+  });
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
   await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
@@ -511,23 +389,6 @@ try {
     }
   };
   compare(restored,before,'F5 restores the exact paused fight');
-  if (monsterPose) {
-    await page.waitForFunction(() => document.querySelectorAll('[data-monster-webgl="ready"]').length === 2);
-    await page.waitForTimeout(100);
-    const currentPose = await readMonsters();
-    assert.equal(currentPose.length, monsterPose.length);
-    currentPose.forEach((layers, i) => {
-      assert.equal(layers.length, monsterPose[i].length);
-      layers.forEach((layer, j) => {
-        const expected = monsterPose[i][j];
-        for (const [key, value] of Object.entries(expected)) {
-          if (typeof value === 'number') assert.ok(Math.abs(layer[key] - value) < .001,
-            `Restored ${layer.kind}/${layer.bar || ''} ${key}: ${layer[key]} != ${value}`);
-          else assert.equal(layer[key], value, `Restored ${layer.kind} ${key}`);
-        }
-      });
-    });
-  }
   await page.waitForTimeout(1800);
   compare(await read(),before,'reload does not restart timers');
   await page.screenshot({path:resolve(output,'restored-paused.png')});
@@ -620,73 +481,6 @@ try {
     const fleeResult=await page.evaluate(async()=>({message:document.querySelector('#gameOverMessage')?.textContent,paused:(await import("/js/combat/clock.js")).isCombatPaused(),outcome:(await import("/js/app/state.js")).battleOutcome,started:(await import("/js/app/state.js")).gameStarted,entities:(await import("/js/entities/runtime.js")).entites.map(e=>({id:e.id,side:e.side,hasFled:e.hasFled,isDEAD:e.isDEAD,hp:e.stats.HP.current,phase:e.orderPhase}))}));
     assert.equal(fleeResult.entities.filter(e=>e.side==='B'&&!e.hasFled&&!e.isDEAD).length,0,JSON.stringify(fleeResult));
     await page.close();console.log('PASS flee: F5 during decision, paused remaining time, normal victory after resume');
-  }
-  {
-    const page=await fixture({speed:20000});
-    await page.evaluate(async()=>{
-      const R=await import('/js/rendering/entities.js'),B=await import('/js/board/controller.js');
-      const grid=document.getElementById('hexGrid'),hex=grid.querySelector('.hex').cloneNode(false);
-      hex.className='hex SideB';hex.dataset.position='3';hex.style.left='700px';grid.append(hex);
-      const survivor={...Clock.combatData(E.entites[1]),id:999822,name:'Survivant',position:'3',battlePosition:'3'};
-      E.entites.push(survivor);const view=R.createEntiteInDOM(survivor);hex.append(view.element);await view.spriteReady;
-      B.invalidateFootprintGeometry(grid);B.rebuildBoardOccupancy(grid);G.startGame();
-      const V=await import('/js/combat/vitals.js');E.entites[1].stats.HP.current=1;V.applyDamage(E.entites[1],100000,E.entites[0],E.entites[0].attackDetails[0]);
-    });
-    await page.waitForFunction(()=>E.entites[1].isDEAD&&document.querySelector('[data-corpse-loot-id] .dead-sprite'));
-    await page.waitForTimeout(150);await page.evaluate(()=>P.pauseCombat());
-    const read=()=>page.evaluate(async()=>{
-      const E=await import('/js/entities/runtime.js'),S=await import('/js/storage/sessionStorage.js');
-      return {entities:E.entites.map(e=>({id:e.id,hp:e.stats.HP.current,armor:e.stats.armor,isDEAD:e.isDEAD,
-        statut:e.statut,kills:e.kills,hasDeathBeenLogged:e.hasDeathBeenLogged,extraLife:e.stats.extraLife})),
-        deathEffect:(await import('/js/combat/clock.js')).captureCombatState().phaserPresentation
-          .flatMap(row=>row.state.presentation.records).filter(r=>r.key==='death-blood').map(({gifElapsed,...r})=>r),
-        loot:S.gameStorage.getItem('PersistentCorpseLootSources'),
-        corpses:[...document.querySelectorAll('[data-corpse-loot-id]')].map(n=>n.dataset.corpseLootId)};
-    });
-    const before=await read();assert.ok(before.loot&&before.corpses.length===1);
-    if(process.env.MONSTER_WEBGL==='1')assert.equal(before.deathEffect.length,1,'Death blood is native and retains its timeline');
-    const checkpoint=await readPauseSnapshot(page);
-    if(process.env.MONSTER_WEBGL==='1')assert.ok(checkpoint.visuals.scene&&!('html' in checkpoint.visuals),'A dead actor and corpse loot restore from data');
-    await page.reload();
-    await page.waitForFunction(()=>document.getElementById('combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre'&&!document.getElementById('combat-pause-control').disabled);
-    assert.deepEqual(await read(),before,'Death, depleted HP/lives, kill count and resolved corpse loot survive F5 without replay');
-    await page.locator('[data-corpse-loot-id]').dispatchEvent('click');
-    await page.waitForSelector('.loot-interface',{state:'attached'});
-    await page.close();console.log('PASS definitive death: exact resources/kill count/loot and usable corpse after F5');
-  }
-  if (process.env.MONSTER_WEBGL === '1') {
-    const page = await fixture({ speed: 10000 });
-    await page.waitForFunction(() => document.querySelectorAll('[data-monster-webgl="ready"]').length === 2);
-    await page.evaluate(async () => {
-      G.startGame();
-      (await import('/js/rendering/damageFeedback.js')).showResilienceCancellation(E.entites[0], 'resilienceCancel');
-      await P.pauseCombat();
-    });
-    const checkpoint = await readPauseSnapshot(page);
-    assert.ok(checkpoint.visuals.html && !checkpoint.visuals.scene, 'Unported effects retain the HTML checkpoint');
-    const deadline = await page.locator('.effect-vfx.resilience').getAttribute('data-combat-remove-at');
-    await page.reload();
-    await page.waitForFunction(() => document.querySelector('#combat-pause-control')?.textContent === 'Pause tactique · Espace pour reprendre' && !document.querySelector('#combat-pause-control').disabled);
-    assert.equal(await page.locator('.effect-vfx.resilience').getAttribute('data-combat-remove-at'), deadline);
-    await page.waitForTimeout(2200);
-    assert.equal(await page.locator('.effect-vfx.resilience').count(), 1, 'Unported effect remains frozen');
-    await page.keyboard.press('Space'); await page.waitForTimeout(2200);
-    assert.equal(await page.locator('.effect-vfx.resilience').count(), 0, 'Unported effect retains its removal deadline');
-    await page.close(); console.log('PASS native board with an unported effect: fallback retains the visual and expiry');
-  }
-  for (const shortcut of ['F5', 'Control+r', 'Control+Shift+r']) {
-    const page=await fixture({phaser:true,A:{range:'range',execution:5000},B:{range:'range',execution:5000}});
-    await page.evaluate(()=>G.startGame());
-    await page.waitForFunction(()=>E.entites.every(e=>e.projectiles?.some(p=>p.status==='in-flight')));
-    const before=await page.evaluate(()=>E.entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction})));
-    await Promise.all([page.waitForEvent('load'),page.keyboard.press(shortcut)]);
-    await page.waitForFunction(async()=>{
-      const P=await import('/js/combat/pause.js'),C=await import('/js/combat/clock.js');
-      return C.isCombatPaused()&&!P.isCombatCheckpointBusy()&&document.getElementById('combat-pause-resume');
-    });
-    assert.deepEqual(await page.evaluate(async()=>(await import('/js/entities/runtime.js')).entites.map(e=>({id:e.id,hp:e.stats.HP.current,action:e._combatAction}))),before,
-      shortcut+' checkpoints the running attack before reloading');
-    await page.close();console.log('PASS live keyboard reload: '+shortcut);
   }
   {
     const page=await fixture({speed:10000});

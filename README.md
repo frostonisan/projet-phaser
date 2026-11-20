@@ -7,6 +7,26 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 - Branche de travail et de publication : `version-2`.
 - Sources du jeu : `docs/` ; outils de verification : `scripts/`.
 
+## Version actuellement publiée — retour à v0.98.0-dev
+
+Le retour demandé le 20 novembre 2026 rétablit intégralement `docs/` et
+`scripts/` au commit `c685f9f8ef5fd4547b217098c9928286ef9d0736`. L'historique
+Git et les exigences d'intégrité du roguelike restent conservés.
+
+Les changements 0.99/0.100 décrits plus bas sont désormais historiques et ne
+sont plus actifs : reconstruction native du checkpoint de combat, effets
+« sort brisé » et sang à la mort en Phaser, graphe de poses et atlas de textes
+GPU partagés. La restauration visuelle revient au chemin HTML et au format
+de checkpoint 2 ; un checkpoint de combat au format 3 ne peut pas être repris.
+Le joueur a confirmé n'avoir aucun combat en cours ou en pause à conserver.
+Aucune sauvegarde du navigateur n'a été effacée ou modifiée par ce retour.
+
+Ce point de retour conserve les dépendances HTML de géométrie/interactions.
+Il contient aussi le défaut diagnostiqué de reconstruction des maillages de
+sol/fond/brouillard après leur projection Phaser : les disparitions pendant
+les mouvements de caméra et le clignotement du brouillard restent à corriger.
+Le retour n'est donc pas une garantie de fluidité ou de disparition du clipping.
+
 ## Point de retour — avant optimisation des calculs
 
 Repère demandé par le joueur : **The Dark Pit v0.98.0-dev**, avant le lot
@@ -35,7 +55,7 @@ les diagnostics locaux ignorés dans `outputs/` ne font pas partie du snapshot G
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.100.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.98.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi

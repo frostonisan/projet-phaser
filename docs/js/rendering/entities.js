@@ -1,9 +1,9 @@
-import { combatViewReference, resolveCombatView, createCanvasBoard, readBoardScreenGeometry } from './boardAdapter.js';
+import { createCanvasBoard, readBoardScreenGeometry } from './boardAdapter.js';
 import {
   updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
   IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
-import { attachPhaserBoard, attachPhaserMonster, wakePhaserMonsters, renderCombatVisual, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, ENTITY_TINTS } from "./animations.js";
+import { attachPhaserBoard, attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, ENTITY_TINTS } from "./animations.js";
 import { persistentMediaMarkup, loadResource, loadSpriteAtlas, getAnimatedImageState, loadEffectAtlas } from "../data/loaderList.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
@@ -15,7 +15,7 @@ import { AttackerSbireTargetPriority, AllySbireTargetPriority } from "../combat/
 import { createUmbraBlock } from "../ui/statistics/components.js";
 import { createEntityAttackDisplay } from "../ui/attacks.js";
 import { createStuffDom } from "../ui/codex/profile.js";
-import { entites, removedEntities } from "../entities/runtime.js";
+import { entites } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
 import { resolveAttackDefinitionForEntity, resolveEntityAttackDisplayName } from "../combat/attackResolution.js";
 import { adjustFontSize } from "../ui/display.js";
@@ -415,8 +415,6 @@ export function stabilizeDeadEntityVisual(entite, { playDeathBlood = false } = {
 
   if (playDeathBlood) {
     document.getElementById(`bloodEffect_${entite.id}`)?.remove();
-    if (renderCombatVisual(entite.id, 'gif', { key: 'death-blood', className: 'effect-vfx blood',
-      src: './media/assets/effects/death-blood.gif', lifetime: 1000 })) return canvas;
     const bloodGif = document.createElement('img');
     playCachedGif(bloodGif, './media/assets/effects/death-blood.gif');
     bloodGif.className = 'effect-vfx blood';
@@ -434,19 +432,19 @@ export function getEntitySpriteSource(entite) {
     return dead ? entite.deadsprite || entite.DeadSprite || './media/sprites/0-dead.png' : entite.sprite;
 }
 
-export function createEntiteInDOM(entite, { spriteImage = null, restoring = false } = {}) {
-    if (!restoring) entite.sizeInCells = entitySizeInCells(entite);
+export function createEntiteInDOM(entite, { spriteImage = null } = {}) {
+    entite.sizeInCells = entitySizeInCells(entite);
     // console.log('// EXEC createEntiteInDOM');
 
     assertEntityType(entite);
-    if (!restoring) determineClasse(entite);
+    determineClasse(entite);
 
     const entityStartsDead =
       entite?.isDEAD === true ||
       entite?.statut?.includes?.("dead") ||
       Number(entite?.stats?.HP?.current ?? 0) <= 0;
 
-    if (entityStartsDead && !restoring) {
+    if (entityStartsDead) {
       entite.isDEAD = true;
       entite.isSurprised = false;
       entite.statut = ["dead"];
@@ -619,7 +617,7 @@ spriteEntite.onload = function () {
       const syncAuras = () => {
         if (!AuraContainer.isConnected) return;
         try {
-          syncEntityAuras(entite, AuraContainer, { restoring });
+          syncEntityAuras(entite, AuraContainer);
         } catch (error) {
           // Une aura défaillante ne doit jamais annuler le dessin du sprite.
           console.error(`❌ Synchronisation des auras impossible pour ${entite.id}`, error);
@@ -770,7 +768,7 @@ statusBar.appendChild(healthBarContainer);
     applyEntitySizeVisual(entite);
     calibrateEntityVisuals(spriteDiv, spriteContainer.parentElement, entityPopUpTop, entityPopDown,
       { auraHost: AuraContainer, effectsHost: effectsContainer });
-    if (entityStartsDead && !restoring) {
+    if (entityStartsDead) {
       setTimeout(() => {
         if (entiteBox.isConnected && (entite.isDEAD || entite.statut?.includes('dead')
             || Number(entite.stats?.HP?.current) <= 0)) {
@@ -779,7 +777,7 @@ statusBar.appendChild(healthBarContainer);
       }, 60);
     }
 
-    if (!restoring && monsterWebGLRequested()) spriteReady.then(() => {
+    if (monsterWebGLRequested()) spriteReady.then(() => {
       globalThis.requestAnimationFrame(() => mountWebGLMonster(entite, entiteBox));
     });
     return { element: entiteBox, canvas, spriteReady };
@@ -1504,11 +1502,10 @@ const monsterStyle = node => getComputedStyle(node);
 // Frames below read the compiled records and the combat clock exclusively.
 const monsterClamp = value => Math.max(0, Math.min(1, value));
 const monsterColorFilter = value => (String(value).match(/(?:grayscale|saturate|sepia|contrast|hue-rotate|invert)\([^)]+\)/g)||[]).join(' ');
-const monsterEasings=new Map(Object.entries({ease:[.25,.1,.25,1],'ease-in':[.42,0,1,1],'ease-out':[0,0,.58,1],'ease-in-out':[.42,0,.58,1]}));
 function monsterEase(value, easing = 'linear') {
   if (easing === 'linear') return value;
-  let bezier=monsterEasings.get(easing);
-  if(bezier===undefined){bezier=easing.match(/cubic-bezier\(([^)]+)\)/)?.[1].split(',').map(Number)||null;monsterEasings.set(easing,bezier);}
+  const presets = { ease: [.25,.1,.25,1], 'ease-in': [.42,0,1,1], 'ease-out': [0,0,.58,1], 'ease-in-out': [.42,0,.58,1] };
+  const bezier = presets[easing] || easing.match(/cubic-bezier\(([^)]+)\)/)?.[1].split(',').map(Number);
   if (!bezier) return value;
   const [a,b,c,d] = bezier, cubic = (t,x,y) => 3*(1-t)**2*t*x+3*(1-t)*t*t*y+t**3;
   let low=0, high=1;
@@ -1586,82 +1583,11 @@ function monsterAnimatedValues(binding, now) {
   return values;
 }
 const monsterPanels = new Map(), monsterTextTextures = new Map();
-// Texts retain their original rasterization. Small atlas regions are uploaded
-// only when a label changes; the shared GPU pages stay resident between frames.
-const monsterTextAtlases=new WeakMap();
-function monsterTextAtlas(scene){
-  let atlas=monsterTextAtlases.get(scene);
-  if(atlas)return atlas;
-  const renderer=scene.game.renderer,gl=renderer.gl;
-  if(!gl)return null;
-  const size=Math.min(2048,renderer.getMaxTextureSize());
-  atlas={pages:[],free:new Map(),pending:[],size};
-  atlas.flush=()=>{
-    if(!atlas.pending.length||gl.isContextLost())return;
-    renderer.flush();
-    const active=gl.getParameter(gl.ACTIVE_TEXTURE),premultiplied=gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL),flip=gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
-    gl.activeTexture(gl.TEXTURE0);const bound=gl.getParameter(gl.TEXTURE_BINDING_2D);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
-    try{
-      let page;
-      for(const upload of atlas.pending){
-        if(page!==upload.slot.page){page=upload.slot.page;gl.bindTexture(gl.TEXTURE_2D,page.texture.source[0].glTexture.webGLTexture);}
-        gl.texSubImage2D(gl.TEXTURE_2D,0,upload.slot.x,upload.slot.y,gl.RGBA,gl.UNSIGNED_BYTE,upload.canvas);
-      }
-      atlas.pending.length=0;
-    }finally{
-      gl.bindTexture(gl.TEXTURE_2D,bound);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,premultiplied);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flip);gl.activeTexture(active);
-    }
-  };
-  atlas.destroy=()=>{
-    scene.game.events.off('prerender',atlas.flush);scene.events.off('shutdown',atlas.destroy);atlas.pending.length=0;atlas.free.clear();
-    for(const page of atlas.pages)scene.textures.remove(page.texture.key);
-    atlas.pages.length=0;monsterTextAtlases.delete(scene);
-  };
-  scene.game.events.on('prerender',atlas.flush);
-  scene.events.once('shutdown',atlas.destroy);
-  monsterTextAtlases.set(scene,atlas);return atlas;
-}
-function storeMonsterText(scene,canvas){
-  const atlas=monsterTextAtlas(scene),w=2**Math.ceil(Math.log2(canvas.width+4)),h=2**Math.ceil(Math.log2(canvas.height+4));
-  if(!atlas||w>atlas.size||h>atlas.size){
-    const texture=`monster-text-${++monsterTextureId}`;scene.textures.addImage(texture,canvas);return {texture};
-  }
-  const bucket=`${w}:${h}`;let slot=atlas.free.get(bucket)?.pop();
-  if(!slot){
-    let page,shelf;
-    for(const candidate of atlas.pages){
-      shelf=candidate.shelves.find(row=>row.h===h&&row.x+w<=atlas.size);
-      if(!shelf&&candidate.y+h<=atlas.size){shelf={x:0,y:candidate.y,h};candidate.y+=h;candidate.shelves.push(shelf);}
-      if(shelf){page=candidate;break;}
-    }
-    if(!page){
-      const source=document.createElement('canvas');source.width=source.height=atlas.size;
-      const texture=scene.textures.addImage(`monster-text-atlas-${++monsterTextureId}`,source);texture.setFilter(0);
-      shelf={x:0,y:0,h};page={texture,context:source.getContext('2d'),y:h,shelves:[shelf]};atlas.pages.push(page);
-    }
-    slot={page,x:shelf.x,y:shelf.y,w,h,bucket};shelf.x+=w;
-  }
-  // A transparent gutter prevents neighbouring labels from bleeding at fractional scales.
-  const tile=document.createElement('canvas');tile.width=w;tile.height=h;tile.getContext('2d').drawImage(canvas,2,2);
-  slot.page.context.clearRect(slot.x,slot.y,w,h);slot.page.context.drawImage(tile,slot.x,slot.y);
-  const frame=`label-${++monsterTextureId}`;slot.page.texture.add(frame,0,slot.x+2,slot.y+2,canvas.width,canvas.height);
-  atlas.pending.push({slot,canvas:tile});
-  return {texture:slot.page.texture.key,frame,atlasSlot:slot};
-}
-function discardMonsterText(entry,scene){
-  if(!entry.atlasSlot){scene.textures.remove(entry.texture);return;}
-  const atlas=monsterTextAtlases.get(scene),slot=entry.atlasSlot;
-  slot.page.texture.remove(entry.frame);
-  if(atlas){if(!atlas.free.has(slot.bucket))atlas.free.set(slot.bucket,[]);atlas.free.get(slot.bucket).push(slot);}
-}
-
 function releaseMonsterText(entry, scene) {
   if (!entry || --entry.users !== 0) return;
   if (monsterTextTextures.size > 512) {
     for (const [key, cached] of monsterTextTextures) {
-      if (cached.users === 0) { discardMonsterText(cached,scene); monsterTextTextures.delete(key); }
+      if (cached.users === 0) { scene.textures.remove(cached.texture); monsterTextTextures.delete(key); }
       if (monsterTextTextures.size <= 512) break;
     }
   }
@@ -1692,12 +1618,12 @@ function updateMonsterText(layer, scene, css, text) {
     const stroke=parseFloat(css.webkitTextStrokeWidth)||0;
     if(stroke){ctx.lineWidth=stroke;ctx.strokeStyle=css.webkitTextStrokeColor;ctx.lineJoin='round';ctx.strokeText(text,padding,baseline);}
     ctx.fillText(text,padding,baseline);
-    const texture = storeMonsterText(scene,canvas);
-    monsterTextTextures.set(key, entry = { key, ...texture, width, height, padding, users: 0 });
+    const texture = `monster-text-${++monsterTextureId}`; scene.textures.addImage(texture, canvas);
+    monsterTextTextures.set(key, entry = { key, texture, width, height, padding, users: 0 });
   }
   entry.users++; releaseMonsterText(layer.textEntry, scene); layer.textEntry = entry;
-  if (!layer.image) layer.image = scene.add.image(0, 0, entry.texture, entry.frame).setOrigin(0);
-  else layer.image.setTexture(entry.texture,entry.frame);
+  if (!layer.image) layer.image = scene.add.image(0, 0, entry.texture).setOrigin(0);
+  else layer.image.setTexture(entry.texture);
 }
 // Panel recipes contain only native Phaser parts: backgrounds, icons and text.
 // The CSS theme is sampled when a component is created/changed. No HTML is cloned,
@@ -1918,7 +1844,7 @@ function createMonsterPanel(scene,recipe,root) {
   for(const part of recipe.parts){
     const texture=part.decoration||part.textEntry;
     const w=part.decoration?texture.w:part.w+texture.padding*2,h=part.decoration?texture.h:part.h+texture.padding*2;
-    const image=scene.add.image(part.x+part.w/2-recipe.width/2,part.y+part.h/2-recipe.height/2,texture.texture,texture.frame)
+    const image=scene.add.image(part.x+part.w/2-recipe.width/2,part.y+part.h/2-recipe.height/2,texture.texture)
       .setDisplaySize(w,h).setAlpha(part.alpha).setRotation(part.angle);
     if(part.introIndex!==undefined){
       const node=roleIcons[part.introIndex],binding={width:node.offsetWidth,height:node.offsetHeight,
@@ -2224,7 +2150,7 @@ function createCombatPresentation(scene,box,entity,anchors,setPose) {
 }
 
 function releaseMonsterScene(scene) {
-  if(--activeMonsterViews===0){monsterTextAtlases.get(scene)?.destroy();monsterCacheEpoch++;for(const key of Object.keys(scene.textures.list))if(key.startsWith('monster-'))scene.textures.remove(key);monsterPanels.clear();monsterImages.clear();monsterResources.clear();monsterTextTextures.clear();monsterDecorations.clear();combatPopupThemes.clear();combatGifThemes.clear();monsterClassStyles.clear();monsterClassAnimations.clear();}
+  if(--activeMonsterViews===0){monsterCacheEpoch++;for(const key of Object.keys(scene.textures.list))if(key.startsWith('monster-'))scene.textures.remove(key);monsterPanels.clear();monsterImages.clear();monsterResources.clear();monsterTextTextures.clear();monsterDecorations.clear();combatPopupThemes.clear();combatGifThemes.clear();monsterClassStyles.clear();monsterClassAnimations.clear();}
 }
 function mountWebGLMonster(entity, box) {
   if (!monsterWebGLRequested() || !box.isConnected || !box.closest('#hexGrid') || monsterViews.has(box)) return;
@@ -2313,7 +2239,6 @@ function mountWebGLMonster(entity, box) {
       layers.set(node,layer);return layer;
     };
     const calibratePresentation=()=>{
-      poseGraphDirty=true;
       for(const [key,id] of [['damage','PopUp_'],['status','PopDow_'],['effects','effectsContainer_'],['cast','Cast_Animation_']]){
         const node=box.querySelector(`[id="${id}${entity.id}"]`);if(!node)continue;
         const chain=chainFor(node),r=node.getBoundingClientRect(),offset=layoutOffset();
@@ -2325,7 +2250,6 @@ function mountWebGLMonster(entity, box) {
       }
     };
     const refreshList=()=>{
-      poseGraphDirty=true;
       for(const node of box.querySelectorAll('canvas'))install(node,'body');
       for(const node of box.querySelectorAll(monsterPanelSelector))install(node,'panel');
       for(const node of box.querySelectorAll('img'))if(!node.closest('.hud-ingame,.combat-popup-life'))install(node,'asset');
@@ -2508,63 +2432,42 @@ function mountWebGLMonster(entity, box) {
       scene.textures.addImage(key,canvas);return key;
     };
     barTexture('base');barTexture('overlay');
-    // Compile the parent ordering once. Animation tracks retain their own clocks,
-    // pivots and replacement rules; a layer only consumes its final native pose.
-    const identityPose={a:1,b:0,c:0,d:1,tx:0,ty:0,sx:1,sy:1,angle:0,alpha:1,brightness:1,visible:true,version:0};
-    const poseGraph=[],poseFrame={get:binding=>binding.poseValues||binding.values};
-    let poseGraphDirty=true,poseCommandDirty=false,poseVersion=0;
-    const compilePoseGraph=()=>{
-      poseGraph.length=0;const seen=new Set();
-      for(const owner of [...layers.values(),...Object.values(presentationAnchors)]){
-        let parent=null;
-        for(let i=owner.chain.length-1;i>=0;i--){
-          const binding=owner.chain[i];
-          if(!seen.has(binding)){
-            binding.poseParent=parent;binding.nativePose=null;binding.poseRoot=binding.node===box;
-            seen.add(binding);poseGraph.push(binding);
-          }
-          parent=binding;
-        }
-      }
-      poseGraphDirty=false;
-    };
-    const evaluatePose=binding=>{
-      const value=binding.poseValues,base=binding.base,m=value.transform,b=base.transform;
-      const parent=binding.poseParent?.nativePose||identityPose;
-      const previous=binding.nativePose;
-      if(previous&&previous.parentVersion===parent.version&&previous.base===base&&previous.display===binding.css.display
-        &&previous.transform===m&&previous.scale===value.scale&&previous.opacity===value.opacity
-        &&previous.filter===value.filter&&previous.left===value.left&&previous.top===value.top&&previous.right===value.right)return;
-      let sx=1,sy=1,angle=0,dx=0,dy=0;
-      if(!binding.poseRoot){
-        sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
-        sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
-        angle=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
-        dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
-        dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
-      }
-      const cos=Math.cos(angle),sin=Math.sin(angle),a=cos*sx,bv=sin*sx,c=-sin*sy,d=cos*sy;
-      const ox=binding.origin.x,oy=binding.origin.y,tx=ox-a*ox-c*oy+dx,ty=oy-bv*ox-d*oy+dy;
-      const result=binding.nativePose||={};
-      result.a=parent.a*a+parent.c*bv;result.b=parent.b*a+parent.d*bv;
-      result.c=parent.a*c+parent.c*d;result.d=parent.b*c+parent.d*d;
-      result.tx=parent.a*tx+parent.c*ty+parent.tx;result.ty=parent.b*tx+parent.d*ty+parent.ty;
-      result.sx=parent.sx*sx;result.sy=parent.sy*sy;result.angle=parent.angle+angle;
-      result.alpha=parent.alpha*value.opacity[0];result.brightness=parent.brightness*value.filter[0];
-      result.visible=parent.visible&&binding.css.display!=='none';
-      result.parentVersion=parent.version;result.version=++poseVersion;result.base=base;result.display=binding.css.display;
-      result.transform=m;result.scale=value.scale;result.opacity=value.opacity;result.filter=value.filter;
-      result.left=value.left;result.top=value.top;result.right=value.right;
-    };
-    const evaluatePoseGraph=(now,chain=null)=>{
-      if(poseGraphDirty)compilePoseGraph();
-      if(chain){
-        for(let i=chain.length-1;i>=0;i--){const binding=chain[i];binding.poseValues=monsterAnimatedValues(binding,now);evaluatePose(binding);}
-      }else for(const binding of poseGraph){binding.poseValues=monsterAnimatedValues(binding,now);evaluatePose(binding);}
-      return poseFrame;
-    };
+    const settledPoses=new WeakMap(),identityPose={a:1,b:0,c:0,d:1,tx:0,ty:0,sx:1,sy:1,angle:0,alpha:1,brightness:1,visible:true};
     const pose=(rect,chain,frame)=>{
-      const parent=chain[0]?.nativePose||identityPose,x=rect.x+rect.w/2,y=rect.y+rect.h/2;
+      // Sibling layers share their ancestors. Compose each ancestor once per
+      // frame instead of repeating trigonometry for every icon, bar and glyph.
+      const cache=frame.poses ||= new Map();
+      let parent=identityPose;
+      for(let i=chain.length-1;i>=0;i--){
+        const binding=chain[i];
+        if(cache.has(binding)){parent=cache.get(binding);continue;}
+        const value=frame.get(binding),base=binding.base,m=value.transform,b=base.transform;
+        const previous=settledPoses.get(binding),ancestor=parent;
+        // Reuse an unchanged pose across frames as well. Values use immutable
+        // numeric arrays; commands, interpolation and restore replace them.
+        if(previous&&previous.parent===parent&&previous.base===base&&previous.display===binding.css.display
+          &&previous.transform===m&&previous.scale===value.scale&&previous.opacity===value.opacity
+          &&previous.filter===value.filter&&previous.left===value.left&&previous.top===value.top&&previous.right===value.right){
+          parent=previous.result;cache.set(binding,parent);continue;
+        }
+        let sx=1,sy=1,angle=0,dx=0,dy=0;
+        if(binding.node!==box){
+          sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
+          sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
+          angle=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
+          dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
+          dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
+        }
+        const cos=Math.cos(angle),sin=Math.sin(angle),a=cos*sx,bv=sin*sx,c=-sin*sy,d=cos*sy;
+        const ox=binding.origin.x,oy=binding.origin.y,tx=ox-a*ox-c*oy+dx,ty=oy-bv*ox-d*oy+dy;
+        parent={a:parent.a*a+parent.c*bv,b:parent.b*a+parent.d*bv,c:parent.a*c+parent.c*d,d:parent.b*c+parent.d*d,
+          tx:parent.a*tx+parent.c*ty+parent.tx,ty:parent.b*tx+parent.d*ty+parent.ty,
+          sx:parent.sx*sx,sy:parent.sy*sy,angle:parent.angle+angle,alpha:parent.alpha*value.opacity[0],
+          brightness:parent.brightness*value.filter[0],visible:parent.visible&&binding.css.display!=='none'};
+        settledPoses.set(binding,{...value,parent:ancestor,base,display:binding.css.display,result:parent});
+        cache.set(binding,parent);
+      }
+      const x=rect.x+rect.w/2,y=rect.y+rect.h/2;
       return {x:parent.a*x+parent.c*y+parent.tx,y:parent.b*x+parent.d*y+parent.ty,
         w:rect.w*parent.sx,h:rect.h*parent.sy,angle:parent.angle,alpha:parent.alpha,brightness:parent.brightness,visible:parent.visible};
     };
@@ -2585,16 +2488,13 @@ function mountWebGLMonster(entity, box) {
         }
         b.values.opacity=[1];(b.overrides||={}).opacity='1';
       }
-      const frame=evaluatePoseGraph(now);
+      const frame=new Map([...bindings.values()].map(binding=>[binding,monsterAnimatedValues(binding,now)]));
       const cell=cells.get(String(entity.position))||originCell, ratio=cell.w/originCell.w, move=getMonsterPlacementOffset(entity);
       presentation?.update(now,key=>{
         const a=presentationAnchors[key],p=pose(a.rect,a.chain,frame);
         const scale=a.chain.reduce((v,b)=>{const value=frame.get(b),base=b.base;return {x:v.x*Math.hypot(value.transform[0],value.transform[1])/(Math.hypot(base.transform[0],base.transform[1])||1)*value.scale[0]/base.scale[0],y:v.y*Math.hypot(value.transform[2],value.transform[3])/(Math.hypot(base.transform[2],base.transform[3])||1)*value.scale[1]/base.scale[1]};},{...a.scale});
         return {x:cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y:cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio,sx:scale.x*ratio,sy:scale.y*ratio,alpha:p.alpha,visible:p.visible};
       },false);
-      // Presentation can command a preparation/recovery pose in this frame.
-      // Keep already sampled tween values, but compose direct writes before drawing.
-      if(poseCommandDirty){for(const binding of poseGraph)evaluatePose(binding);poseCommandDirty=false;}
       const hp=Math.max(0,Math.min(entity.stats.HP.current,entity.stats.HP.max)),armor=Math.max(0,entity.stats.armor?.current||0),den=Math.max(entity.stats.HP.max,hp+armor)||1;
       if(armor>0)armorPulseStart??=now;else armorPulseStart=null;
       let atb=1;
@@ -2654,7 +2554,7 @@ function mountWebGLMonster(entity, box) {
       }
     };
     calibratePresentation();const spritePoseNode=box.querySelector('.sprite');
-    presentation=createCombatPresentation(scene,box,entity,presentationAnchors,values=>{spritePoseNode?._monsterStyleChanged?.(values,clockNow());poseCommandDirty=true;});
+    presentation=createCombatPresentation(scene,box,entity,presentationAnchors,values=>spritePoseNode?._monsterStyleChanged?.(values,clockNow()));
     refreshList();await Promise.all([...layers.values()].map(prepare));
     if(!destroyed){
       if(!document.getElementById('monster-webgl-style')){const css=document.createElement('style');css.id='monster-webgl-style';css.textContent='[data-monster-webgl="ready"] :is(canvas,img,.hud-ingame,.combat-popup-life,.target-search-indicator,.runaway-info,.order-exclamation,.melee-motion-trail,.shield-sweep-layer){visibility:hidden!important}[data-monster-webgl="ready"] *{animation-play-state:paused!important}';document.head.append(css);}
@@ -2664,28 +2564,17 @@ function mountWebGLMonster(entity, box) {
     const bounds=node=>{
       const binding=bindings.get(node);if(!binding)return null;
       const chain=[];for(let current=node;current&&current!==grid;current=current.parentElement){const b=bindings.get(current);if(b)chain.push(b);}
-      const frame=evaluatePoseGraph(clockNow(),chain),p=pose(binding.rect,chain,frame);
+      const frame=new Map(chain.map(b=>[b,monsterAnimatedValues(b,clockNow())])),p=pose(binding.rect,chain,frame);
       const cell=cells.get(String(entity.position))||originCell,ratio=cell.w/originCell.w,move=getMonsterPlacementOffset(entity);
       const width=Math.abs(p.w*Math.cos(p.angle))*ratio+Math.abs(p.h*Math.sin(p.angle))*ratio;
       const height=Math.abs(p.h*Math.cos(p.angle))*ratio+Math.abs(p.w*Math.sin(p.angle))*ratio;
       const left=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio-width/2,top=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio-height/2;
       return {x:left,y:top,left,top,width,height,right:left+width,bottom:top+height};
     };
-    const capture=()=>({presentation:presentation.capture(),armorPulseStart,
-      geometry:{originCell, layers:[...layers.values()].filter(l=>box.contains(l.node)).map(l=>({reference:combatViewReference(l.node,box),rect:l.rect,textScaleX:l.textScaleX,textScaleY:l.textScaleY,fill:l.fill,fillFrom:l.fillFrom,fillTarget:l.fillTarget,fillAt:l.fillAt})),
-        anchors:Object.fromEntries(Object.entries(presentationAnchors).map(([key,a])=>[key,{rect:a.rect,scale:a.scale}]))},
-      armorFlashAt:[...layers.values()].find(l=>l.bar==='armor')?.flashAt,bindings:[...bindings.values()].filter(b=>box.contains(b.node)).map(b=>({reference:combatViewReference(b.node,box),rect:b.rect,origin:b.origin,overrides:b.overrides,values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations})),tweens:[...b.tweens]}))});
-    const restore=state=>{
-      // The compiled pose is render data too: resampling an animated CSS box
-      // would introduce its current shake a second time after a reload.
-      const previous=state?.geometry?.originCell,rx=previous?originCell.w/previous.w:1,ry=previous?originCell.h/previous.h:1;
-      const point=p=>previous?{x:originCell.x+(p.x-previous.x)*rx,y:originCell.y+(p.y-previous.y)*ry}:{...p};
-      const rect=r=>({...point(r),w:r.w*rx,h:r.h*ry});
-      for(const saved of state?.geometry?.layers||[]){const l=layers.get(resolveCombatView(saved.reference,box));if(l)Object.assign(l,{rect:rect(saved.rect),textScaleX:saved.textScaleX*rx,textScaleY:saved.textScaleY*ry,fill:saved.fill,fillFrom:saved.fillFrom,fillTarget:saved.fillTarget,fillAt:saved.fillAt});}
-      for(const [key,saved] of Object.entries(state?.geometry?.anchors||{})){const a=presentationAnchors[key];if(a)Object.assign(a,{rect:rect(saved.rect),scale:{x:saved.scale.x*rx,y:saved.scale.y*ry}});}
-      armorPulseStart=state?.armorPulseStart??null;const armor=[...layers.values()].find(l=>l.bar==='armor');if(armor)armor.flashAt=state?.armorFlashAt;presentation.restore(state?.presentation);for(const saved of state?.bindings||[]){
-      const node=resolveCombatView(saved.reference,box),b=bindings.get(node);if(!b)continue;
-      if(saved.rect)b.rect=rect(saved.rect);if(saved.origin)b.origin=point(saved.origin);
+    const pathFor=node=>{const path=[];for(let n=node;n&&n!==box;n=n.parentElement)path.unshift([...n.parentElement.children].indexOf(n));return path;};
+    const capture=()=>({presentation:presentation.capture(),armorPulseStart,armorFlashAt:[...layers.values()].find(l=>l.bar==='armor')?.flashAt,bindings:[...bindings.values()].filter(b=>box.contains(b.node)).map(b=>({path:pathFor(b.node),overrides:b.overrides,values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations})),tweens:[...b.tweens]}))});
+    const restore=state=>{armorPulseStart=state?.armorPulseStart??null;const armor=[...layers.values()].find(l=>l.bar==='armor');if(armor)armor.flashAt=state?.armorFlashAt;presentation.restore(state?.presentation);for(const saved of state?.bindings||[]){
+      const node=saved.path.reduce((parent,index)=>parent?.children[index],box),b=bindings.get(node);if(!b)continue;
       b.overrides={...saved.overrides};b.values={...saved.values};b.base={...saved.base};b.animations=saved.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));b.tweens=new Map(saved.tweens);
       if(b.overrides.display!==undefined)b.css.display=b.overrides.display;
       if(b.overrides.width!==undefined)b.fill=monsterClamp(parseFloat(b.overrides.width)/100);
@@ -2696,7 +2585,7 @@ function mountWebGLMonster(entity, box) {
 
 window.addEventListener('combatPauseRestored', () => {
   if (!monsterWebGLRequested()) return;
-  for (const entity of [...entites, ...removedEntities]) {
+  for (const entity of entites) {
     const box = document.getElementById(`Box_Entite_${entity.id}`);
     if (box && !monsterViews.has(box)) { box.removeAttribute('data-monster-webgl'); mountWebGLMonster(entity, box); }
   }
@@ -2762,8 +2651,9 @@ async function canvasBoardComponent(scene,root) {
     });
     return {alpha,visible,point:p=>{let {x,y}=p;for(const t of transforms){const dx=(x-t.x)*t.sx,dy=(y-t.y)*t.sy;x=t.x+dx*t.cos-dy*t.sin+t.dx;y=t.y+dx*t.sin+dy*t.cos+t.dy;}return {x,y,w:p.w};}};
   };
-  const capture=()=>[...bindings.values()].filter(b=>root.contains(b.node)).map(b=>({reference:combatViewReference(b.node,root),values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations}))}));
-  const restore=saved=>{for(const value of saved||[]){const b=bindings.get(resolveCombatView(value.reference,root));if(b){b.values=value.values;b.base=value.base;b.animations=value.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));}}lastTime=undefined;};
+  const pathFor=node=>{const path=[];for(let n=node;n!==root;n=n.parentElement)path.unshift([...n.parentElement.children].indexOf(n));return path;};
+  const capture=()=>[...bindings.values()].map(b=>({path:pathFor(b.node),values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations}))}));
+  const restore=saved=>{for(const value of saved||[]){const b=bindings.get(value.path.reduce((n,i)=>n?.children[i],root));if(b){b.values=value.values;b.base=value.base;b.animations=value.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));}}lastTime=undefined;};
   return {parts:parts.filter(p=>p.decoration||p.textEntry||p.asset),motion,capture,restore};
 }
 

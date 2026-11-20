@@ -1464,9 +1464,6 @@ export function updateSpriteUI(entity) {
     if (!container) return;
 
     if (document.getElementById(`bloodEffect_${entity.id}`)) return;
-    if (renderCombatVisual(entity.id, 'gif', { key: 'death-blood', keepExisting: true, className: 'effect-vfx death-blood',
-      src: './media/assets/effects/death-blood.gif', lifetime: 1000 })) return;
-
 
     let effectsContainer = document.getElementById(`effectsContainer_${entity.id}`);
 
@@ -2193,7 +2190,7 @@ export async function attachPhaserMonster(box, create) {
   const view = await create(layer.scene);
   if (!box.isConnected) { view.destroy(); return; }
   phaserMonsterViews.set(box, view);
-  const grid=box.closest('#hexGrid');if(grid!==observedMonsterBoard){monsterBoardResize.disconnect();observedMonsterBoard=grid;observedMonsterBoardSize=null;if(grid)monsterBoardResize.observe(grid);}
+  const grid=box.closest('#hexGrid');if(grid!==observedMonsterBoard){monsterBoardResize.disconnect();observedMonsterBoard=grid;if(grid)monsterBoardResize.observe(grid);}
   const id=box.id.replace('Box_Entite_', '');phaserEntityViews.set(id,view);
   if(pendingPresentation.has(id)){view.restore?.(pendingPresentation.get(id));pendingPresentation.delete(id);}
   for(const {kind,data} of pendingVisualCommands.get(id)||[])view.command(kind,data);pendingVisualCommands.delete(id);
@@ -2204,14 +2201,8 @@ export async function attachPhaserMonster(box, create) {
 export function wakePhaserMonsters() {
   if (phaserMonsterViews.size) phaserLayer?.game?.loop.wake();
 }
-let observedMonsterBoard=null, observedMonsterBoardSize=null;
-const monsterBoardResize=new ResizeObserver(entries=>{
-  const entry=entries.find(e=>e.target===observedMonsterBoard);if(!entry)return;
-  const size=[entry.contentRect.width,entry.contentRect.height],previous=observedMonsterBoardSize;
-  observedMonsterBoardSize=size;
-  // observe() delivers an initial notification even though nothing resized.
-  // The view is already calibrated; keep its restored pose until an actual resize.
-  if(!previous||size.every((value,index)=>value===previous[index]))return;
+let observedMonsterBoard=null;
+const monsterBoardResize=new ResizeObserver(()=>{
   invalidateBoardScreenGeometry(observedMonsterBoard);for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
 });
 let monsterMenusOpen = false, monsterMenusQueued = false, monsterBoardTransition = false;
