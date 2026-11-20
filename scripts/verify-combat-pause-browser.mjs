@@ -38,7 +38,9 @@ const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL 
 
 const errors = [];
 async function fixture(config = {}) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage(config.mobile
+    ? { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }
+    : { viewport: { width: 1280, height: 800 } });
   page.setDefaultTimeout(15000);
   page.on('pageerror', error => errors.push(error.message));
   page.testLog=[];page.on('console',message=>page.testLog.push(message.text()));
@@ -153,7 +155,7 @@ try {
     await page.close();console.log('PASS native vitals: open HUD/command panels update, hidden actor bars stay unchanged, target reset works');
   }
   if(process.env.CANVAS_BOARD_ONLY){
-    const page=await fixture({speed:20000});
+    const page=await fixture({speed:20000,mobile:true});
     await page.evaluate(async()=>{
       const B=await import('/js/board/controller.js'),R=await import('/js/rendering/entities.js');
       const boxes=E.entites.map(e=>document.getElementById(`Box_Entite_${e.id}`));boxes.forEach(n=>document.getElementById('game-container').append(n));document.getElementById('hexGrid').remove();
@@ -163,6 +165,51 @@ try {
       document.querySelectorAll('.entitylootContainer,.worldmap,.menu-map-container').forEach(n=>n.remove());
     });
     await page.waitForTimeout(5000);
+    // Observe after rendering: vertex counts alone miss meshes cleared after
+    // Phaser's preUpdate, which produced blank floors throughout camera motion.
+    const verifyDraws=async(camera=false)=>{
+      const result=await page.evaluate(async camera=>{
+        const scene=[...__boardRoots.values()].flatMap(e=>e.objects).find(o=>o.type==='Mesh').scene;
+        const refs=new Map(),result={frames:0,blank:[],reallocated:0};
+        const inspect=()=>{
+          result.frames++;
+          for(const entry of __boardRoots.values()){
+            const mesh=entry.tileMesh;
+            if(!entry.node.isConnected||!mesh?.visible||![-1000,-900,-150].includes(entry.depth))continue;
+            const active=mesh.vertices.filter(v=>v.alpha>0);
+            if(!active.length)continue;
+            if(!mesh.totalFrame||active.every(v=>!v.vx&&!v.vy)||active.some(v=>!Number.isFinite(v.vx+v.vy)))
+              result.blank.push({depth:entry.depth,frame:result.frames});
+            const previous=refs.get(mesh);
+            if(previous&&(previous.vertex!==mesh.vertices[0]||previous.face!==mesh.faces[0]))result.reallocated++;
+            refs.set(mesh,{vertex:mesh.vertices[0],face:mesh.faces[0]});
+          }
+        };
+        scene.events.on('render',inspect);
+        if(camera)(await import('/js/ui/display.js')).cinematicView();
+        await new Promise(r=>setTimeout(r,camera?2400:650));
+        scene.events.off('render',inspect);return result;
+      },camera);
+      assert.ok(result.frames>8,'Observe frames while the scene is actually rendering');
+      assert.deepEqual(result.blank,[],'Floor, background and fog stay drawn during updates');
+      assert.equal(result.reallocated,0,'Tile meshes retain their existing vertices and faces');
+    };
+    const verifyViewport=async()=>{
+      const bounds=await page.evaluate(()=>{
+        const r=document.getElementById('game-windows').getBoundingClientRect(),b=document.body.getBoundingClientRect();
+        const width=document.documentElement.clientWidth,height=document.documentElement.clientHeight;
+        const stableHeight=Math.min(height,parseFloat(getComputedStyle(document.body).minHeight)||height);
+        return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height,
+          pageWidth:b.width,pageHeight:b.height,viewportWidth:width,viewportHeight:height,
+          expectedScale:Math.min(width/1536,stableHeight/676),zoom:visualViewport.scale,scrollX,scrollY};
+      });
+      assert.ok(bounds.left>=-.5&&bounds.top>=-.5&&bounds.right<=bounds.viewportWidth+.5&&bounds.bottom<=bounds.viewportHeight+.5,JSON.stringify(bounds));
+      assert.ok(Math.abs(bounds.width/1536-bounds.expectedScale)<.001&&Math.abs(bounds.height/676-bounds.expectedScale)<.001,'One proportional fit scale');
+      assert.ok(Math.abs(bounds.pageWidth-bounds.viewportWidth)<1&&Math.abs(bounds.pageHeight-bounds.viewportHeight)<1,'Page fills the mobile viewport');
+      assert.equal(bounds.zoom,1,'No automatic browser zoom');assert.equal(bounds.scrollX,0);assert.equal(bounds.scrollY,0);
+      return bounds.width;
+    };
+    await verifyViewport();
     for(const biome of ['prison','marecage','desert','glacier']){
       await page.evaluate(async biome=>(await import('/js/board/controller.js')).applyBiomeRealtime(biome),biome);
       await page.waitForFunction(()=>document.querySelector('.ground[data-canvas-painted]')&&document.querySelector('.foreground-img[data-canvas-painted]'));
@@ -173,6 +220,8 @@ try {
       await page.evaluate(()=>{window.weatherDraws=0;const draw=CanvasRenderingContext2D.prototype.clearRect;CanvasRenderingContext2D.prototype.clearRect=function(...args){if(this.canvas.matches('#meteo-fx canvas,#ground-fx canvas'))weatherDraws++;return draw.apply(this,args);};});
       await page.waitForTimeout(450);assert.equal(await page.evaluate(()=>weatherDraws),0,'Native weather does not repaint hidden 2D canvases');
       assert.equal(await page.locator('#phaser-projectiles canvas').count(),1);
+      await verifyDraws(biome==='prison');
+      if(biome==='prison'){await page.evaluate(async()=>(await import('/js/ui/display.js')).resetParallaxView({force:true}));await page.waitForTimeout(1600);}
       await page.screenshot({path:resolve(output,`canvas-board-${biome}.png`)});
     }
     await page.evaluate(()=>document.getElementById('hexGrid').style.transform='perspective(2000px) rotateX(65deg)');
@@ -202,6 +251,16 @@ try {
     assert.deepEqual(await page.evaluate(()=>Clock.captureCombatState().canvasBoard.map(rows=>rows.map(r=>({key:r.key,epoch:r.epoch})).sort((a,b)=>a.key.localeCompare(b.key)))),saved.board,'F5 retains board animation epochs');
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(500);await page.screenshot({path:resolve(output,'canvas-board-mobile-paused.png')});
     assert.equal(await page.locator('#phaser-projectiles canvas').count(),1);
+    await verifyViewport();
+    for(const viewport of [{width:844,height:390},{width:844,height:340},{width:844,height:390},{width:390,height:844},{width:844,height:390}]){
+      await page.setViewportSize(viewport);await page.waitForTimeout(350);await verifyViewport();
+    }
+    const stableWidth=await verifyViewport();
+    await page.evaluate(()=>{for(let i=0;i<10;i++)visualViewport.dispatchEvent(new Event('resize'));});await page.waitForTimeout(150);
+    assert.equal(await verifyViewport(),stableWidth,'Repeated viewport notifications do not change the fit scale');
+    const hostBounds=await page.locator('#phaser-projectiles').boundingBox();
+    assert.ok(Math.abs(hostBounds.x)<1&&Math.abs(hostBounds.y)<1&&Math.abs(hostBounds.width-844)<1&&Math.abs(hostBounds.height-390)<1,'Phaser surface stays aligned with the mobile viewport after paused rotation');
+    await page.screenshot({path:resolve(output,'canvas-board-mobile-landscape-paused.png')});
     await page.evaluate(async()=>{const B=await import('/js/board/controller.js');B.applyBiomeRealtime('prison',{size:B.getBoardSizeOptions().at(-1).key});});await page.waitForTimeout(1500);
     assert.ok(await page.evaluate(()=>{const grid=document.getElementById('hexGrid');return grid._canvasBoardView.screenCells.size===grid.querySelectorAll('.hex[data-position]').length;}),'Resizing the board refreshes every native cell');
     assert.deepEqual(errors,[]);await page.close();

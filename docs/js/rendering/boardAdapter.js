@@ -155,6 +155,27 @@ export async function createCanvasBoard(scene,grid,paint) {
   const restoreEntry=entry=>{const value=restored.get(nodeKey(entry.node));if(!value)return;entry.epoch=value.epoch;if(entry.recipe){entry.recipe.restore?.(value.component);entry.recipe.parts.forEach((p,i)=>{if(p.asset&&value.assets?.[i]!=null)p.epoch=performance.now()-value.assets[i];});}restored.delete(nodeKey(entry.node));};
   const resizeObserver=new ResizeObserver(()=>{layoutDirty=true;cameraDirty=true;});
   const now=paint.now,clamp=v=>Math.max(0,Math.min(1,v));
+  // Scene.update changes geometry after Phaser's normal Mesh.preUpdate pass.
+  // Project modified meshes once more immediately before this scene is drawn.
+  const pendingMeshes=new Set();
+  const queueMesh=mesh=>{mesh.dirtyCache[9]=-1;pendingMeshes.add(mesh);};
+  const projectMeshes=()=>{for(const mesh of pendingMeshes)if(mesh.scene)mesh.preUpdate();pendingMeshes.clear();};
+  scene.events.on('prerender',projectMeshes);
+  const writeMesh=(mesh,vertices,uvs,alphas)=>{
+    const count=vertices.length/2,start=mesh.vertices.length;
+    // Retain vertices/faces at the high-water mark; inactive faces are transparent.
+    // Camera/fog updates no longer clear and allocate the whole mesh every frame.
+    if(count>start)mesh.addVertices(vertices.slice(start*2),uvs.slice(start*2),null,false,null,0xffffff,alphas.slice(start));
+    for(let i=0;i<mesh.vertices.length;i++){
+      const vertex=mesh.vertices[i];
+      if(i<count){vertex.x=vertices[i*2];vertex.y=vertices[i*2+1];vertex.setUVs(uvs[i*2],uvs[i*2+1]);vertex.alpha=alphas[i];}
+      else vertex.alpha=0;
+    }
+    if(mesh.width!==scene.scale.width||mesh.height!==scene.scale.height)
+      mesh.setSize(scene.scale.width,scene.scale.height).setOrtho(scene.scale.width,scene.scale.height);
+    queueMesh(mesh);
+  };
+
   const geometry=new Map(),anchors=new Map(),cameraTransitions=new Set();
   const anchorFor=node=>node.closest('#hexGrid')||node.closest('.foreground')||node.closest('.board')||node.closest('#meteo-fx')||node;
   const plane=node=>{
@@ -194,8 +215,11 @@ export async function createCanvasBoard(scene,grid,paint) {
     for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
       const corners=[[i/nx,j/ny],[(i+1)/nx,j/ny],[(i+1)/nx,(j+1)/ny],[i/nx,(j+1)/ny]];
       const points=corners.map(([u,v])=>project(rect.x+u*rect.w,rect.y+v*rect.h));
-      if(points.some(p=>p.w<=0)||Math.max(...points.map(p=>p.x))<0||Math.min(...points.map(p=>p.x))>innerWidth
-        ||Math.max(...points.map(p=>p.y))<0||Math.min(...points.map(p=>p.y))>innerHeight)continue;
+      if(points.some(p=>p.w<=0))continue;
+      // Tiles are culled again whenever the camera moves. Retained images and
+      // components must keep off-screen geometry so they can enter the view.
+      if(entry.batch&&(Math.max(...points.map(p=>p.x))<0||Math.min(...points.map(p=>p.x))>scene.scale.width
+        ||Math.max(...points.map(p=>p.y))<0||Math.min(...points.map(p=>p.y))>scene.scale.height))continue;
       for(const index of [0,1,2,0,2,3]){const p=points[index],[u,v]=corners[index];vertices.push(p.x,-p.y);local.push(rect.x+u*rect.w,rect.y+v*rect.h);
         uvs.push(uv[0]+u*(uv[2]-uv[0]),uv[1]+v*(uv[3]-uv[1]));
         alphas.push(alpha*(entry.groundMask?clamp((rect.y+v*rect.h)/50):1));}
@@ -203,7 +227,7 @@ export async function createCanvasBoard(scene,grid,paint) {
     if(!vertices.length)return;
     if(entry.batch){entry.batch.vertices.push(...vertices);entry.batch.uvs.push(...uvs);entry.batch.alphas.push(...alphas);entry.batch.local.push(...local);return;}
     const mesh=scene.add.mesh(0,0,key).setDepth(entry.depth).setOrtho(scene.scale.width,scene.scale.height);
-    mesh._boardLocal=local;mesh.hideCCW=false;mesh.addVertices(vertices,uvs,null,false,null,0xffffff,alphas);entry.objects.push(mesh);return mesh;
+    mesh._boardLocal=local;mesh.hideCCW=false;mesh.addVertices(vertices,uvs,null,false,null,0xffffff,alphas);queueMesh(mesh);entry.objects.push(mesh);return mesh;
   };
   const clearObjects=entry=>{for(const part of entry.recipe?.parts||[])part.node._canvasNative=false;for(const object of entry.objects)object.destroy();entry.objects=[];for(const sprite of entry.drops?.values()||[]){const key=sprite.texture.key;sprite.destroy();scene.textures.remove(key);owned.delete(key);}entry.drops?.clear();};
   const paintTiles=(entry,time)=>{
@@ -225,7 +249,8 @@ export async function createCanvasBoard(scene,grid,paint) {
     }if(!repeatY)break;}
     const batch=entry.batch;entry.batch=null;
     if(!entry.tileMesh){entry.tileMesh=scene.add.mesh(0,0,image.key).setDepth(entry.depth).setOrtho(scene.scale.width,scene.scale.height);entry.tileMesh.hideCCW=false;entry.objects.push(entry.tileMesh);}
-    entry.tileMesh._boardLocal=batch.local;entry.tileMesh.setTexture(image.key).setSize(scene.scale.width,scene.scale.height).setOrtho(scene.scale.width,scene.scale.height).clear();if(batch.vertices.length)entry.tileMesh.addVertices(batch.vertices,batch.uvs,null,false,null,0xffffff,batch.alphas);
+    entry.tileMesh._boardLocal=batch.local;entry.tileMesh.setTexture(image.key);
+    writeMesh(entry.tileMesh,batch.vertices,batch.uvs,batch.alphas);
     entry.lastPaint=time;
   };
   const sample=async entry=>{
@@ -289,7 +314,7 @@ export async function createCanvasBoard(scene,grid,paint) {
           for(const i of [0,1,2,0,2,3]){vertices.push(points[i].x,-points[i].y);uvs.push(0,0);alpha.push((i<2?aa:ab)*p.opacity*entry.opacity);}
         }
       }
-      entry.rays.setSize(scene.scale.width,scene.scale.height).setOrtho(scene.scale.width,scene.scale.height).clear();if(vertices.length)entry.rays.addVertices(vertices,uvs,null,false,null,0xffffff,alpha);
+      writeMesh(entry.rays,vertices,uvs,alpha);
     }
     if(entry.drops)for(const [drop,sprite] of entry.drops)if(!data.drops.includes(drop)){const key=sprite.texture.key;sprite.destroy();scene.textures.remove(key);owned.delete(key);entry.drops.delete(drop);}
   };
@@ -346,7 +371,7 @@ export async function createCanvasBoard(scene,grid,paint) {
       if(cameraRebase){geometry.clear();anchors.clear();for(const entry of roots.values()){entry.project=plane(entry.node);for(const part of entry.recipe?.parts||[])part.project=plane(part.node);}refreshCamera();cameraRebase=false;paint.cameraSettled?.();}
       for(const entry of roots.values())if(entry.kind==='tiles'&&entry.image)paintTiles(entry,now());
       for(const entry of roots.values())if(!entry.recipe)for(const mesh of entry.objects)if(mesh._boardLocal){
-        for(let i=0;i<mesh.vertices.length;i++){const p=entry.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]);mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}mesh.dirtyCache[9]=-1;
+        for(let i=0;i<mesh._boardLocal.length/2;i++){const p=entry.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]);mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}queueMesh(mesh);
       }
       cameraDirty=false;
     }
@@ -360,11 +385,11 @@ export async function createCanvasBoard(scene,grid,paint) {
       const tint=part.node._canvasTint;
       if(tint&&!part.tint){part.tint=scene.add.image(0,0,mesh.texture.key).setDepth(entry.depth+.00001);entry.objects.push(part.tint);}
       if(part.tint){const a=motion.point(part.project(part.x,part.y)),b=motion.point(part.project(part.x+part.w,part.y+part.h));const rgb=tint?.color.split(',').map(Number)||[255,255,255];part.tint.setFrame(part.asset?.frameNames?.[part.frame]??part.frame??'__BASE').setPosition((a.x+b.x)/2,(a.y+b.y)/2).setDisplaySize(Math.abs(b.x-a.x),Math.abs(b.y-a.y)).setTintFill((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]).setAlpha((tint?.opacity||0)*motion.alpha).setVisible(motion.visible&&!!tint);}
-      for(let i=0;i<mesh.vertices.length;i++){const p=motion.point(part.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]));mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}mesh.dirtyCache[9]=-1;
+      for(let i=0;i<mesh.vertices.length;i++){const p=motion.point(part.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]));mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}queueMesh(mesh);
     }
     for(const entry of roots.values())if(entry.fogDuration&&entry.image&&now()-entry.lastPaint>=33)paintTiles(entry,now());
   };
-  const destroy=()=>{if(disposed)return;disposed=true;observer.disconnect();resizeObserver.disconnect();for(const type of ['pointerover','pointerout','focusin','focusout'])grid.removeEventListener(type,hover);for(const type of ['transitionrun','transitionend','transitioncancel'])document.removeEventListener(type,cameraEvent);for(const [node,e] of roots){e.cancelled=true;delete node.dataset.canvasPainted;clearObjects(e);paint.release(e.recipe);}roots.clear();for(const key of owned)scene.textures.remove(key);delete grid.dataset.canvasBoard;container?.classList.remove('canvas-board-active');paint.dispose();};
+  const destroy=()=>{if(disposed)return;disposed=true;scene.events.off('prerender',projectMeshes);pendingMeshes.clear();observer.disconnect();resizeObserver.disconnect();for(const type of ['pointerover','pointerout','focusin','focusout'])grid.removeEventListener(type,hover);for(const type of ['transitionrun','transitionend','transitioncancel'])document.removeEventListener(type,cameraEvent);for(const [node,e] of roots){e.cancelled=true;delete node.dataset.canvasPainted;clearObjects(e);paint.release(e.recipe);}roots.clear();for(const key of owned)scene.textures.remove(key);delete grid.dataset.canvasBoard;container?.classList.remove('canvas-board-active');paint.dispose();};
   scan();await Promise.all([...dirty].map(entry=>sample(entry)));dirty.clear();
   grid.dataset.canvasBoard='ready';container?.classList.add('canvas-board-active');
   observer.observe(grid.closest('#game-windows')||grid.parentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','src','d','stroke'],characterData:true});

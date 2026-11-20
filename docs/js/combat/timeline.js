@@ -5,6 +5,14 @@ let pending = [], wake = null, draining = null, currentTime = null, sequence = 0
 let impactBatch = null;
 
 export const combatNow = () => currentTime ?? clockNow();
+// Between batches combatNow follows wall time, even when older tasks still wait.
+// Recovery checks need the actual queue delay; this never advances the clock.
+export function getCombatTimelineBacklog() {
+  const now = clockNow();
+  let oldest = currentTime ?? now;
+  for (const task of pending) oldest = Math.min(oldest, task.at);
+  return Math.max(0, now - oldest);
+}
 export const isResolvingCombatImpacts = () => impactBatch !== null;
 export const hasPendingCombatDeath = entity => Boolean(impactBatch
   && impactBatch.stage !== 'death' && impactBatch.deaths.has(entity));

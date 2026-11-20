@@ -20,24 +20,32 @@ const server = createServer(async (req, res) => {
     let data = await readFile(file);
     if (extname(file) !== '.js') return res.end(data);
     data = data.toString();
-    const name = file.split(sep).at(-1);
+    const name = file.split(sep).at(-1), modulePath = file.split(sep).join('/');
     if (baseline && baselineFiles.has(name)) {
       data = await readFile(resolve(baselineDirectory, name), 'utf8');
     }
-    if (file.endsWith("combat/minionTurn.js")) data = data.replace('    clearForcedInvisibleTargetAccuracy(attacker);', `
+    if (modulePath.endsWith('combat/timeline.js')) {
+      data=data.replace('  currentTime = Math.min(...pending.map(task => task.at));', `
+        if(globalThis.__holdCombatQueue)await globalThis.__holdCombatQueue;
+        currentTime = Math.min(...pending.map(task => task.at));
+        if(globalThis.__holdCombatBatch)await globalThis.__holdCombatBatch;`);
+      data += `
+globalThis.__inspectContinuityTimeline=()=>({currentTime,pending:pending.map(t=>({at:t.at,fn:t.callback.name}))});`;
+    }
+    if (modulePath.endsWith("combat/minionTurn.js")) data = data.replace('    clearForcedInvisibleTargetAccuracy(attacker);', `
       if (attacker.__lostTargetOnce) { delete attacker.__lostTargetOnce; attacker.__lateTarget = () => resolve(defendingEntites[0]); return; }
       if (attacker.__throwTargetOnce) { delete attacker.__throwTargetOnce; throw Error('Injected target failure'); }
       clearForcedInvisibleTargetAccuracy(attacker);`);
-    if (file.endsWith("combat/vitals.js")) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
+    if (modulePath.endsWith("combat/vitals.js")) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
       if (attacker.__stallPhaseOnce) { delete attacker.__stallPhaseOnce; await new Promise(resolve => { attacker.__releasePhase = resolve; }); }
       else await combatDelay(Math.max(0, state.nextAt - combatNow()));`);
     if (file.endsWith('attackExecution.js')) data = data.replace('    if (!canPrepare()) return false;', `
       if (attacker.__throwPreparationOnce) { delete attacker.__throwPreparationOnce; throw Error('Injected preparation failure'); }
       if (!canPrepare()) return false;`);
-    if (file.endsWith("combat/loop.js")) data = data.replace('wait.lastTick = now;', `
+    if (modulePath.endsWith("combat/loop.js")) data = data.replace('wait.lastTick = now;', `
       if (attacker.__throwCooldownOnce) { delete attacker.__throwCooldownOnce; throw Error('Injected cooldown failure'); }
       wait.lastTick = now;`);
-    if (!baseline && file.endsWith("combat/loop.js")) data = data
+    if (!baseline && modulePath.endsWith("combat/loop.js")) data = data
       .replace('continuityChecks.set(entity, timer);', 'continuityChecks.set(entity, timer); (window.__checksArmed ||= []).push(entity.id);')
       .replace('continuityChecks.delete(entity);', 'continuityChecks.delete(entity); (window.__checksRun ||= []).push(entity.id);')
       .replace('try { verifyCombatTurnStarts(); }', 'try { window.__startupChecks = (window.__startupChecks || 0) + 1; verifyCombatTurnStarts(); }');
@@ -90,6 +98,8 @@ async function fixture(count = 3) {
       entity.isDEAD = false; entity.statut = ['alive']; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const board=await import('/js/board/controller.js');
+    board.invalidateFootprintGeometry(grid);board.rebuildBoardOccupancy(grid);
     window.actor = E.entites[0]; window.enemy = E.entites[1];
     window.R = await import("/js/combat/attackResolution.js"); window.F = await import("/js/combat/loop.js");
     window.T = await import("/js/combat/timeline.js"); window.recoveries = [];
@@ -118,6 +128,39 @@ async function advanceAttack(page, before = null) {
   await page.waitForFunction(before => attacksDone > before, before, { timeout: 12000 });
 }
 try {
+  for(const held of ['queue','batch']){
+    const page=await fixture(2);
+    await page.evaluate(()=>{editAttack({preparationTime:15000,cooldown:40000});G.startGame();});
+    await page.waitForFunction(()=>actor._combatAction?.stage==='preparation'&&actor._combatAction.preparation.progress>0).catch(async error=>{
+      console.error('Fixture state',await page.evaluate(()=>({errors:[],phase:actor.currentPhase,stage:actor._turnStage,action:actor._combatAction?.stage,
+        running:G.gameStarted,paused:Clock.isCombatPaused(),pauseEvents,attacksDone,recoveries,timeline:__inspectContinuityTimeline()})));throw error;
+    });
+    await page.evaluate(held=>{
+      window.savedAction=actor._combatAction;window.savedPreparation=savedAction.preparation;
+      window.savedTurn=actor.turnCount;window.savedShift=actor.stats.shift.current;
+      window.savedCooldown=R.describeAttackChoices(actor,actor.attackDetails,a=>a.cooldown)[0].readyAt;
+      window[held==='queue'?'__holdCombatQueue':'__holdCombatBatch']=new Promise(r=>window.releaseCombatGate=r);
+    },held);
+    await page.waitForTimeout(400);
+    await page.evaluate(()=>{window.checkRequestedAt=Clock.clockNow();R.notifyAttackSelection(actor);});
+    await page.waitForTimeout(2300);
+    const state=await page.evaluate(()=>({same:actor._combatAction===savedAction&&actor._combatAction.preparation===savedPreparation,
+      recoveries,requestedAt:checkRequestedAt,checks:__inspectContinuityTimeline().pending.filter(t=>t.fn==='verifyContinuity')}));
+    assert.equal(state.same,true,`${held}: queue delay must retain the existing preparation`);
+    assert.deepEqual(state.recoveries,[],`${held}: a delayed combat queue is not a lost entity turn`);
+    assert.equal(state.checks.length,1,'Exactly one deferred continuity check');
+    assert.ok(state.checks[0].at>=state.requestedAt+2000,'A deferred check never moves before the original observation deadline');
+    await page.evaluate(()=>{delete window.__holdCombatQueue;delete window.__holdCombatBatch;releaseCombatGate();});
+    await page.waitForFunction(()=>__inspectContinuityTimeline().pending.every(t=>t.fn!=='verifyContinuity'),null,{timeout:15000});
+    assert.ok(await page.evaluate(()=>actor._combatAction===savedAction&&actor.turnCount===savedTurn&&actor.stats.shift.current===savedShift
+      &&R.describeAttackChoices(actor,actor.attackDetails,a=>a.cooldown)[0].readyAt===savedCooldown&&recoveries.length===0),
+      'Catching up keeps preparation identity, movement charges, turn and cooldown');
+    await page.evaluate(()=>G.StopGame({preserveScene:true}));await page.close();
+    checks.push(`${held}: delayed timeline retains the turn; one check waits for its original deadline and does not refill movement`);
+  }
+  if(process.env.CONTINUITY_BACKLOG_ONLY){
+    assert.deepEqual(errors,[]);console.log(JSON.stringify({checks},null,2));
+  } else {
   const preserved = await fixture();
   await preserved.evaluate(async () => {
     window.Control = await import("/js/combat/control.js");
@@ -479,4 +522,5 @@ try {
   assert.deepEqual(errors.filter(error => !expected.includes(error)), []);
   await writeFile(resolve(output, 'validation.json'), JSON.stringify({ checks, recoveries, simulations, expectedErrors: expected }, null, 2));
   console.log(JSON.stringify({ checks, recoveries, expectedErrors: expected.length }, null, 2));
+  }
 } finally { await browser.close(); await new Promise(done => server.close(done)); }
