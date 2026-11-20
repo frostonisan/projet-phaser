@@ -47,15 +47,9 @@ body, html {
   font-family: 'EB Garamond', sans-serif;
   color: white;
   background-color: black;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
+  width: 1536px;
+  height: 676px;overflow: hidden;
   }
-
-/* The page fills the current viewport. The small height is stable while
- * mobile browser bars open/close, so the logical scene keeps one fit scale. */
-body { position: fixed; inset: 0; height: 100dvh; min-height: 100svh; }
 
 @font-face {
   font-family: 'EB Garamond';
@@ -67,7 +61,7 @@ body { position: fixed; inset: 0; height: 100dvh; min-height: 100svh; }
 #game-windows{opacity:0;
 	width: 1536px;
   height: 676px;
-  position: fixed; left: 0; top: 0; overflow: hidden; transform-origin: center center;}
+  position: relative;overflow:hidden; transform-origin: top left;}
 
 h3{font-weight: 100;
   font-size: 15px;

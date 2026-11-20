@@ -87,25 +87,19 @@ function markPageLoaded() {
 function scaleGameContainer() {
     const container = document.getElementById('game-windows');
     if (!container) return;
-    const width = document.documentElement.clientWidth;
-    const height = Math.min(document.documentElement.clientHeight,
-        parseFloat(getComputedStyle(document.body).minHeight) || document.documentElement.clientHeight);
-    const scale = Math.min(width / 1536, height / 676);
-    const style = {
-        transform: `scale(${scale})`, transformOrigin: 'center center',
-        left: `${(width - 1536) / 2}px`, top: `${(height - 676) / 2}px`,
-    };
-    let changed = false;
-    for (const [key, value] of Object.entries(style)) {
-        if (container.style[key] === value) continue;
-        container.style[key] = value; changed = true;
-    }
-    if (changed) window.dispatchEvent(new Event('gameViewportChanged'));
-}
-let viewportFrame = 0;
-function scheduleGameViewport() {
-    if (viewportFrame) return;
-    viewportFrame = window.requestAnimationFrame(() => { viewportFrame = 0; scaleGameContainer(); });
+
+    const containerWidth = 1536;
+    const containerHeight = 676;
+    // Mobile innerWidth can include the unscaled 1536px game, not the visible viewport.
+    const windowWidth = document.documentElement.clientWidth;
+    const windowHeight = document.documentElement.clientHeight;
+
+    const widthScale = windowWidth / containerWidth;
+    const heightScale = windowHeight / containerHeight;
+    const scale = Math.min(widthScale, heightScale);
+
+    // Remise à zéro avant d'appliquer le scale
+    container.style.transform = `scale(${scale})`;
 }
 
 function createGameContainer() {
@@ -1081,9 +1075,7 @@ let initialized = false;
 export function initializePlayerMenus() {
   if (initialized) return;
   initialized = true;
-  window.addEventListener('resize', scheduleGameViewport);
-  window.addEventListener('orientationchange', scheduleGameViewport);
-  window.visualViewport?.addEventListener('resize', scheduleGameViewport);
+  window.addEventListener('resize', scaleGameContainer);
   window.updateExperienceDisplay = updateExperienceDisplay;
 
   window.addEventListener('stageInterfaceClosing', () => {

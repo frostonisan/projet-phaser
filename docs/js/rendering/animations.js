@@ -1,4 +1,4 @@
-import { readCanvasViewportQuad, invalidateBoardScreenGeometry } from './boardAdapter.js';
+import { invalidateBoardScreenGeometry } from './boardAdapter.js';
 import { applyMovementDestabilisation, wakeFromMovement } from "../combat/effects.js";
 import {
   setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
@@ -2236,14 +2236,14 @@ function updatePhaserMonsters() {
     else view.update(now,monsterMenusOpen);
   }
 }
-for(const name of ['resize','orientationchange','scroll','gameViewportChanged'])window.addEventListener(name,()=>{
+for(const name of ['resize','orientationchange','scroll'])window.addEventListener(name,()=>{
   positionPhaserLayer();invalidateBoardScreenGeometry(observedMonsterBoard);
   for(const view of canvasBoardViews.values())view.invalidate();
   for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
 }, {passive:true});
 
 
-const viewport = () => ({ width: Math.max(1, document.documentElement.clientWidth), height: Math.max(1, document.documentElement.clientHeight) });
+const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
 // The shared Phaser scene drives board travel while the HTML entity, HUD and
 // shaped hitbox stay together. Logical placement is committed before this view.
 const phaserPlacements = new Map();
@@ -2521,13 +2521,13 @@ function clearPhaserProjectiles() {
   for (const entry of [...phaserMelees.values()]) removePhaserMelee(entry);
 }
 for (const event of ['projectileVisualsCleared', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearPhaserProjectiles);
-for (const event of ['combatResumed', 'resize', 'gameViewportChanged']) window.addEventListener(event, () => {
+for (const event of ['combatResumed', 'resize']) window.addEventListener(event, () => {
   const wake = () => {
-    if (canvasBoardViews.size || phaserMonsterViews.size || boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size || phaserPlacements.size) phaserLayer?.game?.loop.wake();
+    if (boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size || phaserPlacements.size) phaserLayer?.game?.loop.wake();
   };
   // Resize handlers also rescale the HTML board. Draw after those handlers,
   // including when the combat clock is paused and the scene draws only once.
-  if (event !== 'combatResumed') globalThis.requestAnimationFrame(wake);
+  if (event === 'resize') globalThis.requestAnimationFrame(wake);
   else wake();
 });
 function wakeProjectileRenderer() {
@@ -2685,16 +2685,10 @@ function drawProjectile(entry, scene) {
 export function positionPhaserLayer(){
   const host=phaserLayer?.host,root=document.getElementById('game-windows');
   if(!host||!root||!phaserMonsterViews.size&&!canvasBoardViews.size)return;
-  // Keep the WebGL surface out of transformed/overflow-clipped ancestors.
-  // HTML controls remain above it; both renderers share viewport coordinates.
-  if(host.parentElement!==document.body)document.body.append(host);
-  if(root.style.zIndex!=='6000')root.style.zIndex='6000';
+  if(host.parentElement!==root)root.append(host);
+  const r=root.getBoundingClientRect(),sx=r.width/(root.offsetWidth||1),sy=r.height/(root.offsetHeight||1);
   host.classList.add('phaser-combat-surface');
-  const {width,height}=viewport(),quad=readCanvasViewportQuad(root);
-  const style={position:'fixed',left:'0px',top:'0px',width:`${width}px`,height:`${height}px`,transform:'none',
-    clipPath:`polygon(${quad.map(point=>`${point.x}px ${point.y}px`).join(',')})`,opacity:getComputedStyle(root).opacity};
-  for(const [key,value] of Object.entries(style))if(host.style[key]!==value)host.style[key]=value;
-  phaserLayer.game?.scale?.updateBounds();
+  Object.assign(host.style,{width:`${innerWidth}px`,height:`${innerHeight}px`,transformOrigin:'0 0',transform:`matrix(${1/(sx||1)},0,0,${1/(sy||1)},${-r.left/(sx||1)},${-r.top/(sy||1)})`});
 }
 window.addEventListener('combatPauseRestored',positionPhaserLayer);
 async function ensurePhaserLayer() {

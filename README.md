@@ -7,54 +7,7 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 - Branche de travail et de publication : `version-2`.
 - Sources du jeu : `docs/` ; outils de verification : `scripts/`.
 
-## Version actuellement publiée — v0.98.1-dev
-
-Correctif ciblé du 20 novembre 2026, construit sur la v0.98 restaurée :
-
-- Cadrage mobile : page à la taille du viewport, scène centrée avec une seule
-  échelle proportionnelle et hauteur stable pendant les variations des barres
-  du navigateur. Le canvas et les coordonnées tactiles suivent ce cadrage.
-- Décors : réutilisation des sommets/faces et projection avant le dessin Phaser.
-  Le sol, le fond et le brouillard restent visibles pendant les changements de vue.
-- Continuité : une file de combat en retard, même entre deux lots de traitements,
-  ne doit pas faire passer un tour actif pour un tour perdu. La vérification
-  reportée ne peut plus précéder son échéance initiale. Les vrais blocages
-  restent récupérables sans ajouter de tour ni de recharge de déplacement.
-
-Les règles de dégâts, statistiques, ciblage, progression et les échéances des
-attaques restent conservées. Le format de sauvegarde reste celui de v0.98.
-Les changements 0.99/0.100 retirés ne sont pas réintroduits.
-Le cadrage est vérifié par émulation Chrome en portrait/paysage ; aucun test
-sur téléphone physique n'est revendiqué. Cette correction ne promet pas 60 FPS.
-
-Le banc de charge contrôle désormais que le canvas est réellement visible,
-que ses parents ne le coupent pas et que les 40/80 corps sont dans le viewport.
-Les rapports sont conservés dans `outputs/targeted-098/`.
-
-Mesures finales : Chrome sur AMD Radeon Graphics, viewport 1920 × 1080,
-biome prison, trois essais visibles de 30 secondes par version et par effectif,
-ordre avant/après alterné, sans autre navigateur de test. Valeurs médianes :
-
-| Monstres | FPS v0.98 | P95 v0.98 (ms) | FPS v0.98.1 | P95 v0.98.1 (ms) |
-| --- | --- | --- | --- | --- |
-| 40 | 38,1 | 66,7 | 37,2 | 83,0 |
-| 80 | 28,3 | 83,3 | 28,6 | 83,3 |
-
-Ces mesures ne montrent pas de gain global de fluidité ; le P95 à 40 monstres
-est même plus élevé sur cette série. Les six essais corrigés ne relancent aucun
-tour sain, contre trois relances sur la référence de cette série. Les saccades
-restantes nécessitent un travail distinct sur les coûts du combat.
-
-Validation : les quatre comparaisons déterministes à 40/80 monstres (graines
-1701/1702) conservent exactement les actions, timings et le journal complet.
-Un calcul de référence à 80 a dépassé le délai du test ; seules les comparaisons
-manquantes ont été reprises dans un navigateur neuf, avec les mêmes sources.
-Les régressions de vrais blocages, drag souris/tactile, attaques/effets,
-pause/recharge et les contrôles des règles/imports/assets passent également.
-
-
-
-## Base historique — retour à v0.98.0-dev
+## Version actuellement publiée — retour à v0.98.0-dev
 
 Le retour demandé le 20 novembre 2026 rétablit intégralement `docs/` et
 `scripts/` au commit `c685f9f8ef5fd4547b217098c9928286ef9d0736`. L'historique
@@ -102,7 +55,7 @@ les diagnostics locaux ignorés dans `outputs/` ne font pas partie du snapshot G
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.98.1-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.98.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi

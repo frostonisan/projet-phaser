@@ -115,89 +115,8 @@ function canvasHomographyFromPoints([p0,p1,p2,p3]) {
 function canvasHomography(m) {
   const apply=(matrix,x,y)=>{const w=matrix[6]*x+matrix[7]*y+matrix[8];return {x:(matrix[0]*x+matrix[1]*y+matrix[2])/w,y:(matrix[3]*x+matrix[4]*y+matrix[5])/w,w};};
   const [a,b,c,d,e,f,g,h,i]=m,inv=[e*i-f*h,c*h-b*i,b*f-c*e,f*g-d*i,a*i-c*g,c*d-a*f,d*h-e*g,b*g-a*h,a*e-b*d];
-  const project=(x,y)=>apply(m,x,y);project.matrix=m;project.inverse=(x,y)=>apply(inv,x,y);project.inverse.matrix=inv;return project;
+  const project=(x,y)=>apply(m,x,y);project.inverse=(x,y)=>apply(inv,x,y);return project;
 }
-// Keep the camera's full 3D transform. A rotateX counter-rotation on an
-// upright actor must cancel the grid rotation before projecting to the screen.
-// Layout/style reads are shared at camera changes; settled combat reuses them.
-const projectionFrames = new WeakMap(), projectionBindings = new WeakMap();
-function projectionFrame(grid, refresh = false) {
-  let frame = projectionFrames.get(grid);
-  if (!frame || refresh) {
-    frame = { matrices: new Map(), layouts: new Map() };
-    projectionFrames.set(grid, frame);
-  }
-  return frame;
-}
-function canvasLayout(node, frame) {
-  if (!node) return { x: 0, y: 0 };
-  if (frame.layouts.has(node)) return frame.layouts.get(node);
-  let x = 0, y = 0;
-  for (let n = node; n; n = n.offsetParent) {
-    x += n.offsetLeft || 0; y += n.offsetTop || 0;
-    if (n.offsetParent) { x += n.offsetParent.clientLeft; y += n.offsetParent.clientTop; }
-  }
-  const layout = { x, y }; frame.layouts.set(node, layout); return layout;
-}
-function canvasWorldMatrix(node, frame) {
-  if (!(node instanceof HTMLElement)) return new DOMMatrix();
-  if (frame.matrices.has(node)) return frame.matrices.get(node);
-  const css = getComputedStyle(node), origin = css.transformOrigin.split(' ').map(parseFloat);
-  const position = canvasLayout(node, frame), parent = canvasLayout(node.parentElement, frame);
-  // Movement is read from combat data by the actor projection, once only.
-  const transform = node.classList.contains('entite-box') || css.transform === 'none' ? undefined : css.transform;
-  const scale = css.scale === 'none' ? [1, 1] : css.scale.split(' ').map(Number);
-  const local = new DOMMatrix().translate(position.x-parent.x+(origin[0]||0), position.y-parent.y+(origin[1]||0), origin[2]||0)
-    .scale(scale[0], scale[1] ?? scale[0]).multiply(new DOMMatrix(transform))
-    .translate(-(origin[0]||0), -(origin[1]||0), -(origin[2]||0));
-  const matrix = canvasWorldMatrix(node.parentElement, frame).multiply(local);
-  frame.matrices.set(node, matrix); return matrix;
-}
-function planeFromMatrix(matrix) {
-  return canvasHomography([matrix.m11,matrix.m21,matrix.m41,matrix.m12,matrix.m22,matrix.m42,matrix.m14,matrix.m24,matrix.m44]);
-}
-export function readCanvasViewportQuad(node) {
-  const matrix=canvasWorldMatrix(node,{matrices:new Map(),layouts:new Map()});
-  const project=planeFromMatrix(matrix);
-  return [[0,0],[node.offsetWidth,0],[node.offsetWidth,node.offsetHeight],[0,node.offsetHeight]].map(([x,y])=>project(x,y));
-}
-export function compileBoardProjection(node, grid, readPlacement) {
-  const initial = { matrices: new Map(), layouts: new Map() };
-  const inverse = planeFromMatrix(canvasWorldMatrix(node, initial)).inverse;
-  let world, local, previousMap, previousPosition, previousX, previousY;
-  const key = {};
-  const prepare = camera => {
-    const hex = node.closest('.hex'), position = getBoardGeometry(grid).model.byId.get(hex?.dataset.position);
-    if (!position) return;
-    world=canvasWorldMatrix(grid,camera);
-    local=new DOMMatrix().translate(-position.x,-position.y)
-      .multiply(world.inverse()).multiply(canvasWorldMatrix(node,camera));
-    previousMap=null;
-  };
-  prepare(initial);
-  let bindings=projectionBindings.get(grid);
-  if(!bindings)projectionBindings.set(grid,bindings=new Map());
-  bindings.set(node,prepare);
-  const read = frame => {
-    if(frame.has(key))return frame.get(key);
-    const placement=readPlacement(),cell=getBoardGeometry(grid).model.byId.get(String(placement.position));
-    if(!cell||!local)return (x,y)=>({x,y});
-    if(!previousMap||previousPosition!==cell.id||previousX!==placement.offset.x||previousY!==placement.offset.y){
-      const project=planeFromMatrix(world.translate(cell.x+placement.offset.x,cell.y+placement.offset.y).multiply(local));
-      const a=project.matrix,b=inverse.matrix,m=Array(9).fill(0);
-      for(let row=0;row<3;row++)for(let col=0;col<3;col++)for(let k=0;k<3;k++)m[row*3+col]+=a[row*3+k]*b[k*3+col];
-      const normalized=m.map(value=>value/m[8]);
-      previousMap=canvasHomography(normalized);
-      previousMap.identity=normalized.every((value,index)=>Math.abs(value-([0,4,8].includes(index)?1:0))<1e-7);
-      previousMap.perspective=Math.abs(normalized[6])+Math.abs(normalized[7])>1e-9;
-      previousPosition=cell.id;previousX=placement.offset.x;previousY=placement.offset.y;
-    }
-    frame.set(key,previousMap);return previousMap;
-  };
-  read.dispose=()=>{if(bindings.get(node)===prepare)bindings.delete(node);};
-  return read;
-}
-
 export function sampleCanvasPlane(node) {
   if(node.matches('img,canvas,svg')){
     const parent=sampleCanvasPlane(node.parentElement),css=getComputedStyle(node),m=new DOMMatrixReadOnly(css.transform==='none'?undefined:css.transform);
@@ -236,28 +155,7 @@ export async function createCanvasBoard(scene,grid,paint) {
   const restoreEntry=entry=>{const value=restored.get(nodeKey(entry.node));if(!value)return;entry.epoch=value.epoch;if(entry.recipe){entry.recipe.restore?.(value.component);entry.recipe.parts.forEach((p,i)=>{if(p.asset&&value.assets?.[i]!=null)p.epoch=performance.now()-value.assets[i];});}restored.delete(nodeKey(entry.node));};
   const resizeObserver=new ResizeObserver(()=>{layoutDirty=true;cameraDirty=true;});
   const now=paint.now,clamp=v=>Math.max(0,Math.min(1,v));
-  // Scene.update changes geometry after Phaser's normal Mesh.preUpdate pass.
-  // Project modified meshes once more immediately before this scene is drawn.
-  const pendingMeshes=new Set();
-  const queueMesh=mesh=>{mesh.dirtyCache[9]=-1;pendingMeshes.add(mesh);};
-  const projectMeshes=()=>{for(const mesh of pendingMeshes)if(mesh.scene)mesh.preUpdate();pendingMeshes.clear();};
-  scene.events.on('prerender',projectMeshes);
-  const writeMesh=(mesh,vertices,uvs,alphas)=>{
-    const count=vertices.length/2,start=mesh.vertices.length;
-    // Retain vertices/faces at the high-water mark; inactive faces are transparent.
-    // Camera/fog updates no longer clear and allocate the whole mesh every frame.
-    if(count>start)mesh.addVertices(vertices.slice(start*2),uvs.slice(start*2),null,false,null,0xffffff,alphas.slice(start));
-    for(let i=0;i<mesh.vertices.length;i++){
-      const vertex=mesh.vertices[i];
-      if(i<count){vertex.x=vertices[i*2];vertex.y=vertices[i*2+1];vertex.setUVs(uvs[i*2],uvs[i*2+1]);vertex.alpha=alphas[i];}
-      else vertex.alpha=0;
-    }
-    if(mesh.width!==scene.scale.width||mesh.height!==scene.scale.height)
-      mesh.setSize(scene.scale.width,scene.scale.height).setOrtho(scene.scale.width,scene.scale.height);
-    queueMesh(mesh);
-  };
-
-  const geometry=new Map(),anchors=new Map(),cameraTransitions=new Set(),screenMotions=new Set();
+  const geometry=new Map(),anchors=new Map(),cameraTransitions=new Set();
   const anchorFor=node=>node.closest('#hexGrid')||node.closest('.foreground')||node.closest('.board')||node.closest('#meteo-fx')||node;
   const plane=node=>{
     if(geometry.has(node))return geometry.get(node);
@@ -268,11 +166,6 @@ export async function createCanvasBoard(scene,grid,paint) {
   };
   const screenCells=readBoardScreenGeometry(grid);
   const refreshCamera=()=>{
-    const camera=projectionFrame(grid,true);
-    for(const [node,prepare] of projectionBindings.get(grid)||[]){
-      if(node.isConnected)prepare(camera);else projectionBindings.get(grid).delete(node);
-    }
-    paint.cameraChanged?.();
     for(const [node,anchor] of anchors)if(node.isConnected)anchor.project=sampleCanvasPlane(node);
     const project=anchors.get(grid)?.project;if(!project)return;
     for(const cell of getBoardGeometry(grid).model.cells){const old=screenCells.get(cell.id);if(!old)continue;
@@ -282,20 +175,10 @@ export async function createCanvasBoard(scene,grid,paint) {
   };
   const cameraEvent=event=>{
     if(!event.target.matches?.('#hexGrid,.board,.board-global,.foreground,#game-container,#game-windows'))return;
-    const key=`${event.target.id||event.target.className}:${event.propertyName||event.animationName}`;
-    if(event.type==='transitionrun'||event.type==='animationstart')cameraTransitions.add(key);else {cameraTransitions.delete(key);cameraRebase=true;}cameraDirty=true;
+    const key=`${event.target.id||event.target.className}:${event.propertyName}`;
+    if(event.type==='transitionrun')cameraTransitions.add(key);else {cameraTransitions.delete(key);cameraRebase=true;}cameraDirty=true;
   };
-  for(const type of ['transitionrun','transitionend','transitioncancel','animationstart','animationend','animationcancel'])document.addEventListener(type,cameraEvent);
-  const trackScreenMotion=animation=>{
-    if(!animation||screenMotions.has(animation))return;screenMotions.add(animation);cameraDirty=true;
-    const done=()=>{screenMotions.delete(animation);cameraDirty=true;cameraRebase=true;};
-    animation.addEventListener('finish',done,{once:true});animation.addEventListener('cancel',done,{once:true});
-  };
-  const screenMotion=event=>trackScreenMotion(event.detail?.animation);
-  const restoreScreenMotion=()=>{for(const animation of grid.closest('#game-windows')?.getAnimations()||[])trackScreenMotion(animation);cameraDirty=true;};
-  window.addEventListener('gameScreenMotion',screenMotion);
-  for(const type of ['combatPauseRestored','combatResumed'])window.addEventListener(type,restoreScreenMotion);
-  restoreScreenMotion();
+  for(const type of ['transitionrun','transitionend','transitioncancel'])document.addEventListener(type,cameraEvent);
 
   const imageTexture=async source=>{
     if(!textures.has(source))textures.set(source,(async()=>{
@@ -311,11 +194,8 @@ export async function createCanvasBoard(scene,grid,paint) {
     for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
       const corners=[[i/nx,j/ny],[(i+1)/nx,j/ny],[(i+1)/nx,(j+1)/ny],[i/nx,(j+1)/ny]];
       const points=corners.map(([u,v])=>project(rect.x+u*rect.w,rect.y+v*rect.h));
-      if(points.some(p=>p.w<=0))continue;
-      // Tiles are culled again whenever the camera moves. Retained images and
-      // components must keep off-screen geometry so they can enter the view.
-      if(entry.batch&&(Math.max(...points.map(p=>p.x))<0||Math.min(...points.map(p=>p.x))>scene.scale.width
-        ||Math.max(...points.map(p=>p.y))<0||Math.min(...points.map(p=>p.y))>scene.scale.height))continue;
+      if(points.some(p=>p.w<=0)||Math.max(...points.map(p=>p.x))<0||Math.min(...points.map(p=>p.x))>innerWidth
+        ||Math.max(...points.map(p=>p.y))<0||Math.min(...points.map(p=>p.y))>innerHeight)continue;
       for(const index of [0,1,2,0,2,3]){const p=points[index],[u,v]=corners[index];vertices.push(p.x,-p.y);local.push(rect.x+u*rect.w,rect.y+v*rect.h);
         uvs.push(uv[0]+u*(uv[2]-uv[0]),uv[1]+v*(uv[3]-uv[1]));
         alphas.push(alpha*(entry.groundMask?clamp((rect.y+v*rect.h)/50):1));}
@@ -323,7 +203,7 @@ export async function createCanvasBoard(scene,grid,paint) {
     if(!vertices.length)return;
     if(entry.batch){entry.batch.vertices.push(...vertices);entry.batch.uvs.push(...uvs);entry.batch.alphas.push(...alphas);entry.batch.local.push(...local);return;}
     const mesh=scene.add.mesh(0,0,key).setDepth(entry.depth).setOrtho(scene.scale.width,scene.scale.height);
-    mesh._boardLocal=local;mesh.hideCCW=false;mesh.addVertices(vertices,uvs,null,false,null,0xffffff,alphas);queueMesh(mesh);entry.objects.push(mesh);return mesh;
+    mesh._boardLocal=local;mesh.hideCCW=false;mesh.addVertices(vertices,uvs,null,false,null,0xffffff,alphas);entry.objects.push(mesh);return mesh;
   };
   const clearObjects=entry=>{for(const part of entry.recipe?.parts||[])part.node._canvasNative=false;for(const object of entry.objects)object.destroy();entry.objects=[];for(const sprite of entry.drops?.values()||[]){const key=sprite.texture.key;sprite.destroy();scene.textures.remove(key);owned.delete(key);}entry.drops?.clear();};
   const paintTiles=(entry,time)=>{
@@ -345,8 +225,7 @@ export async function createCanvasBoard(scene,grid,paint) {
     }if(!repeatY)break;}
     const batch=entry.batch;entry.batch=null;
     if(!entry.tileMesh){entry.tileMesh=scene.add.mesh(0,0,image.key).setDepth(entry.depth).setOrtho(scene.scale.width,scene.scale.height);entry.tileMesh.hideCCW=false;entry.objects.push(entry.tileMesh);}
-    entry.tileMesh._boardLocal=batch.local;entry.tileMesh.setTexture(image.key);
-    writeMesh(entry.tileMesh,batch.vertices,batch.uvs,batch.alphas);
+    entry.tileMesh._boardLocal=batch.local;entry.tileMesh.setTexture(image.key).setSize(scene.scale.width,scene.scale.height).setOrtho(scene.scale.width,scene.scale.height).clear();if(batch.vertices.length)entry.tileMesh.addVertices(batch.vertices,batch.uvs,null,false,null,0xffffff,batch.alphas);
     entry.lastPaint=time;
   };
   const sample=async entry=>{
@@ -410,7 +289,7 @@ export async function createCanvasBoard(scene,grid,paint) {
           for(const i of [0,1,2,0,2,3]){vertices.push(points[i].x,-points[i].y);uvs.push(0,0);alpha.push((i<2?aa:ab)*p.opacity*entry.opacity);}
         }
       }
-      writeMesh(entry.rays,vertices,uvs,alpha);
+      entry.rays.setSize(scene.scale.width,scene.scale.height).setOrtho(scene.scale.width,scene.scale.height).clear();if(vertices.length)entry.rays.addVertices(vertices,uvs,null,false,null,0xffffff,alpha);
     }
     if(entry.drops)for(const [drop,sprite] of entry.drops)if(!data.drops.includes(drop)){const key=sprite.texture.key;sprite.destroy();scene.textures.remove(key);owned.delete(key);entry.drops.delete(drop);}
   };
@@ -462,12 +341,12 @@ export async function createCanvasBoard(scene,grid,paint) {
     }
     for(const entry of [...dirty]){if(entry.busy)continue;dirty.delete(entry);entry.busy=true;
       void sample(entry).catch(error=>console.warn('[CanvasBoard]',error)).finally(()=>entry.busy=false);}
-    if(cameraDirty||cameraTransitions.size||[...screenMotions].some(animation=>animation.playState==='running')){
+    if(cameraDirty||cameraTransitions.size){
       refreshCamera();
       if(cameraRebase){geometry.clear();anchors.clear();for(const entry of roots.values()){entry.project=plane(entry.node);for(const part of entry.recipe?.parts||[])part.project=plane(part.node);}refreshCamera();cameraRebase=false;paint.cameraSettled?.();}
       for(const entry of roots.values())if(entry.kind==='tiles'&&entry.image)paintTiles(entry,now());
       for(const entry of roots.values())if(!entry.recipe)for(const mesh of entry.objects)if(mesh._boardLocal){
-        for(let i=0;i<mesh._boardLocal.length/2;i++){const p=entry.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]);mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}queueMesh(mesh);
+        for(let i=0;i<mesh.vertices.length;i++){const p=entry.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]);mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}mesh.dirtyCache[9]=-1;
       }
       cameraDirty=false;
     }
@@ -481,11 +360,11 @@ export async function createCanvasBoard(scene,grid,paint) {
       const tint=part.node._canvasTint;
       if(tint&&!part.tint){part.tint=scene.add.image(0,0,mesh.texture.key).setDepth(entry.depth+.00001);entry.objects.push(part.tint);}
       if(part.tint){const a=motion.point(part.project(part.x,part.y)),b=motion.point(part.project(part.x+part.w,part.y+part.h));const rgb=tint?.color.split(',').map(Number)||[255,255,255];part.tint.setFrame(part.asset?.frameNames?.[part.frame]??part.frame??'__BASE').setPosition((a.x+b.x)/2,(a.y+b.y)/2).setDisplaySize(Math.abs(b.x-a.x),Math.abs(b.y-a.y)).setTintFill((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]).setAlpha((tint?.opacity||0)*motion.alpha).setVisible(motion.visible&&!!tint);}
-      for(let i=0;i<mesh.vertices.length;i++){const p=motion.point(part.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]));mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}queueMesh(mesh);
+      for(let i=0;i<mesh.vertices.length;i++){const p=motion.point(part.project(mesh._boardLocal[i*2],mesh._boardLocal[i*2+1]));mesh.vertices[i].x=p.x;mesh.vertices[i].y=-p.y;}mesh.dirtyCache[9]=-1;
     }
     for(const entry of roots.values())if(entry.fogDuration&&entry.image&&now()-entry.lastPaint>=33)paintTiles(entry,now());
   };
-  const destroy=()=>{if(disposed)return;disposed=true;scene.events.off('prerender',projectMeshes);pendingMeshes.clear();observer.disconnect();resizeObserver.disconnect();for(const type of ['pointerover','pointerout','focusin','focusout'])grid.removeEventListener(type,hover);for(const type of ['transitionrun','transitionend','transitioncancel','animationstart','animationend','animationcancel'])document.removeEventListener(type,cameraEvent);window.removeEventListener('gameScreenMotion',screenMotion);for(const type of ['combatPauseRestored','combatResumed'])window.removeEventListener(type,restoreScreenMotion);screenMotions.clear();for(const [node,e] of roots){e.cancelled=true;delete node.dataset.canvasPainted;clearObjects(e);paint.release(e.recipe);}roots.clear();for(const key of owned)scene.textures.remove(key);delete grid.dataset.canvasBoard;container?.classList.remove('canvas-board-active');paint.dispose();};
+  const destroy=()=>{if(disposed)return;disposed=true;observer.disconnect();resizeObserver.disconnect();for(const type of ['pointerover','pointerout','focusin','focusout'])grid.removeEventListener(type,hover);for(const type of ['transitionrun','transitionend','transitioncancel'])document.removeEventListener(type,cameraEvent);for(const [node,e] of roots){e.cancelled=true;delete node.dataset.canvasPainted;clearObjects(e);paint.release(e.recipe);}roots.clear();for(const key of owned)scene.textures.remove(key);delete grid.dataset.canvasBoard;container?.classList.remove('canvas-board-active');paint.dispose();};
   scan();await Promise.all([...dirty].map(entry=>sample(entry)));dirty.clear();
   grid.dataset.canvasBoard='ready';container?.classList.add('canvas-board-active');
   observer.observe(grid.closest('#game-windows')||grid.parentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','src','d','stroke'],characterData:true});

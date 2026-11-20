@@ -12,7 +12,7 @@ import {
   setTimeout, clearTimeout, clockNow, registerCombatState, waitForCombatResume, isCombatPaused,
   combatTarget,
 } from "./clock.js";
-import { combatNow, combatDelay, atCombatStart, scheduleCombatTask, cancelCombatTask, getCombatTimelineBacklog } from "./timeline.js";
+import { combatNow, combatDelay, atCombatStart, scheduleCombatTask, cancelCombatTask } from "./timeline.js";
 import { gameStarted, checkGameOver, stopAllIntervals, OrderEntity, getOrderSide, isBattleFinished } from "../app/state.js";
 import { createOrderButton, createQuitButton } from "../app/stages.js";
 import { entites } from "../entities/runtime.js";
@@ -139,19 +139,17 @@ function requestCombatContinuityCheck(entity, trigger) {
     if (trigger !== 'interrupted-turn') recoveryAttempts.delete(entity);
     if (continuityChecks.has(entity) || (recoveryAttempts.get(entity) || 0) >= 2) return;
     const signature = combatProgressSignature(entity), epoch = combatEpoch;
-    const checkAt = clockNow() + STALLED_TURN_DELAY;
     let deferredForBacklog = false;
     let timer = setTimeout(verifyContinuity, STALLED_TURN_DELAY);
     continuityChecks.set(entity, timer);
     function verifyContinuity() {
         if (continuityChecks.get(entity) !== timer) return;
-        // A browser timer can overtake queued work, including between batches
-        // when combatNow() temporarily equals wall time. Wait for that work.
-        // Never move the check before its original observation deadline when
-        // the logical clock is behind. Normal checks keep their timer/order.
-        if (!deferredForBacklog && getCombatTimelineBacklog() > 50) {
+        // A browser callback can overtake a healthy, delayed combat batch.
+        // Only in that case defer this one check into logical combat time.
+        // Ordinary checks keep their original deadline and event ordering.
+        if (!deferredForBacklog && clockNow() - combatNow() > 50) {
             deferredForBacklog = true;
-            timer = scheduleCombatTask(verifyContinuity, Math.max(STALLED_TURN_DELAY, checkAt - combatNow()));
+            timer = scheduleCombatTask(verifyContinuity, STALLED_TURN_DELAY);
             continuityChecks.set(entity, timer);
             return;
         }
