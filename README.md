@@ -35,7 +35,7 @@ les diagnostics locaux ignorés dans `outputs/` ne font pas partie du snapshot G
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.98.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.99.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -718,3 +718,66 @@ visuels ; les fichiers de règles n'ont pas changé. Les validations finales
 sont dans `delivery-validation/`, `board-optimized.log` et `static-delivery.log`,
 sous `outputs/canvas-board/`. Les tests du rendu HTML habituel restent dans
 `html-validated/` au même endroit.
+
+
+## Reconstruction du combat Phaser — v0.99.0-dev
+
+Avec `?monsters=webgl`, une scène entièrement montée en Phaser est désormais
+reconstruite depuis les données du checkpoint, sans copie HTML du plateau.
+Les constructeurs existants recréent les cases, les acteurs, les décors, les
+coffres et les objets au sol. Les positions et l'occupation viennent du modèle
+logique ; les PV, l'armure, les effets et les actions viennent de leurs états
+sauvegardés. La reconstruction ne relance ni déploiement, ni mort, ni génération
+de butin, ni tirage des effets visuels.
+
+Les coordonnées compilées, animations, interpolations des jauges, particules
+météo et restes des objets consommés retrouvent leur phase et leurs échéances.
+Les références de vues sont stables lorsque des enfants d'un conteneur changent.
+Les adaptateurs HTML d'interaction et de thème existent encore : ils sont
+recréés, puis alimentent la scène native. Le rendu HTML, un démarrage WebGL
+incomplet ou une scène contenant encore un effet externe non porté conservent
+leur chemin de sauvegarde visuelle. Les menus et l'inventaire restent en HTML.
+Aucun fichier de jeu supplémentaire n'a été créé. « Sort brisé » et le sang
+à la mort utilisent maintenant les commandes d'effets Phaser, avec leurs durées
+existantes et leurs états de reprise.
+
+Pour la suite, les anciens parents ne sont pas tous de simples enveloppes : ils
+permettent le cumul de l'idle, de la préparation, de l'attaque, des impacts et
+des déplacements. La simplification doit conserver l'ordre de composition,
+les pivots, les repères locaux et les horloges indépendantes. Arrêter une piste
+ne doit pas remettre les autres à zéro. Garder les groupes fonctionnels utiles,
+supprimer seulement les couches devenues inutiles et vérifier les animations
+combinées, leurs interruptions et leur reprise après F5 avant de retirer un
+adaptateur. La projection de perspective doit être reproduite explicitement ;
+une div ne doit pas devenir automatiquement un conteneur Phaser.
+
+Le format courant du checkpoint de pause est la version 3 ; aucune passerelle
+vers un ancien format n'est ajoutée, conformément aux règles du dépôt.
+F5, Ctrl+R et Ctrl+Maj+R passent par la même pause et attendent la validation
+IndexedDB avant le rechargement. Le bouton de rechargement du navigateur pendant
+un combat actif et une interruption brutale ne sont pas couverts par cette
+validation : la persistance continue de chaque action reste un chantier distinct.
+Ce lot prépare la suppression des adaptateurs ; il ne constitue pas une nouvelle
+optimisation du calcul des combats et ne promet pas de hausse des FPS.
+
+
+Validation de ce lot : quatre comparaisons déterministes contre `0.98.0-dev`
+(40/80 combattants, graines 1701/1702, cinq secondes simulées) conservent les
+résultats, les phases et le journal complet, ordre et échéances compris.
+Les sources figées et résultats sont dans `outputs/data-restore/delivery-comparison/`.
+`delivery-review.json` vérifie que les sources livrées sont identiques aux sources
+testées, hors normalisation des fins de ligne de trois fichiers de rendu.
+Il s'agit de contrôles fonctionnels ; aucune nouvelle mesure de FPS n'est annoncée.
+
+Les contrôles navigateur couvrent les projectiles, les différentes natures de
+mêlée et les doubles attaques, la pause, les reprises sans double impact, les
+boosts temporaires, la fuite, la mort et le butin, les objets au sol, les effets
+restants et le rendu indisponible. La reconstruction native interdit tout appel
+à `Math.random` dans le test. La pose des sprites, jauges et textes après F5
+est comparée à 0,001 pixel près sur les scénarios concernés. Cela ne remplace pas
+une comparaison exhaustive du rendu de chaque combinaison d'animations.
+Les contrôles finaux des transitions sont dans `outputs/data-restore/delivery-transitions/` ;
+ceux des quatre biomes dans `final-board/`, du drag souris/tactile dans le journal
+`final-native/verify-tactical-pause-browser.mjs.log`, et du rendu HTML dans
+`final-html/`, sous le même dossier de diagnostics. Les vérifications statiques
+et les tests de règles restent dans `delivery-static.log`.

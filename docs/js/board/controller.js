@@ -111,7 +111,7 @@ export function applyBiomeRealtime(biomeClass, options = {}) {
 }
 
 // Fonction pour générer les éléments de décor (foreground et ground)
-export function generateDecor(gameContainer, board, hexGrid) {
+export function generateDecor(gameContainer, board, hexGrid, options = {}) {
     // Vérifier que matchingBiome est défini avant d'utiliser ses propriétés
     if (matchingBiome && gameContainer) {
     const foreGround = document.createElement('div');
@@ -145,13 +145,13 @@ if (hexGrid) {
       // GROUND FX
     if (matchingBiome.ground_fx) {
         // Appliquer les effets "ground_fx" spécifiquement
-        handleGroundFx(matchingBiome.ground_fx, matchingBiome.classe);
+        handleGroundFx(matchingBiome.ground_fx, matchingBiome.classe, options);
     }
 
     // METEO
     if (matchingBiome.meteo) {
         // Appliquer la météo spécifiquement
-        handleMeteo(matchingBiome.meteo, matchingBiome.classe);
+        handleMeteo(matchingBiome.meteo, matchingBiome.classe, options);
     }
 }
 
@@ -778,6 +778,24 @@ export function captureCombatBoard(grid = document.getElementById('hexGrid')) {
   const placements = entites.filter(entity => registry.model.placements.has(String(entity.id)))
     .map(entity => ({ ...registry.model.placements.get(String(entity.id)) }));
   return { ...snapshotBoardState(registry.model), placements };
+}
+
+// Build only the presentation scaffold. Placement, ownership and released bodies
+// are restored separately from the board model, never from these view properties.
+export function restoreCombatBoardView(snapshot, { biome, framed = true } = {}) {
+  matchingBiome = biome || null;
+  const container = getOrCreateGameContainer();
+  container.querySelector(':scope > .worldmap')?.remove();
+  const grid = document.createElement('div'); grid.id = 'hexGrid'; grid.className = 'hex-grid';
+  if (framed) {
+    const global = document.createElement('div'); global.className = 'board-global';
+    const board = document.createElement('div'); board.className = 'board';
+    board.append(grid); global.append(board); container.append(global);
+    addBackground(board);
+    if (matchingBiome) generateDecor(container, board, grid, { restoring: true });
+  } else container.append(grid);
+  renderBoardGeometry(grid, restoreBoardState(snapshot).geometry);
+  return grid;
 }
 
 export function restoreCombatBoard(snapshot, actors = entites, grid = document.getElementById('hexGrid')) {

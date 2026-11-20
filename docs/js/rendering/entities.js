@@ -1,9 +1,9 @@
-import { createCanvasBoard, readBoardScreenGeometry } from './boardAdapter.js';
+import { combatViewReference, resolveCombatView, createCanvasBoard, readBoardScreenGeometry } from './boardAdapter.js';
 import {
   updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
   IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
-import { attachPhaserBoard, attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, ENTITY_TINTS } from "./animations.js";
+import { attachPhaserBoard, attachPhaserMonster, wakePhaserMonsters, renderCombatVisual, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, ENTITY_TINTS } from "./animations.js";
 import { persistentMediaMarkup, loadResource, loadSpriteAtlas, getAnimatedImageState, loadEffectAtlas } from "../data/loaderList.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
@@ -15,7 +15,7 @@ import { AttackerSbireTargetPriority, AllySbireTargetPriority } from "../combat/
 import { createUmbraBlock } from "../ui/statistics/components.js";
 import { createEntityAttackDisplay } from "../ui/attacks.js";
 import { createStuffDom } from "../ui/codex/profile.js";
-import { entites } from "../entities/runtime.js";
+import { entites, removedEntities } from "../entities/runtime.js";
 import { attackDetails } from "../data/attackList.js";
 import { resolveAttackDefinitionForEntity, resolveEntityAttackDisplayName } from "../combat/attackResolution.js";
 import { adjustFontSize } from "../ui/display.js";
@@ -415,6 +415,8 @@ export function stabilizeDeadEntityVisual(entite, { playDeathBlood = false } = {
 
   if (playDeathBlood) {
     document.getElementById(`bloodEffect_${entite.id}`)?.remove();
+    if (renderCombatVisual(entite.id, 'gif', { key: 'death-blood', className: 'effect-vfx blood',
+      src: './media/assets/effects/death-blood.gif', lifetime: 1000 })) return canvas;
     const bloodGif = document.createElement('img');
     playCachedGif(bloodGif, './media/assets/effects/death-blood.gif');
     bloodGif.className = 'effect-vfx blood';
@@ -432,19 +434,19 @@ export function getEntitySpriteSource(entite) {
     return dead ? entite.deadsprite || entite.DeadSprite || './media/sprites/0-dead.png' : entite.sprite;
 }
 
-export function createEntiteInDOM(entite, { spriteImage = null } = {}) {
-    entite.sizeInCells = entitySizeInCells(entite);
+export function createEntiteInDOM(entite, { spriteImage = null, restoring = false } = {}) {
+    if (!restoring) entite.sizeInCells = entitySizeInCells(entite);
     // console.log('// EXEC createEntiteInDOM');
 
     assertEntityType(entite);
-    determineClasse(entite);
+    if (!restoring) determineClasse(entite);
 
     const entityStartsDead =
       entite?.isDEAD === true ||
       entite?.statut?.includes?.("dead") ||
       Number(entite?.stats?.HP?.current ?? 0) <= 0;
 
-    if (entityStartsDead) {
+    if (entityStartsDead && !restoring) {
       entite.isDEAD = true;
       entite.isSurprised = false;
       entite.statut = ["dead"];
@@ -617,7 +619,7 @@ spriteEntite.onload = function () {
       const syncAuras = () => {
         if (!AuraContainer.isConnected) return;
         try {
-          syncEntityAuras(entite, AuraContainer);
+          syncEntityAuras(entite, AuraContainer, { restoring });
         } catch (error) {
           // Une aura défaillante ne doit jamais annuler le dessin du sprite.
           console.error(`❌ Synchronisation des auras impossible pour ${entite.id}`, error);
@@ -768,7 +770,7 @@ statusBar.appendChild(healthBarContainer);
     applyEntitySizeVisual(entite);
     calibrateEntityVisuals(spriteDiv, spriteContainer.parentElement, entityPopUpTop, entityPopDown,
       { auraHost: AuraContainer, effectsHost: effectsContainer });
-    if (entityStartsDead) {
+    if (entityStartsDead && !restoring) {
       setTimeout(() => {
         if (entiteBox.isConnected && (entite.isDEAD || entite.statut?.includes('dead')
             || Number(entite.stats?.HP?.current) <= 0)) {
@@ -777,7 +779,7 @@ statusBar.appendChild(healthBarContainer);
       }, 60);
     }
 
-    if (monsterWebGLRequested()) spriteReady.then(() => {
+    if (!restoring && monsterWebGLRequested()) spriteReady.then(() => {
       globalThis.requestAnimationFrame(() => mountWebGLMonster(entite, entiteBox));
     });
     return { element: entiteBox, canvas, spriteReady };
@@ -2571,10 +2573,21 @@ function mountWebGLMonster(entity, box) {
       const left=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio-width/2,top=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio-height/2;
       return {x:left,y:top,left,top,width,height,right:left+width,bottom:top+height};
     };
-    const pathFor=node=>{const path=[];for(let n=node;n&&n!==box;n=n.parentElement)path.unshift([...n.parentElement.children].indexOf(n));return path;};
-    const capture=()=>({presentation:presentation.capture(),armorPulseStart,armorFlashAt:[...layers.values()].find(l=>l.bar==='armor')?.flashAt,bindings:[...bindings.values()].filter(b=>box.contains(b.node)).map(b=>({path:pathFor(b.node),overrides:b.overrides,values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations})),tweens:[...b.tweens]}))});
-    const restore=state=>{armorPulseStart=state?.armorPulseStart??null;const armor=[...layers.values()].find(l=>l.bar==='armor');if(armor)armor.flashAt=state?.armorFlashAt;presentation.restore(state?.presentation);for(const saved of state?.bindings||[]){
-      const node=saved.path.reduce((parent,index)=>parent?.children[index],box),b=bindings.get(node);if(!b)continue;
+    const capture=()=>({presentation:presentation.capture(),armorPulseStart,
+      geometry:{originCell, layers:[...layers.values()].filter(l=>box.contains(l.node)).map(l=>({reference:combatViewReference(l.node,box),rect:l.rect,textScaleX:l.textScaleX,textScaleY:l.textScaleY,fill:l.fill,fillFrom:l.fillFrom,fillTarget:l.fillTarget,fillAt:l.fillAt})),
+        anchors:Object.fromEntries(Object.entries(presentationAnchors).map(([key,a])=>[key,{rect:a.rect,scale:a.scale}]))},
+      armorFlashAt:[...layers.values()].find(l=>l.bar==='armor')?.flashAt,bindings:[...bindings.values()].filter(b=>box.contains(b.node)).map(b=>({reference:combatViewReference(b.node,box),rect:b.rect,origin:b.origin,overrides:b.overrides,values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations})),tweens:[...b.tweens]}))});
+    const restore=state=>{
+      // The compiled pose is render data too: resampling an animated CSS box
+      // would introduce its current shake a second time after a reload.
+      const previous=state?.geometry?.originCell,rx=previous?originCell.w/previous.w:1,ry=previous?originCell.h/previous.h:1;
+      const point=p=>previous?{x:originCell.x+(p.x-previous.x)*rx,y:originCell.y+(p.y-previous.y)*ry}:{...p};
+      const rect=r=>({...point(r),w:r.w*rx,h:r.h*ry});
+      for(const saved of state?.geometry?.layers||[]){const l=layers.get(resolveCombatView(saved.reference,box));if(l)Object.assign(l,{rect:rect(saved.rect),textScaleX:saved.textScaleX*rx,textScaleY:saved.textScaleY*ry,fill:saved.fill,fillFrom:saved.fillFrom,fillTarget:saved.fillTarget,fillAt:saved.fillAt});}
+      for(const [key,saved] of Object.entries(state?.geometry?.anchors||{})){const a=presentationAnchors[key];if(a)Object.assign(a,{rect:rect(saved.rect),scale:{x:saved.scale.x*rx,y:saved.scale.y*ry}});}
+      armorPulseStart=state?.armorPulseStart??null;const armor=[...layers.values()].find(l=>l.bar==='armor');if(armor)armor.flashAt=state?.armorFlashAt;presentation.restore(state?.presentation);for(const saved of state?.bindings||[]){
+      const node=resolveCombatView(saved.reference,box),b=bindings.get(node);if(!b)continue;
+      if(saved.rect)b.rect=rect(saved.rect);if(saved.origin)b.origin=point(saved.origin);
       b.overrides={...saved.overrides};b.values={...saved.values};b.base={...saved.base};b.animations=saved.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));b.tweens=new Map(saved.tweens);
       if(b.overrides.display!==undefined)b.css.display=b.overrides.display;
       if(b.overrides.width!==undefined)b.fill=monsterClamp(parseFloat(b.overrides.width)/100);
@@ -2585,7 +2598,7 @@ function mountWebGLMonster(entity, box) {
 
 window.addEventListener('combatPauseRestored', () => {
   if (!monsterWebGLRequested()) return;
-  for (const entity of entites) {
+  for (const entity of [...entites, ...removedEntities]) {
     const box = document.getElementById(`Box_Entite_${entity.id}`);
     if (box && !monsterViews.has(box)) { box.removeAttribute('data-monster-webgl'); mountWebGLMonster(entity, box); }
   }
@@ -2651,9 +2664,8 @@ async function canvasBoardComponent(scene,root) {
     });
     return {alpha,visible,point:p=>{let {x,y}=p;for(const t of transforms){const dx=(x-t.x)*t.sx,dy=(y-t.y)*t.sy;x=t.x+dx*t.cos-dy*t.sin+t.dx;y=t.y+dx*t.sin+dy*t.cos+t.dy;}return {x,y,w:p.w};}};
   };
-  const pathFor=node=>{const path=[];for(let n=node;n!==root;n=n.parentElement)path.unshift([...n.parentElement.children].indexOf(n));return path;};
-  const capture=()=>[...bindings.values()].map(b=>({path:pathFor(b.node),values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations}))}));
-  const restore=saved=>{for(const value of saved||[]){const b=bindings.get(value.path.reduce((n,i)=>n?.children[i],root));if(b){b.values=value.values;b.base=value.base;b.animations=value.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));}}lastTime=undefined;};
+  const capture=()=>[...bindings.values()].filter(b=>root.contains(b.node)).map(b=>({reference:combatViewReference(b.node,root),values:b.values,base:b.base,animations:b.animations.map(a=>({...a,iterations:a.iterations===Infinity?'Infinity':a.iterations}))}));
+  const restore=saved=>{for(const value of saved||[]){const b=bindings.get(resolveCombatView(value.reference,root));if(b){b.values=value.values;b.base=value.base;b.animations=value.animations.map(a=>({...a,iterations:a.iterations==='Infinity'?Infinity:a.iterations}));}}lastTime=undefined;};
   return {parts:parts.filter(p=>p.decoration||p.textEntry||p.asset),motion,capture,restore};
 }
 

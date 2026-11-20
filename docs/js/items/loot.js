@@ -1598,7 +1598,7 @@ function syncChestGlitter(source, container) {
     container.querySelectorAll(":scope > .glitter-loot-container:not(.is-dispersing)").forEach((glitter) => glitter.remove());
   }
 }
-function syncChestState(source, container = null) {
+function syncChestState(source, container = null, { restoring = false } = {}) {
   container ||= document.querySelector(
     `.chest-container[data-chest-id="${CSS.escape(String(source.id))}"]`
   );
@@ -1633,6 +1633,7 @@ function syncChestState(source, container = null) {
     }
   }
   if (loot instanceof HTMLCanvasElement) scheduleChestCanvasRefresh(loot);
+  if (restoring) return;
   const entrancePending = container.dataset.chestEntrancePending === "true";
   if (sourceHasLostLoot(source) && markLootLossGlitterPlayed(source)) {
     disperseLootGlitter(container);
@@ -2048,15 +2049,16 @@ function ensureInteraction() {
 }
 export function createChestLoot(sourceOrId, {
   spawnMode = "auto",
-  stageId = null
+  stageId = null,
+  restoring = false
 } = {}) {
   const source = normalizeLootSource(resolveLootSource(sourceOrId), "chest");
   if (!isChestSource(source)) return null;
   const hadGenerationDate = Boolean(source.lootGeneratedAt);
-  if (source.statut !== "destroyed" && source.statut !== "looted") {
+  if (!restoring && source.statut !== "destroyed" && source.statut !== "looted") {
     ensureSimpleLootBundle(source);
   }
-  if (!hadGenerationDate) saveLootSource(source);
+  if (!restoring && !hadGenerationDate) saveLootSource(source);
   const activeStageId = getActiveStageId();
   const requestedStageId = String(stageId ?? activeStageId);
   if (!activeStageId || requestedStageId !== activeStageId || String(source.stageId) !== activeStageId) return null;
@@ -2086,7 +2088,7 @@ export function createChestLoot(sourceOrId, {
   const [defaultPosition] = source.statut === "locked"
     ? hexCoordonne(chestSide === "neutral" ? "B" : chestSide, "top", "end", 1)
     : chestSide === 'neutral' ? [findUnlockedPosition(grid)] : hexCoordonne(chestSide, "middle", "center", 1);
-  const position = preferredPosition && !isHexOccupied(preferredPosition)
+  const position = restoring ? preferredPosition : preferredPosition && !isHexOccupied(preferredPosition)
     ? preferredPosition
     : defaultPosition;
 
@@ -2101,7 +2103,7 @@ export function createChestLoot(sourceOrId, {
     className: "chest-battle-element"
   }, { container: grid, requireExistingHex: true });
   if (!battleElement) return null;
-  persistBattlePosition(source, position);
+  if (!restoring) persistBattlePosition(source, position);
   battleElement.id = `chest-ui-${source.id}`;
   Object.assign(battleElement.dataset, {
     entityType: "passive",
@@ -2137,7 +2139,8 @@ export function createChestLoot(sourceOrId, {
   ensureInteraction();
   const mode = spawnMode === "auto" ? source.statut === "created" ? "initial" : "in-place" : spawnMode;
   if (mode === "initial") container.dataset.chestEntrancePending = "true";
-  syncChestState(source, container);
+  syncChestState(source, container, { restoring });
+  if (restoring) return container;
   if (mode === "initial") {
     const entranceAnimation = container.querySelector(":scope > .chest-animation");
     const entranceFinished = waitForChestCssAnimation(entranceAnimation, 2500);
@@ -2406,7 +2409,7 @@ function ensureCorpseGlitter(source, entityBox) {
   }
   return glitter;
 }
-function syncCorpseState(source, entityBox = null) {
+function syncCorpseState(source, entityBox = null, { restoring = false } = {}) {
   if (!isCorpseSource(source)) return null;
   entityBox ||= findCorpseEntityBox(source);
   if (!entityBox?.isConnected || !entityBox.querySelector('.dead-sprite')) return null;
@@ -2416,6 +2419,7 @@ function syncCorpseState(source, entityBox = null) {
   entityBox.dataset.lootSourceType = "corpse";
   entityBox.style.cursor = remaining ? "pointer" : "default";
   entityBox.title = remaining ? `Fouiller le corps de ${corpseDisplayName(source)}` : `Corps de ${corpseDisplayName(source)} d\xE9j\xE0 fouill\xE9`;
+  if (restoring) { glitterHost(entityBox, source); return entityBox; }
   if (sourceHasLostLoot(source) && markLootLossGlitterPlayed(source)) {
     disperseLootGlitter2(entityBox);
   }
@@ -2535,6 +2539,14 @@ export function createCorpseLoot(entity) {
     detail: { corpse: source, entity }
   }));
   return source;
+}
+export function restoreCorpseLootViews(ids) {
+  ensureInteraction2();
+  for (const id of ids || []) {
+    const source = resolveLootSource(id);
+    if (!source || !syncCorpseState(source, null, { restoring: true }))
+      throw new Error('Cadavre du combat introuvable : ' + id);
+  }
 }
 export function renderPersistentCorpses(stageId = getActiveStageId()) {
   ensureInteraction2();

@@ -38,7 +38,7 @@ export function initCanvas(parentElement, canvasId, initFunction) {
         canvas.width = 1536; // Largeur fixe
         canvas.height = 676; // Hauteur fixe
         parentElement.appendChild(canvas);
-        initFunction(canvasId); // Appeler la fonction d'initialisation spécifique
+        initFunction?.(canvasId); // Appeler la fonction d'initialisation spécifique
     } else {
         console.log(`Un canvas pour ${canvasId} existe déjà.`);
     }
@@ -82,7 +82,7 @@ function animate() {
     }
 }
 
-export function handleMeteo(meteoString, biomeClass) {
+export function handleMeteo(meteoString, biomeClass, { restoring = false } = {}) {
     // Récupérer ou créer la div parente "meteo-fx"
 	let gameContainer = document.getElementById('game-windows');
     let existingMeteo = document.getElementById('meteo-fx');
@@ -110,13 +110,13 @@ export function handleMeteo(meteoString, biomeClass) {
             // Appliquer les effets météo en fonction du type
             switch (meteoType) {
                 case 'snowstorm':
-                    initCanvas(meteo, 'snowCanvas', initSnowstorm);
+                    initCanvas(meteo, 'snowCanvas', restoring ? null : initSnowstorm);
                     break;
                 case 'sunray':
-                    initCanvas(meteo, 'sunrayCanvas', initSunray);
+                    initCanvas(meteo, 'sunrayCanvas', restoring ? null : initSunray);
                     break;
                 case 'waterDrop':  // Nouveau cas pour l'effet "waterDrop"
-                    initCanvas(meteo, 'waterDropCanvas', initWaterDrop); // Initialiser le canvas pour les gouttes d'eau
+                    initCanvas(meteo, 'waterDropCanvas', restoring ? null : initWaterDrop); // Initialiser le canvas pour les gouttes d'eau
                     break;
                 default:
                     console.log(`Aucun effet météo spécifique pour: ${meteoType}`);
@@ -129,7 +129,7 @@ export function handleMeteo(meteoString, biomeClass) {
 }
 
 // Gestion des effets de sol (ground_fx)
-export function handleGroundFx(groundFxString, biomeClass) {
+export function handleGroundFx(groundFxString, biomeClass, { restoring = false } = {}) {
     const hexGrid = document.getElementById('hexGrid');
 
     if (hexGrid) {
@@ -157,7 +157,7 @@ export function handleGroundFx(groundFxString, biomeClass) {
 
                 switch (groundFxType) {
                     case 'droplet':
-                        initCanvas(groundFx, 'dropletCanvas', initDroplet);
+                        initCanvas(groundFx, 'dropletCanvas', restoring ? null : initDroplet);
                         break;
                     case 'swampFog':
                         swampFog(); // Appel à la fonction swampFog pour ajouter les éléments
@@ -603,6 +603,27 @@ export function glitterStuff(selector, maxGlitters = 4) {
   });
 }
 
+export function restoreLootGlitter(target, saved) {
+    const container = document.createElement('div');
+    container.className = saved.className; container.style.cssText = saved.style;
+    container.dataset.initialized = 'true';
+    for (const particle of saved.particles) {
+        const node = document.createElement(particle.tinted ? 'span' : 'img');
+        node.className = particle.className; node.style.cssText = particle.style;
+        if (!particle.tinted) node.src = './media/assets/misc/glitter-loot.svg';
+        node.draggable = false; node.setAttribute('aria-hidden', 'true'); container.append(node);
+    }
+    target.append(container);
+    if (saved.fadeAt != null && saved.removeAt != null) bindLootGlitterExpiry(target, container, Number(saved.fadeAt), Number(saved.removeAt));
+}
+
+function bindLootGlitterExpiry(target, container, fadeAt, removeAt) {
+    target.dataset.glitterDispersing = 'true';
+    container.dataset.glitterFadeAt = fadeAt; container.dataset.glitterRemoveAt = removeAt;
+    setTimeout(() => container.classList.add('is-fading'), Math.max(0, fadeAt - clockNow()));
+    setTimeout(() => { container.remove(); delete target.dataset.glitterDispersing; }, Math.max(0, removeAt - clockNow()));
+}
+
 export function glitterLoot(target, options = 15) {
   const random = (min, max) => Math.random() * (max - min) + min;
   const config = typeof options === 'number' ? { count: options } : (options || {});
@@ -735,14 +756,7 @@ export function disperseLootGlitter(target, {
       sourceGlitter.style.setProperty('--burst-duration', `${duration}ms`);
     });
 
-    setTimeout(() => {
-      container.classList.add('is-fading');
-    }, resolvedFadeDelay);
-
-    setTimeout(() => {
-      container.remove();
-      delete element.dataset.glitterDispersing;
-    }, resolvedFadeDelay + resolvedFadeDuration);
+    bindLootGlitterExpiry(element, container, clockNow() + resolvedFadeDelay, clockNow() + resolvedFadeDelay + resolvedFadeDuration);
   });
 }
 
@@ -859,5 +873,7 @@ registerCombatState('weather', () => Object.values(activeEffects).map(effect => 
         if (!document.getElementById(entry.canvasId)) continue;
         if (entry.kind === 'waterDrop') initWaterDrop(entry.canvasId, entry.settings, entry);
         else ({ snowstorm: initSnowstorm, sunray: initSunray, droplet: initDroplet })[entry.kind]?.(entry.canvasId, entry);
+        const effect = Object.values(activeEffects).find(e => e.ctx.canvas.id === entry.canvasId);
+        if (effect) effect.ctx.canvas._combatWeather = effect;
     }
 });

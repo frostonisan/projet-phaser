@@ -169,15 +169,7 @@ function settleGroundSummon(record, status) {
             glitter.style[property] = glitterStyle[property];
         }
         remnant.appendChild(glitter);
-        const observer = new MutationObserver(() => {
-            if (remnant.childElementCount) return;
-            observer.disconnect();
-            groundLootRemnants.delete(remnant);
-            remnant.remove();
-            cleanupGroundSummonHex(lastHex);
-        });
-        observer.observe(remnant, { childList: true });
-        groundLootRemnants.set(remnant, observer);
+        watchGroundLootRemnant(remnant, lastHex);
         disperseLootGlitter(remnant);
     }
     record.node?.remove();
@@ -605,7 +597,7 @@ export async function summonEntite(target, template, attacker, removeEffectCallb
     return { summonId: entity.id, targetElement: box };
 }
 
-function summonConsommable(target, summon) {
+function summonConsommable(target, summon, restoredId = null) {
     const hexElement = getEntityHex(target);
     if (!hexElement) {
         console.warn('Élément parent .hex introuvable');
@@ -616,8 +608,7 @@ function summonConsommable(target, summon) {
     refreshHexOccupancy(hexElement);
     const effectsContainer = getGroundSummonContainer(hexElement);
 
-    const uniqueId = crypto.randomUUID();
-    const summonId = `summon-${summon.summonId}-${uniqueId}`;
+    const summonId = restoredId || `summon-${summon.summonId}-${crypto.randomUUID()}`;
 
     let summonContainer = document.createElement('div');
     summonContainer.id = summonId;
@@ -809,7 +800,33 @@ function bindSummonExpiry(entity, onEnd) {
         onEnd?.();
     }, Math.max(0, entity.summonExpiresAt - clockNow()));
 }
+function watchGroundLootRemnant(remnant, hex) {
+    const observer = new MutationObserver(() => {
+        if (remnant.childElementCount) return;
+        observer.disconnect(); groundLootRemnants.delete(remnant); remnant.remove(); cleanupGroundSummonHex(hex);
+    });
+    observer.observe(remnant, { childList: true }); groundLootRemnants.set(remnant, observer);
+}
+export function restoreGroundSummonViews(records, entities, remnants = []) {
+    for (const saved of remnants) {
+        const hex = combatTarget(saved.hex, entities);
+        if (!hex) throw new Error('Vestige au sol sans case.');
+        const node = document.createElement('div'); node.className = 'ground-loot-remnant battle-ground-item-active';
+        node.style.cssText = saved.style; getGroundSummonContainer(hex).append(node);
+        watchGroundLootRemnant(node, hex);
+    }
+    for (const data of records || []) {
+        const hex = combatTarget(data.hex, entities);
+        if (!hex || !data.summon) throw new Error('Objet au sol incomplet : ' + data.id);
+        summonConsommable(hex, data.summon, data.id);
+        const node = document.getElementById(data.id);
+        node.classList.add('battle-ground-item-active');
+        if (data.itemId) node.dataset.itemId = data.itemId;
+        if (data.effectClass) hex.classList.add(data.effectClass);
+    }
+}
 registerCombatState('ground', () => ({
+    remnants: [...groundLootRemnants.keys()].filter(n => n.isConnected).map(n => ({ hex: combatReference(n.closest('.hex')), style: n.style.cssText })),
     records: [...groundSummons.values()].map(record => ({ ...combatData(record), hex: combatReference(record.hex) })),
     poisons: [...jarretPoisonEffects.values()].map(active => active.state),
 }), async (saved, { entities }) => {

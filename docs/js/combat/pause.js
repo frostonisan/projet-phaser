@@ -6,7 +6,8 @@ import { gameStarted, isBattleFinished, getOrderSide, restoreRunningBattle, mana
 import { entites, removedEntities } from "../entities/runtime.js";
 import { captureAdminSession, restoreAdminSession } from "../storage/sessionStorage.js";
 
-import { captureCombatBoard, restoreCombatBoard } from "../board/controller.js";
+import { captureCombatBoard, restoreCombatBoard, restoreCombatBoardView } from "../board/controller.js";
+import { combatViewReference, resolveCombatView } from '../rendering/boardAdapter.js';
 import { persistentMediaMarkup, loadResource } from "../data/loaderList.js";
 
 // Combat visuals freeze and restore with the pause lifecycle.
@@ -83,8 +84,80 @@ function resumeCombatVisuals() {
 }
 
 
+// Phaser owns the saved visual timeline. Only layout/style values are retained
+// for the temporary input/theme adapters; their structure is rebuilt by factories.
+// The HTML renderer keeps its existing checkpoint until its effects are ported.
+function captureCombatScene() {
+  const grid = document.getElementById('hexGrid');
+  if (!grid || !grid.querySelector('[data-monster-webgl="ready"]')
+    || [...document.querySelectorAll('#hexGrid .entite-box')].some(n => n.dataset.monsterWebgl !== 'ready')
+    || document.querySelector('body > .BattleFX, body > .projectile-parent, body > .magic-projectile-dispersion, body > .melee-clone-death-blood')
+    // Effects still owned by HTML need that renderer's checkpoint until ported.
+    || grid.querySelector('.effect-vfx, .battle-regen-hp-vfx, .battle-element:not(.chest-battle-element)')) return null;
+  const properties = [...document.querySelectorAll('#game-windows, #game-windows *')]
+    .filter(n => !n.closest(UI + ', #phaser-projectiles') && n instanceof HTMLElement)
+    .map(node => ({ reference: combatViewReference(node), key: keyFor(node),
+      className: node.className, style: persistentMediaMarkup(node.style.cssText),
+      // Rendering identifiers are not combat positions or entity statistics.
+      data: Object.fromEntries(['canvasKey', 'canvasSource', 'canvasDraw', 'gifSource', 'animationConfigured',
+        'combatRemoveAt', 'boardOccupant'].filter(k => node.dataset[k] !== undefined).map(k => [k, node.dataset[k]])),
+      ...(node instanceof HTMLCanvasElement ? { width: node.width, height: node.height } : {}) }));
+  const glitter = [...grid.querySelectorAll('.glitter-loot-container')].map(node => ({
+    parent: combatViewReference(node.parentElement), className: node.className, style: node.style.cssText,
+    fadeAt: node.dataset.glitterFadeAt, removeAt: node.dataset.glitterRemoveAt,
+    particles: [...node.children].map(n => ({ tinted: n.tagName !== 'IMG', className: n.className, style: n.style.cssText })),
+  }));
+  return { framed: !!grid.closest('.board-global'), properties, glitter,
+    departures: removedEntities.filter(e => grid.contains(document.getElementById(`Box_Entite_${e.id}`))).map(e => e.id),
+    corpses: [...grid.querySelectorAll('[data-corpse-loot-id]')].map(n => n.dataset.corpseLootId),
+    chests: [...grid.querySelectorAll('.chest-container')].map(n => n.dataset.chestId) };
+}
+function restoreSceneProperties(scene) {
+  for (const entry of scene.properties) {
+    const node = resolveCombatView(entry.reference); if (!node) continue;
+    node.dataset.combatVisualKey = entry.key;
+    node.className = entry.className; node.style.cssText = entry.style;
+    Object.assign(node.dataset, entry.data);
+    if (node instanceof HTMLCanvasElement) { node.width = entry.width; node.height = entry.height; }
+  }
+}
+async function rebuildCombatScene(checkpoint) {
+  const scene = checkpoint.visuals.scene;
+  const [{ createGameContainer }, { createEntiteInDOM }, { restoreGroundSummonViews },
+    { createChestLoot, restoreCorpseLootViews }, { restoreLootGlitter }] = await Promise.all([
+    import('../ui/application.js'), import('../rendering/entities.js'), import('./summons.js'),
+    import('../items/loot.js'), import('../biome/meteo.js'),
+  ]);
+  createGameContainer();
+  const grid = restoreCombatBoardView(checkpoint.board, { ...scene, biome: checkpoint.state.board?.matchingBiome });
+  restoreSceneProperties(scene);
+  // Objects enter their saved cells before the final occupancy model is installed.
+  for (const id of scene.chests) if (!createChestLoot(id, { stageId: checkpoint.stageId, restoring: true }))
+    throw new Error('Coffre du combat introuvable : ' + id);
+  restoreGroundSummonViews(checkpoint.state.ground?.records, entites, checkpoint.state.ground?.remnants);
+  const placements = new Map(checkpoint.board.placements.map(p => [p.id, p]));
+  const actors = [...entites, ...removedEntities.filter(e => scene.departures.includes(e.id))];
+  await Promise.all(actors.map(async entity => {
+    const placement = placements.get(String(entity.id)) || (scene.departures.includes(entity.id)
+      ? { anchor: entity.battlePosition || entity.position } : null);
+    if (!placement) return;
+    const created = createEntiteInDOM(entity, { restoring: true });
+    created.element.dataset.monsterWebgl = 'restoring';
+    grid.querySelector(`.hex[data-position="${CSS.escape(placement.anchor)}"]`).append(created.element);
+    const sprite = await created.spriteReady;
+    if (!sprite.loaded) throw new Error('Sprite du combat inaccessible : ' + entity.id);
+  }));
+  restoreCorpseLootViews(scene.corpses);
+  for (const saved of scene.glitter) {
+    const parent = resolveCombatView(saved.parent);
+    if (parent) restoreLootGlitter(parent, saved);
+  }
+  restoreSceneProperties(scene);
+}
+
 function captureCombatVisuals() {
   freezeNewVisuals();
+  const scene = captureCombatScene();
   const animations = [];
   for (const [animation, previous] of held) {
     const node = animation.effect?.target;
@@ -104,20 +177,21 @@ function captureCombatVisuals() {
   const roots = [...document.querySelectorAll(ROOTS)].filter(node => !node.parentElement?.closest(ROOTS));
   document.querySelectorAll('.sprite-container, .sprite-canvas, .sprite, .animation-sprite').forEach(keyFor);
   const styles = [...document.querySelectorAll('[data-combat-visual-key]')].map(node => ({ key: node.dataset.combatVisualKey, style: node.getAttribute('style') === null ? null : persistentMediaMarkup(node.getAttribute('style')) }));
-  const media = [...document.querySelectorAll('audio, video')].map(node => ({ key: keyFor(node), html: persistentMediaMarkup(node.outerHTML),
+  const media = [...document.querySelectorAll('audio, video')].map(node => ({ key: keyFor(node), tag: node.localName, src: persistentMediaMarkup(node.currentSrc || node.src), loop: node.loop, className: node.className,
     time: node.currentTime, volume: node.volume, muted: node.muted, rate: node.playbackRate, playing: audioHeld.has(node) }));
-  return { animations, canvases, styles, media, sequence: visualId, html: roots.map(node => {
+  return { animations, canvases, styles, media, sequence: visualId, ...(scene ? { scene } : { html: roots.map(node => {
     const scene = node.cloneNode(true);
     scene.querySelector('#combat-pause-fx')?.remove();scene.querySelector('#phaser-projectiles')?.remove();
     return persistentMediaMarkup(scene.outerHTML);
-  }) };
+  }) }) };
 }
 
-async function restoreCombatVisuals(snapshot) {
+async function restoreCombatVisuals(snapshot, checkpoint) {
   visualId = snapshot.sequence;
   const phaserHost=document.getElementById('phaser-projectiles');if(phaserHost)document.body.append(phaserHost);
   for (const node of document.querySelectorAll(ROOTS)) node.remove();
-  for (const html of snapshot.html) document.body.insertAdjacentHTML('beforeend', html);
+  if (snapshot.scene) await rebuildCombatScene(checkpoint);
+  else for (const html of snapshot.html) document.body.insertAdjacentHTML('beforeend', html);
   const gifJobs = [];
   for (const node of document.querySelectorAll(`${ROOTS.replaceAll(', ', ' img, ')} img`)) {
     if (/\.gif(?:[?#]|$)/i.test(node.src)) gifJobs.push(loadResource(node.src).then(resource => { node.src = resource.url; }));
@@ -144,7 +218,11 @@ async function restoreCombatVisuals(snapshot) {
 function restoreCombatMedia(snapshot) {
   for (const data of snapshot.media || []) {
     let node = byKey(data.key);
-    if (!node) { (document.querySelector('.sound-controls') || document.body).insertAdjacentHTML('beforeend', data.html); node = byKey(data.key); }
+    if (!node) {
+      node = document.createElement(data.tag); node.dataset.combatVisualKey = data.key;
+      node.src = data.src; node.loop = data.loop; node.className = data.className;
+      (document.querySelector('.sound-controls') || document.body).append(node);
+    }
     node.autoplay = false; node.pause(); node.volume = data.volume; node.muted = data.muted; node.playbackRate = data.rate;
     node.currentTime = data.time;
     if (data.playing) audioHeld.add(node);
@@ -407,7 +485,7 @@ function saveCheckpoint() {
         const capturedRevision = revision;
         pauseCombatVisuals();
         const snapshot = {
-          version: 2, now: clockNow(), sequence: combatClockSequence(), orderSide: getOrderSide(),
+          version: 3, now: clockNow(), sequence: combatClockSequence(), orderSide: getOrderSide(),
           pause: getCombatPauseReasons(),
           levelRunning: window.levelRunning, stageId: window.currentStageId,
           bodyClass: document.body.className, bodyStyle: document.body.style.cssText,
@@ -505,7 +583,7 @@ async function restore() {
   if (sessionStorage.getItem(AVAILABLE) !== '1') return false;
   const snapshot = await stored('get');
   if (!snapshot) { sessionStorage.removeItem(AVAILABLE); restoreAdminSession(null); return false; }
-  if (snapshot.version !== 2 || !Array.isArray(snapshot.entities) || !Number.isFinite(snapshot.now)) throw new Error('Sauvegarde de pause invalide.');
+  if (snapshot.version !== 3 || !Array.isArray(snapshot.entities) || !Number.isFinite(snapshot.now)) throw new Error('Sauvegarde de pause invalide.');
   busy = true;
   tacticalPause = Boolean(snapshot.pause?.tactical);
   automaticPause = Boolean(snapshot.pause?.absolute);
@@ -517,7 +595,7 @@ async function restore() {
   entites.splice(0, entites.length, ...snapshot.entities);
   removedEntities.splice(0, removedEntities.length, ...(snapshot.removed || []));
   restoreRunningBattle(snapshot.orderSide);
-  await restoreCombatVisuals(snapshot.visuals);
+  await restoreCombatVisuals(snapshot.visuals, snapshot);
   restoreCombatBoard(snapshot.board);
   // Runtime handles from the old document must never cancel newly bound timers.
   for (const entity of entites) {
@@ -559,7 +637,7 @@ export function restorePausedCombat() {
 }
 
 document.addEventListener('keydown', event => {
-  if (event.key === 'F5' && gameStarted && !isBattleFinished() && !window.__combatSimulation) {
+  if ((event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r')) && gameStarted && !isBattleFinished() && !window.__combatSimulation) {
     // Freeze before unloading and wait for IndexedDB: a live order must resume
     // at its saved deadline, just like an order paused explicitly by the player.
     event.preventDefault(); event.stopImmediatePropagation();

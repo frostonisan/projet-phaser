@@ -267,8 +267,12 @@ export function presentExecutionImpact(target) {
 export function presentBrokenSpell(entite, pct) {
 
 
+    const native = renderCombatVisual(entite.id, 'gif', {
+      className: 'effect-vfx broken-spell', src: './media/assets/effects/broken-spell.gif', lifetime: 2100,
+      style: { position: 'absolute', pointerEvents: 'none', zIndex: '10' },
+    });
     const effectsContainer = document.getElementById(`effectsContainer_${entite.id}`);
-    if (effectsContainer) {
+    if (!native && effectsContainer) {
       const brokenVFX = document.createElement("img");
       playCachedGif(brokenVFX, `./media/assets/effects/broken-spell.gif`);
       brokenVFX.className = "effect-vfx broken-spell";

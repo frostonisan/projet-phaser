@@ -1,3 +1,24 @@
+// Stable view references survive reconstruction from combat data. Child indexes
+// only distinguish siblings with the same tag/class, not unrelated HUD/effect nodes.
+export function combatViewReference(node, root = document.body) {
+  if (!node || !root.contains(node)) return null;
+  const path = [];
+  for (let current = node; current && current !== root; current = current.parentElement) {
+    if (current.id) return { id: current.id, path };
+    if (current.matches('.hex[data-position]')) return { cell: current.dataset.position, path };
+    const selector = current.localName + (current.classList[0] ? '.' + CSS.escape(current.classList[0]) : '');
+    path.unshift({ selector, index: [...current.parentElement.children].filter(n => n.matches(selector)).indexOf(current) });
+  }
+  return { path };
+}
+export function resolveCombatView(reference, root = document.body) {
+  if (!reference) return null;
+  let node = reference.id ? document.getElementById(reference.id)
+    : reference.cell ? document.querySelector(`#hexGrid .hex[data-position="${CSS.escape(reference.cell)}"]`) : root;
+  for (const part of reference.path) node = [...(node?.children || [])].filter(n => n.matches(part.selector))[part.index];
+  return node || null;
+}
+
 // The current HTML board is one adapter for the logical grid and its coordinates.
 import { createBoardGeometry, footprintCells, footprintCenter } from '../board/model.js';
 const geometryCache = new WeakMap(), cellGeometry = new WeakMap();

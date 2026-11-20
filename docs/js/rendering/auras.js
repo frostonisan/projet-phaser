@@ -943,7 +943,7 @@ export function cleanupEntityAuras(entite) {
 export function syncEntityAuras(
   entite,
   sourceOrContainer = "battle",
-  { lifeOnly = false } = {}
+  { lifeOnly = false, restoring = false } = {}
 ) {
   if (!entite?.stats) {
     return;
@@ -970,7 +970,7 @@ export function syncEntityAuras(
    * Même pipeline que le tint des dégâts : applyEntityTint() redessine la
    * couleur en source-atop sans modifier l'opacité CSS du canvas.
    */
-  syncArmorEntityTint(entite);
+  if (!restoring) syncArmorEntityTint(entite);
 
   if (!container) {
     return;
@@ -978,7 +978,7 @@ export function syncEntityAuras(
 
   const ctxKey = getAuraContextKey(container);
 
-  syncConfiguredRandomAuras(
+  if (!restoring) syncConfiguredRandomAuras(
     entite,
     container,
     ctxKey
@@ -999,7 +999,8 @@ export function syncEntityAuras(
   syncShieldSweep(
     entite,
     container,
-    ctxKey
+    ctxKey,
+    restoring
   );
 }
 function sanitizeAuraCssId(value) {
@@ -1526,7 +1527,8 @@ function ensureShieldSweepStyles() {
 function syncShieldSweep(
   entite,
   container,
-  ctxKey
+  ctxKey,
+  restoring = false
 ) {
   ensureShieldSweepStyles();
 
@@ -1595,8 +1597,8 @@ function syncShieldSweep(
     spriteRoot.appendChild(effect);
   }
 if (!effect.dataset.animationConfigured) {
-  const duration = 3200 + Math.random() * 2400;
-  const delay = -(Math.random() * duration);
+  const duration = restoring ? 3200 : 3200 + Math.random() * 2400;
+  const delay = restoring ? 0 : -(Math.random() * duration);
 
   effect.style.setProperty(
     "--shield-duration",
