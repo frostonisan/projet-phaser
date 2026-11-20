@@ -7,6 +7,74 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('C:/Users/Utilisateur/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root = resolve('docs'), output = resolve('outputs/paused-combat');
 await mkdir(output, { recursive: true });
+// Previous hierarchy composition, uncached and independent of the native graph.
+function referencePose(rect,chain,frame,box,boardScale){
+  let parent={a:1,b:0,c:0,d:1,tx:0,ty:0,sx:1,sy:1,angle:0,alpha:1,brightness:1,visible:true};
+  for(let i=chain.length-1;i>=0;i--){
+    const binding=chain[i];
+    const value=frame.get(binding),base=binding.base,m=value.transform,b=base.transform;
+    let sx=1,sy=1,angle=0,dx=0,dy=0;
+    if(binding.node!==box){
+      sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
+      sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
+      angle=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
+      dx=(m[4]-b[4]+value.left[0]-base.left[0]-value.right[0]+base.right[0])*boardScale.x;
+      dy=(m[5]-b[5]+value.top[0]-base.top[0])*boardScale.y;
+    }
+    const cos=Math.cos(angle),sin=Math.sin(angle),a=cos*sx,bv=sin*sx,c=-sin*sy,d=cos*sy;
+    const ox=binding.origin.x,oy=binding.origin.y,tx=ox-a*ox-c*oy+dx,ty=oy-bv*ox-d*oy+dy;
+    parent={a:parent.a*a+parent.c*bv,b:parent.b*a+parent.d*bv,c:parent.a*c+parent.c*d,d:parent.b*c+parent.d*d,
+      tx:parent.a*tx+parent.c*ty+parent.tx,ty:parent.b*tx+parent.d*ty+parent.ty,
+      sx:parent.sx*sx,sy:parent.sy*sy,angle:parent.angle+angle,alpha:parent.alpha*value.opacity[0],
+      brightness:parent.brightness*value.filter[0],visible:parent.visible&&binding.css.display!=='none'};
+  }
+  const x=rect.x+rect.w/2,y=rect.y+rect.h/2;
+  return {x:parent.a*x+parent.c*y+parent.tx,y:parent.b*x+parent.d*y+parent.ty,
+    w:rect.w*parent.sx,h:rect.h*parent.sy,angle:parent.angle,alpha:parent.alpha,brightness:parent.brightness,visible:parent.visible};
+}
+// Test-only readback compares atlas regions against separate original GPU textures.
+function checkTextAtlas(scene){
+  const gl=scene.game.renderer.gl,atlas=monsterTextAtlases.get(scene),entries=[];
+  const framebuffer=gl.createFramebuffer(),previous=gl.getParameter(gl.FRAMEBUFFER_BINDING);
+  const read=(texture,x,y,w,h)=>{
+    gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture.source[0].glTexture.webGLTexture,0);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Atlas framebuffer incomplete');
+    const bytes=new Uint8Array(w*h*4);gl.readPixels(x,y,w,h,gl.RGBA,gl.UNSIGNED_BYTE,bytes);return bytes;
+  };
+  const verify=entry=>{
+    atlas.flush();
+    const {atlasSlot:slot,frame}=entry,f=slot.page.texture.get(frame);
+    const original=scene.textures.addImage('__atlas-reference',entry.canvas);
+    try{
+      const expected=read(original,0,0,f.width,f.height),actual=read(slot.page.texture,f.cutX,f.cutY,f.width,f.height);
+      if(actual.some((v,i)=>v!==expected[i]))throw Error('Atlas pixels differ from original standalone texture');
+      const backing=scene.textures.addImage('__atlas-restored',slot.page.context.canvas);
+      try{
+        const restored=read(backing,f.cutX,f.cutY,f.width,f.height);
+        if(restored.some((v,i)=>v!==expected[i]))throw Error('Context restoration GPU pixels differ from original text');
+      }finally{scene.textures.remove(backing.key);}
+    }finally{scene.textures.remove(original.key);}
+  };
+  const create=i=>{
+    const canvas=document.createElement('canvas');canvas.width=93;canvas.height=31;
+    const ctx=canvas.getContext('2d');ctx.font='bold 16px serif';ctx.fillStyle=i%2?'#abcdee':'#e83b19';
+    ctx.shadowColor='#000';ctx.shadowBlur=3;ctx.fillText('PV : '+i,2,21);
+    const entry={...storeMonsterText(scene,canvas),canvas};entries.push(entry);return entry;
+  };
+  try{
+    const first=create(100),neighbour=create(200);verify(first);verify(neighbour);
+    const oldFrame=first.frame,slot=first.atlasSlot;discardMonsterText(first,scene);entries.splice(entries.indexOf(first),1);
+    const reused=create(300);
+    if(reused.atlasSlot!==slot||slot.page.texture.has(oldFrame))throw Error('Released atlas slot was not safely recycled');
+    verify(reused);verify(neighbour);
+    if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error during partial text upload');
+    return {pixels:true,recycled:true,neighbour:true,contextBacking:true};
+  }finally{
+    gl.bindFramebuffer(gl.FRAMEBUFFER,previous);gl.deleteFramebuffer(framebuffer);
+    for(const entry of entries)discardMonsterText(entry,scene);
+  }
+}
 const server = createServer(async (req, res) => {
   const file = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
   if (!file.startsWith(root + sep)) return res.writeHead(403).end();
@@ -19,9 +87,22 @@ const server = createServer(async (req, res) => {
       data = source.replace(marker, 'attack: {\n  launchContextId: attackDetail?.launchContextId,\n  functionName: attackDetail');
     }
     if (file === resolve(root, 'js/rendering/entities.js')) {
-      data=data.toString().replace('return {command,update,capture,restore,destroy};',`return {command,update,capture,restore,destroy,
+      data=data.toString();
+      if(process.env.MONSTER_WEBGL==='1'){
+        data+=`\n${referencePose.toString()}\n${checkTextAtlas.toString()}`;
+        assert.ok(data.includes('    const pose=(rect,chain,frame)=>{'));
+        data=data.replace('    const pose=(rect,chain,frame)=>{','    const optimizedPose=(rect,chain,frame)=>{')
+          .replace('    const update=(now,showHTML=false)=>{',`    const pose=(rect,chain,frame)=>{
+            const actual=optimizedPose(rect,chain,frame),expected=referencePose(rect,chain,frame,box,boardScale);
+            for(const key of Object.keys(expected))if(typeof expected[key]==='boolean'?actual[key]!==expected[key]:Math.abs(actual[key]-expected[key])>1e-7)
+              throw Error('Native pose differs from hierarchy: '+key+' '+actual[key]+' / '+expected[key]);
+            globalThis.__poseChecks=(globalThis.__poseChecks||0)+1;return actual;
+          };
+    const update=(now,showHTML=false)=>{`);
+      }
+      data=data.replace('return {command,update,capture,restore,destroy};',`return {command,update,capture,restore,destroy,
         inspect:()=>records.map(r=>({kind:r.kind,packed:r.asset?.packed,texture:r.asset?.name,frame:r.image?.frame?.name,type:r.image?.type,visible:r.image?.visible}))};`)
-        .replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,
+        .replace('box._monsterView={invalidateGeometry}', `box._monsterView={invalidateGeometry,inspectTextAtlas:()=>checkTextAtlas(scene),
         inspectFX:()=>[...layers.values()].filter(l=>l.kind==='panel'||l.asset?.packed).map(l=>({kind:l.kind,
           packed:l.asset?.packed,texture:l.asset?.name,frame:l.image?.frame?.name,parts:l.image?.list?.length,roleIcons:l.image?.list?.filter(p=>p.updateMonsterIntro).length,
           type:l.image?.type,visible:l.image?.visible})).concat(presentation.inspect()),
@@ -307,7 +388,11 @@ try {
     const poseBefore=await readPose();assert.equal(poseBefore.length,1);
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);
     assert.deepEqual(await readPose(),poseBefore,'Viewport calibration retains the paused native pose');
-    await page.close();console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
+    assert.ok(await page.evaluate(()=>__poseChecks>100),'Native poses were checked against the uncached hierarchy');
+    assert.deepEqual(await page.evaluate(()=>document.querySelector('[data-monster-webgl="ready"]')._monsterView.inspectTextAtlas()),
+      {pixels:true,recycled:true,neighbour:true,contextBacking:true});
+    await page.close();console.log('PASS native layered poses and text atlas: exact GPU pixels, recycling, neighbours, context backing, resize');
+    console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
   }
   if (!process.env.PAUSE_EXTRA_ONLY) {
   for (const mode of (process.env.PAUSE_TEST_MODE ? process.env.PAUSE_TEST_MODE.split(',') : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple', 'melee-magical', 'melee-mixed', 'melee-triple', 'melee-double-pending', 'melee-double-active'])) {

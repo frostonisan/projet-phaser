@@ -831,6 +831,14 @@ registerCombatState('ground', () => ({
     poisons: [...jarretPoisonEffects.values()].map(active => active.state),
 }), async (saved, { entities }) => {
     groundSummons.clear(); jarretPoisonEffects.clear();
+    // The HTML checkpoint already contains consumed-item remnants. Rebind their
+    // lifetime observers as the native scene factory does, without respawning loot.
+    for (const [node, observer] of groundLootRemnants) if (!node.isConnected) {
+        observer.disconnect(); groundLootRemnants.delete(node);
+    }
+    for (const node of document.querySelectorAll('.ground-loot-remnant')) {
+        if (!groundLootRemnants.has(node)) watchGroundLootRemnant(node, node.closest('.hex'));
+    }
     for (const data of saved.records) {
         const record = { ...data, node: document.getElementById(data.id), hex: combatTarget(data.hex, entities),
             attacker: entities.find(e => e.id === data.attacker?.id) || data.attacker,

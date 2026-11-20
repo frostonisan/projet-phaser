@@ -269,7 +269,7 @@ export async function createCanvasBoard(scene,grid,paint) {
       paint.release(entry.recipe);entry.recipe=recipe;clearObjects(entry);
       for(const part of recipe.parts){const tex=part.decoration||part.textEntry,asset=part.asset;if(!tex&&!asset)continue;
         const pad=tex?.padding||asset?.padding||0,key=tex?.texture||asset.name;
-        const owner={...entry,project:plane(part.node),objects:entry.objects},frame=asset?scene.textures.get(key).get(asset.frameNames?.[0]??0):null;
+        const owner={...entry,project:plane(part.node),objects:entry.objects},frame=asset?scene.textures.get(key).get(asset.frameNames?.[0]??0):tex.frame?scene.textures.get(key).get(tex.frame):null;
         part.node._canvasNative=true;part.project=owner.project;part.mesh=addMesh(owner,key,{x:part.x-pad,y:part.y-pad,w:part.w+pad*2,h:part.h+pad*2},frame?[frame.u0,frame.v0,frame.u1,frame.v1]:undefined,1);
       }
     }

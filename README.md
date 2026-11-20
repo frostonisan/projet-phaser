@@ -35,7 +35,7 @@ les diagnostics locaux ignorés dans `outputs/` ne font pas partie du snapshot G
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.99.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.100.0-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi
@@ -781,3 +781,82 @@ ceux des quatre biomes dans `final-board/`, du drag souris/tactile dans le journ
 `final-native/verify-tactical-pause-browser.mjs.log`, et du rendu HTML dans
 `final-html/`, sous le même dossier de diagnostics. Les vérifications statiques
 et les tests de règles restent dans `delivery-static.log`.
+
+
+## Composition native et textes GPU partagés — v0.100.0-dev
+
+Les couches visuelles des monstres sont compilées en un graphe ordonné de poses.
+Chaque couche réutilise la pose de son parent et conserve son résultat tant que
+ses entrées ne changent pas. Cela remplace les parcours répétés des ancêtres et
+les tables temporaires de chaque image. Les pistes restent indépendantes :
+ordre des transformations, pivots, courbes, horloges, interruptions et reprise
+sont conservés. Une commande de préparation/récupération émise pendant le rendu
+est composée avant le dessin de la même image. Les coefficients des courbes
+sont mis en cache sans modifier leur évaluation numérique.
+
+Les textes du combat, panneaux et retours de dégâts utilisent des atlas GPU
+partagés. Le dessin des glyphes, couleurs, ombres et contours reste identique.
+Seules les régions nouvelles sont transférées avec `texSubImage2D` ; les
+emplacements libérés sont réutilisés et protégés par une marge transparente.
+Le support canvas des pages reste disponible pour la restauration du contexte.
+Les textes du plateau utilisent les coordonnées de leur région dans l'atlas.
+Aucun fichier de jeu ni dépendance supplémentaire.
+
+Les adaptateurs HTML invisibles d'interaction et de thème existent encore.
+La composition des poses reste sur le CPU ; le GPU dessine les sprites et
+regroupe davantage de textures. Ce lot ne retire pas toutes les anciennes
+structures et ne modifie pas les calculs des caractéristiques ou du ciblage.
+
+Les contrôles comparent les poses à l'ancien calcul hiérarchique, sans son
+cache, pendant les scénarios réels d'animation et de restauration. Les textures
+partagées sont relues sur le GPU et comparées pixel par pixel aux textures
+séparées, y compris après réutilisation d'une région et depuis leur support de
+restauration. Les durées et règles de combat ne changent pas.
+
+Le test tactique a aussi reproduit un défaut sur la référence `8af6693` :
+le chemin HTML de restauration perdait le suivi des restes visuels d'objets
+consommés. Leurs observateurs sont maintenant réattachés aux éléments restaurés,
+sans recréer de butin ni réappliquer la consommation. Aucun changement de format
+de sauvegarde ; les limites de persistance continue décrites en v0.99 restent
+applicables.
+
+
+Mesures contre `8af6693` (v0.99), Chrome 157, AMD Radeon Graphics via ANGLE/D3D11,
+1920×1080, biome prison, combat mixte, WebGL des deux côtés. Deux passages de
+12 secondes par côté et par taille, ordre alterné, sans profilage CPU ni autre
+navigateur de test en parallèle. Moyennes des deux passages pour les temps ;
+appels GPU cumulés divisés par le nombre d'images pour la dernière colonne.
+
+Le banc vérifie maintenant l'opacité du canvas, les dimensions de ses ancêtres
+et la présence des corps natifs dans le viewport. Des captures sont prises avant
+et après chaque combat. Les anciens essais avec biome avaient une fenêtre
+transparente ou un cadre tronqué : leurs temps ne doivent pas être interprétés
+comme une mesure de fluidité du plateau entier visible, y compris les chiffres
+historiques indiqués plus haut. Les résultats ci-dessous les remplacent.
+
+| Monstres | Version | ms/image moyens | P95 (ms) | Appels de dessin GPU/image |
+| --- | --- | ---: | ---: | ---: |
+| 40 | Avant | 28,49 | 83,30 | 13,41 |
+| 40 | Après | 28,50 | 75,00 | 8,37 |
+| 80 | Avant | 44,02 | 149,95 | 15,96 |
+| 80 | Après | 41,62 | 158,30 | 11,07 |
+
+Les appels de dessin GPU diminuent, mais les pics ne disparaissent pas et la
+moyenne à 80 reste proche de 24 images/s. Aucun gain global de fluidité n'est
+démontré par ce lot. Les deux répétitions ne suffisent pas à caractériser finement
+la variabilité ; le second passage de référence à 40 a déclenché une récupération
+automatique d'acteur, conservée dans le rapport. Aucun passage de la nouvelle
+version n'en a déclenché. Un rendu GPU plus regroupé ne supprime pas le travail
+JavaScript des règles, des statistiques et des adaptateurs de présentation.
+
+Les quatre comparaisons déterministes (40/80, graines 1701/1702, cinq secondes)
+conservent résultats, phases et journal complet. Elles restent dans
+`outputs/native-monster/comparison/` ; les mesures visibles et leurs sources
+figées sont dans `outputs/native-monster/delivery-visible/`. Les empreintes des
+modules testés sont comparées au code livré dans `delivery-review.json`.
+Les vérifications finales sont dans `pause-all/`, `board-final/`, `tactical-fixed/`,
+`tactical-html/` et `static-final.log` sous `outputs/native-monster/`. Elles couvrent
+notamment les douze variantes d'attaque, les effets et décès, les objets consommés,
+la pause, F5/Ctrl+R/Ctrl+Maj+R, le drag souris/tactile, les prises, les échanges et
+les redimensionnements. Les premiers profils CPU sont des diagnostics séparés
+avec la surface transparente ; ils ne servent pas aux chiffres du tableau.
