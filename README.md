@@ -7,6 +7,32 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 - Branche de travail et de publication : `version-2`.
 - Sources du jeu : `docs/` ; outils de verification : `scripts/`.
 
+## Point de retour — avant optimisation des calculs
+
+Repère demandé par le joueur : **The Dark Pit v0.98.0-dev**, avant le lot
+« caractéristiques, attaques et ciblage ». Le code de référence est le commit
+[`c685f9f8ef5fd4547b217098c9928286ef9d0736`](https://github.com/frostonisan/projet-phaser/tree/c685f9f8ef5fd4547b217098c9928286ef9d0736),
+publié sur `origin/version-2`. L'arbre de travail était propre à sa capture.
+Le tag local annoté `checkpoint-0.98.0-avant-optimisation-calculs` pointe sur ce
+commit. Ce SHA, conservé dans le dépôt distant, est la référence durable.
+
+- Plateau visible dans le canvas Phaser/WebGL avec `?monsters=webgl` ; menus
+  et adaptateurs invisibles d'interaction en HTML. Règles de combat conservées.
+- À 40 monstres : 26,59 ms/image en moyenne, P95 74,95 ms ; à 80 : 41,50 ms,
+  P95 141,65 ms. Les saccades persistent. Conditions détaillées plus bas.
+- Contrôles validés : règles/imports/assets, quatre biomes, panneaux PV/armure,
+  souris/tactile, échanges de places, grab, attaques, pause/F5 et mobile.
+  Quatre comparaisons déterministes 40/80 conservent résultats et journaux.
+- Les nouvelles optimisations de caractéristiques, attaques et ciblage discutées
+  après cette version n'ont pas été appliquées à ce point de retour.
+
+Sur demande « Reviens à l'état avant l'optimisation des calculs », rétablir le
+contenu du projet à partir de ce commit, vérifier puis republier via un nouveau
+commit sur `version-2`, en conservant l'historique. Préserver préalablement les
+éventuelles modifications locales non enregistrées. Aucun retour automatique.
+Ce repère couvre les fichiers suivis par Git ; les sauvegardes du navigateur et
+les diagnostics locaux ignorés dans `outputs/` ne font pas partie du snapshot Git.
+
 ## Version affichée
 
 Le jeu affiche **The Dark Pit v0.98.0-dev** en blanc, juste avant « ID de la partie »,
