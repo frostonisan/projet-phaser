@@ -115,8 +115,89 @@ function canvasHomographyFromPoints([p0,p1,p2,p3]) {
 function canvasHomography(m) {
   const apply=(matrix,x,y)=>{const w=matrix[6]*x+matrix[7]*y+matrix[8];return {x:(matrix[0]*x+matrix[1]*y+matrix[2])/w,y:(matrix[3]*x+matrix[4]*y+matrix[5])/w,w};};
   const [a,b,c,d,e,f,g,h,i]=m,inv=[e*i-f*h,c*h-b*i,b*f-c*e,f*g-d*i,a*i-c*g,c*d-a*f,d*h-e*g,b*g-a*h,a*e-b*d];
-  const project=(x,y)=>apply(m,x,y);project.inverse=(x,y)=>apply(inv,x,y);return project;
+  const project=(x,y)=>apply(m,x,y);project.matrix=m;project.inverse=(x,y)=>apply(inv,x,y);project.inverse.matrix=inv;return project;
 }
+// Keep the camera's full 3D transform. A rotateX counter-rotation on an
+// upright actor must cancel the grid rotation before projecting to the screen.
+// Layout/style reads are shared at camera changes; settled combat reuses them.
+const projectionFrames = new WeakMap(), projectionBindings = new WeakMap();
+function projectionFrame(grid, refresh = false) {
+  let frame = projectionFrames.get(grid);
+  if (!frame || refresh) {
+    frame = { matrices: new Map(), layouts: new Map() };
+    projectionFrames.set(grid, frame);
+  }
+  return frame;
+}
+function canvasLayout(node, frame) {
+  if (!node) return { x: 0, y: 0 };
+  if (frame.layouts.has(node)) return frame.layouts.get(node);
+  let x = 0, y = 0;
+  for (let n = node; n; n = n.offsetParent) {
+    x += n.offsetLeft || 0; y += n.offsetTop || 0;
+    if (n.offsetParent) { x += n.offsetParent.clientLeft; y += n.offsetParent.clientTop; }
+  }
+  const layout = { x, y }; frame.layouts.set(node, layout); return layout;
+}
+function canvasWorldMatrix(node, frame) {
+  if (!(node instanceof HTMLElement)) return new DOMMatrix();
+  if (frame.matrices.has(node)) return frame.matrices.get(node);
+  const css = getComputedStyle(node), origin = css.transformOrigin.split(' ').map(parseFloat);
+  const position = canvasLayout(node, frame), parent = canvasLayout(node.parentElement, frame);
+  // Movement is read from combat data by the actor projection, once only.
+  const transform = node.classList.contains('entite-box') || css.transform === 'none' ? undefined : css.transform;
+  const scale = css.scale === 'none' ? [1, 1] : css.scale.split(' ').map(Number);
+  const local = new DOMMatrix().translate(position.x-parent.x+(origin[0]||0), position.y-parent.y+(origin[1]||0), origin[2]||0)
+    .scale(scale[0], scale[1] ?? scale[0]).multiply(new DOMMatrix(transform))
+    .translate(-(origin[0]||0), -(origin[1]||0), -(origin[2]||0));
+  const matrix = canvasWorldMatrix(node.parentElement, frame).multiply(local);
+  frame.matrices.set(node, matrix); return matrix;
+}
+function planeFromMatrix(matrix) {
+  return canvasHomography([matrix.m11,matrix.m21,matrix.m41,matrix.m12,matrix.m22,matrix.m42,matrix.m14,matrix.m24,matrix.m44]);
+}
+export function readCanvasViewportQuad(node) {
+  const matrix=canvasWorldMatrix(node,{matrices:new Map(),layouts:new Map()});
+  const project=planeFromMatrix(matrix);
+  return [[0,0],[node.offsetWidth,0],[node.offsetWidth,node.offsetHeight],[0,node.offsetHeight]].map(([x,y])=>project(x,y));
+}
+export function compileBoardProjection(node, grid, readPlacement) {
+  const initial = { matrices: new Map(), layouts: new Map() };
+  const inverse = planeFromMatrix(canvasWorldMatrix(node, initial)).inverse;
+  let world, local, previousMap, previousPosition, previousX, previousY;
+  const key = {};
+  const prepare = camera => {
+    const hex = node.closest('.hex'), position = getBoardGeometry(grid).model.byId.get(hex?.dataset.position);
+    if (!position) return;
+    world=canvasWorldMatrix(grid,camera);
+    local=new DOMMatrix().translate(-position.x,-position.y)
+      .multiply(world.inverse()).multiply(canvasWorldMatrix(node,camera));
+    previousMap=null;
+  };
+  prepare(initial);
+  let bindings=projectionBindings.get(grid);
+  if(!bindings)projectionBindings.set(grid,bindings=new Map());
+  bindings.set(node,prepare);
+  const read = frame => {
+    if(frame.has(key))return frame.get(key);
+    const placement=readPlacement(),cell=getBoardGeometry(grid).model.byId.get(String(placement.position));
+    if(!cell||!local)return (x,y)=>({x,y});
+    if(!previousMap||previousPosition!==cell.id||previousX!==placement.offset.x||previousY!==placement.offset.y){
+      const project=planeFromMatrix(world.translate(cell.x+placement.offset.x,cell.y+placement.offset.y).multiply(local));
+      const a=project.matrix,b=inverse.matrix,m=Array(9).fill(0);
+      for(let row=0;row<3;row++)for(let col=0;col<3;col++)for(let k=0;k<3;k++)m[row*3+col]+=a[row*3+k]*b[k*3+col];
+      const normalized=m.map(value=>value/m[8]);
+      previousMap=canvasHomography(normalized);
+      previousMap.identity=normalized.every((value,index)=>Math.abs(value-([0,4,8].includes(index)?1:0))<1e-7);
+      previousMap.perspective=Math.abs(normalized[6])+Math.abs(normalized[7])>1e-9;
+      previousPosition=cell.id;previousX=placement.offset.x;previousY=placement.offset.y;
+    }
+    frame.set(key,previousMap);return previousMap;
+  };
+  read.dispose=()=>{if(bindings.get(node)===prepare)bindings.delete(node);};
+  return read;
+}
+
 export function sampleCanvasPlane(node) {
   if(node.matches('img,canvas,svg')){
     const parent=sampleCanvasPlane(node.parentElement),css=getComputedStyle(node),m=new DOMMatrixReadOnly(css.transform==='none'?undefined:css.transform);
@@ -176,7 +257,7 @@ export async function createCanvasBoard(scene,grid,paint) {
     queueMesh(mesh);
   };
 
-  const geometry=new Map(),anchors=new Map(),cameraTransitions=new Set();
+  const geometry=new Map(),anchors=new Map(),cameraTransitions=new Set(),screenMotions=new Set();
   const anchorFor=node=>node.closest('#hexGrid')||node.closest('.foreground')||node.closest('.board')||node.closest('#meteo-fx')||node;
   const plane=node=>{
     if(geometry.has(node))return geometry.get(node);
@@ -187,6 +268,11 @@ export async function createCanvasBoard(scene,grid,paint) {
   };
   const screenCells=readBoardScreenGeometry(grid);
   const refreshCamera=()=>{
+    const camera=projectionFrame(grid,true);
+    for(const [node,prepare] of projectionBindings.get(grid)||[]){
+      if(node.isConnected)prepare(camera);else projectionBindings.get(grid).delete(node);
+    }
+    paint.cameraChanged?.();
     for(const [node,anchor] of anchors)if(node.isConnected)anchor.project=sampleCanvasPlane(node);
     const project=anchors.get(grid)?.project;if(!project)return;
     for(const cell of getBoardGeometry(grid).model.cells){const old=screenCells.get(cell.id);if(!old)continue;
@@ -196,10 +282,20 @@ export async function createCanvasBoard(scene,grid,paint) {
   };
   const cameraEvent=event=>{
     if(!event.target.matches?.('#hexGrid,.board,.board-global,.foreground,#game-container,#game-windows'))return;
-    const key=`${event.target.id||event.target.className}:${event.propertyName}`;
-    if(event.type==='transitionrun')cameraTransitions.add(key);else {cameraTransitions.delete(key);cameraRebase=true;}cameraDirty=true;
+    const key=`${event.target.id||event.target.className}:${event.propertyName||event.animationName}`;
+    if(event.type==='transitionrun'||event.type==='animationstart')cameraTransitions.add(key);else {cameraTransitions.delete(key);cameraRebase=true;}cameraDirty=true;
   };
-  for(const type of ['transitionrun','transitionend','transitioncancel'])document.addEventListener(type,cameraEvent);
+  for(const type of ['transitionrun','transitionend','transitioncancel','animationstart','animationend','animationcancel'])document.addEventListener(type,cameraEvent);
+  const trackScreenMotion=animation=>{
+    if(!animation||screenMotions.has(animation))return;screenMotions.add(animation);cameraDirty=true;
+    const done=()=>{screenMotions.delete(animation);cameraDirty=true;cameraRebase=true;};
+    animation.addEventListener('finish',done,{once:true});animation.addEventListener('cancel',done,{once:true});
+  };
+  const screenMotion=event=>trackScreenMotion(event.detail?.animation);
+  const restoreScreenMotion=()=>{for(const animation of grid.closest('#game-windows')?.getAnimations()||[])trackScreenMotion(animation);cameraDirty=true;};
+  window.addEventListener('gameScreenMotion',screenMotion);
+  for(const type of ['combatPauseRestored','combatResumed'])window.addEventListener(type,restoreScreenMotion);
+  restoreScreenMotion();
 
   const imageTexture=async source=>{
     if(!textures.has(source))textures.set(source,(async()=>{
@@ -366,7 +462,7 @@ export async function createCanvasBoard(scene,grid,paint) {
     }
     for(const entry of [...dirty]){if(entry.busy)continue;dirty.delete(entry);entry.busy=true;
       void sample(entry).catch(error=>console.warn('[CanvasBoard]',error)).finally(()=>entry.busy=false);}
-    if(cameraDirty||cameraTransitions.size){
+    if(cameraDirty||cameraTransitions.size||[...screenMotions].some(animation=>animation.playState==='running')){
       refreshCamera();
       if(cameraRebase){geometry.clear();anchors.clear();for(const entry of roots.values()){entry.project=plane(entry.node);for(const part of entry.recipe?.parts||[])part.project=plane(part.node);}refreshCamera();cameraRebase=false;paint.cameraSettled?.();}
       for(const entry of roots.values())if(entry.kind==='tiles'&&entry.image)paintTiles(entry,now());
@@ -389,7 +485,7 @@ export async function createCanvasBoard(scene,grid,paint) {
     }
     for(const entry of roots.values())if(entry.fogDuration&&entry.image&&now()-entry.lastPaint>=33)paintTiles(entry,now());
   };
-  const destroy=()=>{if(disposed)return;disposed=true;scene.events.off('prerender',projectMeshes);pendingMeshes.clear();observer.disconnect();resizeObserver.disconnect();for(const type of ['pointerover','pointerout','focusin','focusout'])grid.removeEventListener(type,hover);for(const type of ['transitionrun','transitionend','transitioncancel'])document.removeEventListener(type,cameraEvent);for(const [node,e] of roots){e.cancelled=true;delete node.dataset.canvasPainted;clearObjects(e);paint.release(e.recipe);}roots.clear();for(const key of owned)scene.textures.remove(key);delete grid.dataset.canvasBoard;container?.classList.remove('canvas-board-active');paint.dispose();};
+  const destroy=()=>{if(disposed)return;disposed=true;scene.events.off('prerender',projectMeshes);pendingMeshes.clear();observer.disconnect();resizeObserver.disconnect();for(const type of ['pointerover','pointerout','focusin','focusout'])grid.removeEventListener(type,hover);for(const type of ['transitionrun','transitionend','transitioncancel','animationstart','animationend','animationcancel'])document.removeEventListener(type,cameraEvent);window.removeEventListener('gameScreenMotion',screenMotion);for(const type of ['combatPauseRestored','combatResumed'])window.removeEventListener(type,restoreScreenMotion);screenMotions.clear();for(const [node,e] of roots){e.cancelled=true;delete node.dataset.canvasPainted;clearObjects(e);paint.release(e.recipe);}roots.clear();for(const key of owned)scene.textures.remove(key);delete grid.dataset.canvasBoard;container?.classList.remove('canvas-board-active');paint.dispose();};
   scan();await Promise.all([...dirty].map(entry=>sample(entry)));dirty.clear();
   grid.dataset.canvasBoard='ready';container?.classList.add('canvas-board-active');
   observer.observe(grid.closest('#game-windows')||grid.parentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','src','d','stroke'],characterData:true});

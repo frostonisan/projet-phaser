@@ -1,4 +1,4 @@
-import { invalidateBoardScreenGeometry } from './boardAdapter.js';
+import { readCanvasViewportQuad, invalidateBoardScreenGeometry } from './boardAdapter.js';
 import { applyMovementDestabilisation, wakeFromMovement } from "../combat/effects.js";
 import {
   setIntervalFrom, remainingCombatTimer, registerCombatState, removeCombatVisualAfter, setTimeout,
@@ -2685,11 +2685,14 @@ function drawProjectile(entry, scene) {
 export function positionPhaserLayer(){
   const host=phaserLayer?.host,root=document.getElementById('game-windows');
   if(!host||!root||!phaserMonsterViews.size&&!canvasBoardViews.size)return;
-  if(host.parentElement!==root)root.append(host);
-  const r=root.getBoundingClientRect(),sx=r.width/(root.offsetWidth||1),sy=r.height/(root.offsetHeight||1);
+  // Keep the WebGL surface out of transformed/overflow-clipped ancestors.
+  // HTML controls remain above it; both renderers share viewport coordinates.
+  if(host.parentElement!==document.body)document.body.append(host);
+  if(root.style.zIndex!=='6000')root.style.zIndex='6000';
   host.classList.add('phaser-combat-surface');
-  const {width,height}=viewport();
-  const style={width:`${width}px`,height:`${height}px`,transformOrigin:'0 0',transform:`matrix(${1/(sx||1)},0,0,${1/(sy||1)},${-r.left/(sx||1)},${-r.top/(sy||1)})`};
+  const {width,height}=viewport(),quad=readCanvasViewportQuad(root);
+  const style={position:'fixed',left:'0px',top:'0px',width:`${width}px`,height:`${height}px`,transform:'none',
+    clipPath:`polygon(${quad.map(point=>`${point.x}px ${point.y}px`).join(',')})`,opacity:getComputedStyle(root).opacity};
   for(const [key,value] of Object.entries(style))if(host.style[key]!==value)host.style[key]=value;
   phaserLayer.game?.scale?.updateBounds();
 }

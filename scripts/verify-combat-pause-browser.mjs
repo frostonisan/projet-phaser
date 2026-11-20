@@ -330,7 +330,8 @@ try {
     });
     await page.waitForTimeout(150);
     assert.equal(await page.locator('[data-monster-webgl="ready"]').count(),2,'Menus keep the native battlefield alive');
-    assert.equal(await page.evaluate(()=>document.getElementById('phaser-projectiles').parentElement.id),'game-windows');
+    assert.equal(await page.evaluate(()=>document.getElementById('phaser-projectiles').parentElement===document.body),true,'Canvas avoids transformed HTML ancestors');
+    assert.deepEqual(await page.evaluate(()=>{const css=getComputedStyle(document.getElementById('phaser-projectiles'));return {position:css.position,transform:css.transform,clipped:css.clipPath.startsWith('polygon(')};}),{position:'fixed',transform:'none',clipped:true});
     await page.screenshot({path:resolve(output,'canvas-menu-and-feedback.png')});
     const readPose=()=>page.evaluate(()=>Clock.captureCombatState().phaserPresentation.find(v=>v.id===String(E.entites[0].id)).state.bindings
       .filter(b=>b.overrides?.transform?.includes('23px')).map(b=>({overrides:b.overrides,values:b.values})));
@@ -342,6 +343,26 @@ try {
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);
     assert.deepEqual(await readPose(),poseBefore,'Viewport calibration retains the paused native pose');
     await page.close();console.log('PASS native Phaser panels and ambidextry atlas: shared PNG, independent frames, pause and cleanup');
+  }
+  if(process.env.MONSTER_WEBGL==='1'){
+    const page=await fixture({speed:20000});
+    await page.setViewportSize({width:891,height:360});await page.waitForTimeout(100);
+    await page.evaluate(async()=>{
+      document.querySelector('.entitylootContainer')?.remove();G.startGame();
+      await (await import('/js/events/runtime.js')).shakeScreenEvent({effect:'zoomout'});
+      const animation=document.getElementById('game-windows').getAnimations().find(a=>a.effect.getTiming().duration===4100);
+      if(!animation)throw Error('Missing screen zoom');animation.currentTime=1100;await P.pauseCombat();
+    });
+    const screen=()=>page.evaluate(()=>document.getElementById('game-windows').getBoundingClientRect().toJSON());
+    const before=await screen();
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#combat-pause-control')?.textContent==='Pause tactique · Espace pour reprendre'&&!document.querySelector('#combat-pause-control').disabled);
+    await page.waitForSelector('#phaser-projectiles:not([hidden]) canvas');
+    const after=await screen();
+    for(const key of ['x','y','width','height'])assert.ok(Math.abs(before[key]-after[key])<1,'Reload preserves fitted screen motion: '+key);
+    await page.keyboard.press('Space');await page.waitForTimeout(4500);
+    const settled=await screen();assert.ok(settled.width<=891.5&&settled.height<=360.5,'Screen returns to mobile fit after the saved motion');
+    await page.close();console.log('PASS screen motion: zoom position/size survive pause/reload and return to mobile fit');
   }
   if (!process.env.PAUSE_EXTRA_ONLY) {
   for (const mode of (process.env.PAUSE_TEST_MODE ? process.env.PAUSE_TEST_MODE.split(',') : ['range', 'melee', 'phaser', 'phaser-melee', 'magical', 'mixed', 'triple', 'melee-magical', 'melee-mixed', 'melee-triple', 'melee-double-pending', 'melee-double-active'])) {

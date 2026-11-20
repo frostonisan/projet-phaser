@@ -961,6 +961,31 @@ export async function ensureBattleInterfaceReady({ source = 'fight' } = {}) {
  * La bordure reste visible jusqu'à l'appel suivant avec false/null.
  * Pour le moment, seul un échec déclenche le tremblement bref de l'écran.
  */
+function updateGameScreenFit() {
+  const node=document.getElementById('game-windows');
+  if(node)node.style.setProperty('--game-screen-fit',node.style.transform||'scale(1)');
+}
+window.addEventListener('gameViewportChanged',updateGameScreenFit);
+function fittedScreenFrames(frames) {
+  // The existing snapshot stores keyframes, including this live viewport value.
+  // Replacement composition is idempotent when visuals are rebound on reload.
+  return frames.map(({transformOrigin,composite,...frame})=>({...frame,
+    transform:`var(--game-screen-fit, scale(1)) ${frame.transform}`}));
+}
+function animateGameScreen(node, frames, options) {
+  updateGameScreenFit();
+  const animation=node.animate(fittedScreenFrames(frames),options);
+  window.dispatchEvent(new CustomEvent('gameScreenMotion',{detail:{animation}}));
+  return animation;
+}
+function fitScreenShake(node) {
+  updateGameScreenFit();
+  for(const animation of node.getAnimations())if(animation.animationName==='cinematic-screen-fail-shake'){
+    animation.effect.setKeyframes(fittedScreenFrames(animation.effect.getKeyframes()));
+    window.dispatchEvent(new CustomEvent('gameScreenMotion',{detail:{animation}}));
+  }
+}
+
 export function cinematicScreenFX(outcome = null) {
   clearTimeout(cinematicScreenFX._shakeTimer);
   cinematicScreenFX._shakeTimer = null;
@@ -972,7 +997,10 @@ export function cinematicScreenFX(outcome = null) {
   gameWindows.classList.remove('event-screen-shake-fail');
   const currentTransform = () => {
     const value = getComputedStyle(gameWindows).transform;
-    return !value || value === 'none' ? 'scale(1)' : value;
+    const fit = gameWindows.style.transform;
+    // Keep interrupted motion relative to the viewport fit.
+    return new DOMMatrixReadOnly(!fit || fit === 'none' ? undefined : fit).inverse()
+      .multiply(new DOMMatrixReadOnly(!value || value === 'none' ? undefined : value)).toString();
   };
   let interruptedTransform = 'scale(1)';
   if (cinematicScreenFX._screenMotion) {
@@ -989,7 +1017,7 @@ export function cinematicScreenFX(outcome = null) {
   cinematicScreenFX._successFlash = null;
   const settleToNormal = (from = interruptedTransform, duration = 1250) => {
     if (typeof gameWindows.animate !== 'function') return null;
-    const animation = gameWindows.animate([
+    const animation = animateGameScreen(gameWindows, [
       { transform: from, transformOrigin: 'center center' },
       { transform: 'scale(1)', transformOrigin: 'center center' }
     ], { duration, easing: 'cubic-bezier(.18,.72,.22,1)', fill: 'none' });
@@ -1047,7 +1075,7 @@ export function cinematicScreenFX(outcome = null) {
       }, { once: true });
     }
     if (typeof gameWindows.animate === 'function') {
-      const animation = gameWindows.animate([
+      const animation = animateGameScreen(gameWindows, [
         { transform: interruptedTransform, transformOrigin: 'center center', offset: 0 },
         { transform: 'scale(1.050)', transformOrigin: 'center center', offset: .23 },
         { transform: 'scale(1.010)', transformOrigin: 'center center', offset: .46 },
@@ -1065,7 +1093,7 @@ export function cinematicScreenFX(outcome = null) {
     }
   }
   if (normalizedOutcome === 'middle' && typeof gameWindows.animate === 'function') {
-    const animation = gameWindows.animate([
+    const animation = animateGameScreen(gameWindows, [
       { transform: interruptedTransform, transformOrigin: 'center center', offset: 0 },
       { transform: 'scale(1.010)', transformOrigin: 'center center', offset: .16 },
       { transform: 'scale(1.022)', transformOrigin: 'center center', offset: .36 },
@@ -1091,6 +1119,7 @@ export function cinematicScreenFX(outcome = null) {
     gameWindows.style.animationDelay = '0s';
     void gameWindows.offsetWidth;
     gameWindows.classList.add('event-screen-shake-fail');
+    fitScreenShake(gameWindows);
     cinematicScreenFX._shakeTimer = setTimeout(() => {
       gameWindows.classList.remove('event-screen-shake-fail');
       gameWindows.style.removeProperty('animation-delay');
@@ -1125,12 +1154,15 @@ export async function shakeScreenEvent({
   const currentTransform = () => {
     if (!gameWindows) return 'scale(1)';
     const value = getComputedStyle(gameWindows).transform;
-    return !value || value === 'none' ? 'scale(1)' : value;
+    const fit = gameWindows.style.transform;
+    // Keep interrupted motion relative to the viewport fit.
+    return new DOMMatrixReadOnly(!fit || fit === 'none' ? undefined : fit).inverse()
+      .multiply(new DOMMatrixReadOnly(!value || value === 'none' ? undefined : value)).toString();
   };
   const playZoom = (frames, duration) => {
     if (!gameWindows || typeof gameWindows.animate !== 'function') return null;
     gameWindows.style.transformOrigin = 'center center';
-    const animationInstance = gameWindows.animate(frames, {
+    const animationInstance = animateGameScreen(gameWindows, frames, {
       duration,
       easing: 'cubic-bezier(.17,.72,.22,1)',
       fill: 'none'
@@ -1165,6 +1197,7 @@ export async function shakeScreenEvent({
       gameWindows.style.animationDelay = '0s';
       void gameWindows.offsetWidth;
       gameWindows.classList.add('event-screen-shake-fail');
+      fitScreenShake(gameWindows);
       shakeScreenEvent._shakeTimer = setTimeout(() => {
         gameWindows.classList.remove('event-screen-shake-fail');
         gameWindows.style.removeProperty('animation-delay');

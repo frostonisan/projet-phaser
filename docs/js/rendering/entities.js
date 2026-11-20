@@ -1,9 +1,9 @@
-import { createCanvasBoard, readBoardScreenGeometry } from './boardAdapter.js';
+import { createCanvasBoard, readBoardScreenGeometry, compileBoardProjection } from './boardAdapter.js';
 import {
   updateRoleInDOM, getBattleTargetAttack, updateEntityAttackTargetDisplay, applyCombatProfileView,
   IngameListingFocus, renderMovementCounter, getLevelBattleStats,
 } from "./hud.js";
-import { attachPhaserBoard, attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, ENTITY_TINTS } from "./animations.js";
+import { attachPhaserBoard, attachPhaserMonster, wakePhaserMonsters, renderEntityTint, getMonsterPlacementOffset, readCombatAnimations, queueCombatPresentationUpdate, positionPhaserLayer, ENTITY_TINTS } from "./animations.js";
 import { persistentMediaMarkup, loadResource, loadSpriteAtlas, getAnimatedImageState, loadEffectAtlas } from "../data/loaderList.js";
 import { updateHealthBar } from "./vitalFeedback.js";
 import { entitySizeInCells, applyEntitySizeVisual } from "../board/controller.js";
@@ -2149,6 +2149,32 @@ function createCombatPresentation(scene,box,entity,anchors,setPose) {
   return {command,update,capture,restore,destroy};
 }
 
+// Project the sprite quad inside Phaser's existing texture batch. Camera
+// perspective must also move its corners, not just stretch an axis-aligned box.
+function setMonsterQuadProjection(image, project) {
+  if (!image) return;
+  if (image.list) { for (const child of image.list) setMonsterQuadProjection(child, project); return; }
+  image._combatQuadProjection = image.preFX?.list?.length ? null : project;
+  const pipeline = image.pipeline;
+  if (!project || !pipeline?.batchQuad || pipeline._combatQuadProjection) return;
+  const batch = pipeline.batchQuad;
+  pipeline._combatQuadProjection = true;
+  pipeline.batchQuad = function(object,x0,y0,x1,y1,x2,y2,x3,y3,u0,v0,u1,v1,t0,t1,t2,t3,effect,texture,unit) {
+    const map = object?._combatQuadProjection;
+    if (!map) return batch.apply(this, arguments);
+    // Four sub-quads keep perspective interpolation close to the CSS plane,
+    // while sharing the same GPU batch and texture as the original sprite.
+    for(let row=0;row<2;row++) for(let col=0;col<2;col++) {
+      const left=col/2,right=(col+1)/2,top=row/2,bottom=(row+1)/2;
+      const point=(u,v)=>map(x0+(x3-x0)*u+(x1-x0)*v,y0+(y3-y0)*u+(y1-y0)*v);
+      const a=point(left,top),b=point(left,bottom),c=point(right,bottom),d=point(right,top);
+      batch.call(this,object,a.x,a.y,b.x,b.y,c.x,c.y,d.x,d.y,u0+(u1-u0)*left,v0+(v1-v0)*top,
+        u0+(u1-u0)*right,v0+(v1-v0)*bottom,t0,t1,t2,t3,effect,texture,unit);
+    }
+    return false;
+  };
+}
+
 function releaseMonsterScene(scene) {
   if(--activeMonsterViews===0){monsterCacheEpoch++;for(const key of Object.keys(scene.textures.list))if(key.startsWith('monster-'))scene.textures.remove(key);monsterPanels.clear();monsterImages.clear();monsterResources.clear();monsterTextTextures.clear();monsterDecorations.clear();combatPopupThemes.clear();combatGifThemes.clear();monsterClassStyles.clear();monsterClassAnimations.clear();}
 }
@@ -2157,13 +2183,20 @@ function mountWebGLMonster(entity, box) {
   mountCanvasBoard();monsterViews.add(box);
   void attachPhaserMonster(box, async scene => {
     activeMonsterViews++;
-    const layers=new Map(), bindings=new Map(), presentationAnchors={};
+    const layers=new Map(), bindings=new Map(), presentationAnchors={}, projections=new Map();
     let presentation,healthBinding,armorPulseStart=null;
     const grid=box.closest('#hexGrid');
     let cells=new Map(), originCell, originPosition, boardScale={x:1,y:1}, destroyed=false, suspended=false, queued=false, geometryQueued=false;
     const cssCopy=css=>Object.fromEntries(['opacity','display','transform','scale','left','top','right','fontStyle','fontWeight','fontSize','fontFamily','textShadow','textAlign','color','backgroundColor','backgroundImage','transitionProperty','transitionDuration','transitionTimingFunction','transformOrigin','filter','animationName','animationDuration','animationDelay'].map(key=>[key,css[key]]));
     const layoutOffset=()=>{const cell=cells.get(String(entity.position))||originCell,move=getMonsterPlacementOffset(entity);
       return {x:cell.x-originCell.x+move.x*boardScale.x,y:cell.y-originCell.y+move.y*boardScale.y};};
+    const projectionFor = node => {
+      const anchor = node.closest('.hud-ingame,.drag-box');
+      if (!anchor) return null;
+      if (!projections.has(anchor)) projections.set(anchor, compileBoardProjection(anchor, grid,
+        () => ({position:entity.position, offset:getMonsterPlacementOffset(entity)})));
+      return projections.get(anchor);
+    };
     const bind = node => {
       if(bindings.has(node))return bindings.get(node);
       const css=cssCopy(getComputedStyle(node)), rect=node.getBoundingClientRect();
@@ -2171,6 +2204,7 @@ function mountWebGLMonster(entity, box) {
       const origin=css.transformOrigin.split(' ').map(parseFloat), values={},offset=layoutOffset();
       for(const key of ['transform','scale','opacity','left','top','right','filter'])values[key]=monsterValue(key,css[key],{width,height});
       const b={node,css,rect:{x:rect.left-offset.x,y:rect.top-offset.y,w:rect.width,h:rect.height},width,height,
+        cameraControlled:node.matches('.hud-ingame,.drag-box'),
         origin:{x:rect.left-offset.x+(origin[0]||0)*boardScale.x,y:rect.top-offset.y+(origin[1]||0)*boardScale.y},
         values,base:{...values},tweens:new Map(),animations:[]};
       b.animations=readCombatAnimations(node,css).map(animation=>monsterAnimation(animation,b));
@@ -2212,7 +2246,7 @@ function mountWebGLMonster(entity, box) {
     const install=(node,kind)=>{
       if(layers.has(node))return layers.get(node);
       const css=cssCopy(getComputedStyle(node)), rect=node.getBoundingClientRect();
-      const layer={node,kind,css,rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height},chain:chainFor(node),dirty:true,startedAt:performance.now(),fallbackText:node.textContent,textScaleX:rect.width/(node.offsetWidth||1),textScaleY:rect.height/(node.offsetHeight||1)};
+      const layer={node,kind,css,projection:projectionFor(node),rect:{x:rect.left,y:rect.top,w:rect.width,h:rect.height},chain:chainFor(node),dirty:true,startedAt:performance.now(),fallbackText:node.textContent,textScaleX:rect.width/(node.offsetWidth||1),textScaleY:rect.height/(node.offsetHeight||1)};
       if(kind==='text'&&(node.classList.contains('preparation')||node.classList.contains('execution'))){
         const parent=node.parentElement,r=parent.getBoundingClientRect(),css=getComputedStyle(parent);
         const x=r.width/(parent.offsetWidth||1)||boardScale.x,y=r.height/(parent.offsetHeight||1)||boardScale.y;
@@ -2246,7 +2280,7 @@ function mountWebGLMonster(entity, box) {
         probe.style.cssText='position:absolute;left:0;top:0;width:100px;height:100px;visibility:hidden;pointer-events:none;transform:none;';
         node.append(probe);const measured=probe.getBoundingClientRect();probe.remove();
         const scale={x:measured.width/100||boardScale.x,y:measured.height/100||boardScale.y};
-        presentationAnchors[key]={node,chain,rect:{x:r.left-offset.x,y:r.top-offset.y,w:0,h:0},scale};
+        presentationAnchors[key]={node,chain,projection:projectionFor(node),rect:{x:r.left-offset.x,y:r.top-offset.y,w:0,h:0},scale};
       }
     };
     const refreshList=()=>{
@@ -2393,11 +2427,12 @@ function mountWebGLMonster(entity, box) {
         geometryQueued=false;if(destroyed||!box.isConnected)return;
         if(boardGeometryDirty)calibrateBoard();
         const whole=geometryRoots.has(null),affected=node=>whole||[...geometryRoots].some(root=>root.contains(node));
+        for(const [anchor,projection] of projections)if(affected(anchor)){projection.dispose();projections.delete(anchor);}
         const previousBindings=new Map([...bindings].filter(([node])=>affected(node)));
         for(const node of previousBindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;bindings.delete(node);}
         for(const [node,layer] of [...layers]) { if(!affected(node))continue;
           layers.delete(node);const fresh=install(node,layer.kind);
-          Object.assign(layer,{rect:fresh.rect,chain:fresh.chain,css:fresh.css,barBinding:fresh.barBinding,flipX:fresh.flipX,textScaleX:fresh.textScaleX,textScaleY:fresh.textScaleY});layers.set(node,layer);
+          Object.assign(layer,{rect:fresh.rect,chain:fresh.chain,css:fresh.css,projection:fresh.projection,barBinding:fresh.barBinding,flipX:fresh.flipX,textScaleX:fresh.textScaleX,textScaleY:fresh.textScaleY});layers.set(node,layer);
           if(!layer.image)layer.dirty=true;
         }
         calibratePresentation();
@@ -2419,7 +2454,7 @@ function mountWebGLMonster(entity, box) {
     const destroy=()=>{
       if(destroyed)return;destroyed=true;observer.disconnect();box.removeAttribute('data-monster-webgl');delete box._monsterView;
       for(const node of bindings.keys()){delete node._monsterStyleChanged;delete node._monsterAnimationStarted;}bindings.clear();
-      presentation?.destroy();for(const layer of layers.values())disposeMonsterLayer(layer,scene);layers.clear();
+      presentation?.destroy();for(const projection of projections.values())projection.dispose();projections.clear();for(const layer of layers.values())disposeMonsterLayer(layer,scene);layers.clear();
       releaseMonsterScene(scene);
     };
     const fail=error=>{if(!destroyed){destroy();console.warn('[MonsterWebGL] HTML restored:',error);}};
@@ -2433,7 +2468,7 @@ function mountWebGLMonster(entity, box) {
     };
     barTexture('base');barTexture('overlay');
     const settledPoses=new WeakMap(),identityPose={a:1,b:0,c:0,d:1,tx:0,ty:0,sx:1,sy:1,angle:0,alpha:1,brightness:1,visible:true};
-    const pose=(rect,chain,frame)=>{
+    const pose=(rect,chain,frame,projection)=>{
       // Sibling layers share their ancestors. Compose each ancestor once per
       // frame instead of repeating trigonometry for every icon, bar and glyph.
       const cache=frame.poses ||= new Map();
@@ -2451,7 +2486,7 @@ function mountWebGLMonster(entity, box) {
           parent=previous.result;cache.set(binding,parent);continue;
         }
         let sx=1,sy=1,angle=0,dx=0,dy=0;
-        if(binding.node!==box){
+        if(binding.node!==box && !(projection && binding.cameraControlled)){
           sx=Math.hypot(m[0],m[1])/(Math.hypot(b[0],b[1])||1)*value.scale[0]/base.scale[0];
           sy=Math.hypot(m[2],m[3])/(Math.hypot(b[2],b[3])||1)*value.scale[1]/base.scale[1];
           angle=Math.atan2(m[1],m[0])-Math.atan2(b[1],b[0]);
@@ -2468,8 +2503,28 @@ function mountWebGLMonster(entity, box) {
         cache.set(binding,parent);
       }
       const x=rect.x+rect.w/2,y=rect.y+rect.h/2;
-      return {x:parent.a*x+parent.c*y+parent.tx,y:parent.b*x+parent.d*y+parent.ty,
+      const result={x:parent.a*x+parent.c*y+parent.tx,y:parent.b*x+parent.d*y+parent.ty,
         w:rect.w*parent.sx,h:rect.h*parent.sy,angle:parent.angle,alpha:parent.alpha,brightness:parent.brightness,visible:parent.visible};
+      if(projection){
+        const map=projection(frame.projections ||= new Map());result.projected=true;
+        if(map.identity){result.projectionScaleX=1;result.projectionScaleY=1;return result;}
+        const original={...result},center=map(result.x,result.y),cos=Math.cos(result.angle),sin=Math.sin(result.angle);
+        const horizontal=map(result.x+cos,result.y+sin),vertical=map(result.x-sin,result.y+cos);
+        result.projectionScaleX=Math.hypot(horizontal.x-center.x,horizontal.y-center.y);
+        result.projectionScaleY=Math.hypot(vertical.x-center.x,vertical.y-center.y);
+        result.x=center.x;result.y=center.y;result.w*=result.projectionScaleX;result.h*=result.projectionScaleY;
+        result.angle=Math.atan2(horizontal.y-center.y,horizontal.x-center.x);
+        if(map.perspective&&original.w>0&&original.h>0){
+          const points=[[-.5,-.5],[-.5,.5],[.5,.5],[.5,-.5]].map(([u,v])=>map(original.x+cos*u*original.w-sin*v*original.h,original.y+sin*u*original.w+cos*v*original.h));
+          const left=Math.min(...points.map(p=>p.x)),right=Math.max(...points.map(p=>p.x)),top=Math.min(...points.map(p=>p.y)),bottom=Math.max(...points.map(p=>p.y));
+          result.x=(left+right)/2;result.y=(top+bottom)/2;result.w=right-left;result.h=bottom-top;result.angle=0;
+          result.quadProjection=(x,y)=>{
+            const u=(x-result.x)*original.w/result.w,v=(y-result.y)*original.h/result.h;
+            return map(original.x+cos*u-sin*v,original.y+sin*u+cos*v);
+          };
+        }
+      }
+      return result;
     };
     const update=(now,showHTML=false)=>{
       if(destroyed)return;
@@ -2491,9 +2546,9 @@ function mountWebGLMonster(entity, box) {
       const frame=new Map([...bindings.values()].map(binding=>[binding,monsterAnimatedValues(binding,now)]));
       const cell=cells.get(String(entity.position))||originCell, ratio=cell.w/originCell.w, move=getMonsterPlacementOffset(entity);
       presentation?.update(now,key=>{
-        const a=presentationAnchors[key],p=pose(a.rect,a.chain,frame);
-        const scale=a.chain.reduce((v,b)=>{const value=frame.get(b),base=b.base;return {x:v.x*Math.hypot(value.transform[0],value.transform[1])/(Math.hypot(base.transform[0],base.transform[1])||1)*value.scale[0]/base.scale[0],y:v.y*Math.hypot(value.transform[2],value.transform[3])/(Math.hypot(base.transform[2],base.transform[3])||1)*value.scale[1]/base.scale[1]};},{...a.scale});
-        return {x:cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y:cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio,sx:scale.x*ratio,sy:scale.y*ratio,alpha:p.alpha,visible:p.visible};
+        const a=presentationAnchors[key],p=pose(a.rect,a.chain,frame,a.projection);
+        const scale=a.chain.reduce((v,b)=>{const value=frame.get(b),base=b.base;if(a.projection&&b.cameraControlled)return v;return {x:v.x*Math.hypot(value.transform[0],value.transform[1])/(Math.hypot(base.transform[0],base.transform[1])||1)*value.scale[0]/base.scale[0],y:v.y*Math.hypot(value.transform[2],value.transform[3])/(Math.hypot(base.transform[2],base.transform[3])||1)*value.scale[1]/base.scale[1]};},{...a.scale});
+        return {x:p.projected?p.x:cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y:p.projected?p.y:cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio,sx:scale.x*(p.projectionScaleX??ratio),sy:scale.y*(p.projectionScaleY??ratio),alpha:p.alpha,visible:p.visible};
       },false);
       const hp=Math.max(0,Math.min(entity.stats.HP.current,entity.stats.HP.max)),armor=Math.max(0,entity.stats.armor?.current||0),den=Math.max(entity.stats.HP.max,hp+armor)||1;
       if(armor>0)armorPulseStart??=now;else armorPulseStart=null;
@@ -2529,11 +2584,12 @@ function mountWebGLMonster(entity, box) {
           if(layer.bar==='hp')layer.image.setTint(color);
         }
         if(!layer.image)continue;
-        const p=pose(rect,layer.chain,frame),image=layer.image;
+        const p=pose(rect,layer.chain,frame,layer.projection),image=layer.image;
         if(layer.textRole==='prep'||layer.textRole==='exec'||layer.bar==='armor')p.visible=layer.chain.every(b=>b.node===layer.node||b.css.display!=='none');
         if(layer.bar==='armor'&&layer.flashAt&&!layer.brightness)layer.brightness=scene.add.image(0,0,barTexture('base')).setOrigin(.5);
         if(image.list)for(const part of image.list)part.updateMonsterIntro?.(now);
-        const x=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio;
+        const ratio=p.projected?1:cell.w/originCell.w;
+        const x=p.projected?p.x:cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio,y=p.projected?p.y:cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio;
         let w=p.w*ratio,h=p.h*ratio,px=x,py=y;
         if(layer.panel){const a=layer.panel;w*=a.w/a.width;h*=a.h/a.height;px+=(a.w-a.width-2*a.padding)/2/a.width*p.w*ratio;}
         else if(layer.asset){w*=layer.asset.width/layer.asset.contentWidth;h*=layer.asset.height/layer.asset.contentHeight;}
@@ -2548,6 +2604,7 @@ function mountWebGLMonster(entity, box) {
           if(layer.brightness)layer.brightness.setTexture(a.name,a.frameNames?.[idx]??idx).setPosition(px,py).setDisplaySize(w,h).setRotation(p.angle)
             .setFlipX(layer.flipX).setAlpha(p.alpha*Math.min(1,p.brightness-1)).setDepth(depth+.0000001).setVisible(image.visible&&p.brightness>1);
         }
+        for(const part of [layer.image,layer.overlay,layer.tint,layer.brightness])setMonsterQuadProjection(part,p.quadProjection);
         if(layer.bar==='armor'&&layer.brightness)layer.brightness.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setAlpha(p.alpha*.7*Math.max(0,1-(now-layer.flashAt)/180)).setVisible(image.visible).setDepth(depth+.000001);
         if(layer.overlay)layer.overlay.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setAlpha(p.alpha).setVisible(image.visible).setDepth(depth+.000001);
         if(layer.tint){const tone=armor>0&&(!layer.tone||layer.tone.priority<ENTITY_TINTS.armorActive.priority)?{...ENTITY_TINTS.armorActive,opacity:.08+(Math.sin((now-armorPulseStart)/1800*Math.PI*2)+1)/2*.34}:layer.tone,rgb=tone?.color.split(',').map(Number)||[0,0,0];layer.tint.setPosition(x,y).setDisplaySize(p.w*ratio,p.h*ratio).setRotation(p.angle).setFlipX(layer.flipX).setDepth(depth+.000001).setVisible(image.visible&&Boolean(tone)).setAlpha(p.alpha*(tone?.opacity||0)).setTintFill((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);}
@@ -2564,11 +2621,11 @@ function mountWebGLMonster(entity, box) {
     const bounds=node=>{
       const binding=bindings.get(node);if(!binding)return null;
       const chain=[];for(let current=node;current&&current!==grid;current=current.parentElement){const b=bindings.get(current);if(b)chain.push(b);}
-      const frame=new Map(chain.map(b=>[b,monsterAnimatedValues(b,clockNow())])),p=pose(binding.rect,chain,frame);
-      const cell=cells.get(String(entity.position))||originCell,ratio=cell.w/originCell.w,move=getMonsterPlacementOffset(entity);
+      const frame=new Map(chain.map(b=>[b,monsterAnimatedValues(b,clockNow())])),p=pose(binding.rect,chain,frame,projectionFor(node));
+      const cell=cells.get(String(entity.position))||originCell,ratio=p.projected?1:cell.w/originCell.w,move=getMonsterPlacementOffset(entity);
       const width=Math.abs(p.w*Math.cos(p.angle))*ratio+Math.abs(p.h*Math.sin(p.angle))*ratio;
       const height=Math.abs(p.h*Math.cos(p.angle))*ratio+Math.abs(p.w*Math.sin(p.angle))*ratio;
-      const left=cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio-width/2,top=cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio-height/2;
+      const left=(p.projected?p.x:cell.x+(p.x-originCell.x)*ratio+move.x*boardScale.x*ratio)-width/2,top=(p.projected?p.y:cell.y+(p.y-originCell.y)*ratio+move.y*boardScale.y*ratio)-height/2;
       return {x:left,y:top,left,top,width,height,right:left+width,bottom:top+height};
     };
     const pathFor=node=>{const path=[];for(let n=node;n&&n!==box;n=n.parentElement)path.unshift([...n.parentElement.children].indexOf(n));return path;};
@@ -2666,7 +2723,7 @@ function mountCanvasBoard(){
   void attachPhaserBoard(grid,async (scene,cameraSettled)=>{
     activeMonsterViews++;
     try{return await createCanvasBoard(scene,grid,{
-      now:clockNow,media:monsterMediaImage,cameraSettled,
+      now:clockNow,media:monsterMediaImage,cameraSettled,cameraChanged:positionPhaserLayer,
       component:node=>canvasBoardComponent(scene,node),
       release:recipe=>{for(const part of recipe?.parts||[])releaseMonsterText(part.textEntry,scene);},
       dispose:()=>releaseMonsterScene(scene),
