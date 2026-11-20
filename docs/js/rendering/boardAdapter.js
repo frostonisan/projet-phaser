@@ -215,8 +215,11 @@ export async function createCanvasBoard(scene,grid,paint) {
     for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
       const corners=[[i/nx,j/ny],[(i+1)/nx,j/ny],[(i+1)/nx,(j+1)/ny],[i/nx,(j+1)/ny]];
       const points=corners.map(([u,v])=>project(rect.x+u*rect.w,rect.y+v*rect.h));
-      if(points.some(p=>p.w<=0)||Math.max(...points.map(p=>p.x))<0||Math.min(...points.map(p=>p.x))>innerWidth
-        ||Math.max(...points.map(p=>p.y))<0||Math.min(...points.map(p=>p.y))>innerHeight)continue;
+      // Components/images retain off-screen faces: a later camera transform
+      // can bring them back. Repainted tile batches may still cull each frame.
+      if(points.some(p=>p.w<=0))continue;
+      if(entry.batch&&(Math.max(...points.map(p=>p.x))<0||Math.min(...points.map(p=>p.x))>scene.scale.width
+        ||Math.max(...points.map(p=>p.y))<0||Math.min(...points.map(p=>p.y))>scene.scale.height))continue;
       for(const index of [0,1,2,0,2,3]){const p=points[index],[u,v]=corners[index];vertices.push(p.x,-p.y);local.push(rect.x+u*rect.w,rect.y+v*rect.h);
         uvs.push(uv[0]+u*(uv[2]-uv[0]),uv[1]+v*(uv[3]-uv[1]));
         alphas.push(alpha*(entry.groundMask?clamp((rect.y+v*rect.h)/50):1));}

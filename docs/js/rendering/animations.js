@@ -2245,14 +2245,14 @@ function updatePhaserMonsters() {
     else view.update(now,monsterMenusOpen);
   }
 }
-for(const name of ['resize','orientationchange','scroll'])window.addEventListener(name,()=>{
+for(const name of ['resize','orientationchange','scroll','gameViewportChanged'])window.addEventListener(name,()=>{
   positionPhaserLayer();invalidateBoardScreenGeometry(observedMonsterBoard);
   for(const view of canvasBoardViews.values())view.invalidate();
   for(const view of phaserMonsterViews.values())view.invalidateGeometry?.(true);
 }, {passive:true});
 
 
-const viewport = () => ({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) });
+const viewport = () => ({ width: Math.max(1, document.documentElement.clientWidth), height: Math.max(1, document.documentElement.clientHeight) });
 // The shared Phaser scene drives board travel while the HTML entity, HUD and
 // shaped hitbox stay together. Logical placement is committed before this view.
 const phaserPlacements = new Map();
@@ -2530,13 +2530,13 @@ function clearPhaserProjectiles() {
   for (const entry of [...phaserMelees.values()]) removePhaserMelee(entry);
 }
 for (const event of ['projectileVisualsCleared', 'battleStopped', 'battleResolved']) window.addEventListener(event, clearPhaserProjectiles);
-for (const event of ['combatResumed', 'resize']) window.addEventListener(event, () => {
+for (const event of ['combatResumed', 'resize', 'gameViewportChanged']) window.addEventListener(event, () => {
   const wake = () => {
-    if (boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size || phaserPlacements.size) phaserLayer?.game?.loop.wake();
+    if (canvasBoardViews.size || phaserMonsterViews.size || boardDragZone || phaserFlights.size || phaserEffects.size || phaserMelees.size || phaserPlacements.size) phaserLayer?.game?.loop.wake();
   };
   // Resize handlers also rescale the HTML board. Draw after those handlers,
   // including when the combat clock is paused and the scene draws only once.
-  if (event === 'resize') globalThis.requestAnimationFrame(wake);
+  if (event !== 'combatResumed') globalThis.requestAnimationFrame(wake);
   else wake();
 });
 function wakeProjectileRenderer() {
@@ -2693,15 +2693,21 @@ function drawProjectile(entry, scene) {
 
 export function positionPhaserLayer(){
   const host=phaserLayer?.host,root=document.getElementById('game-windows');
-  if(!host||!root||!phaserMonsterViews.size&&!canvasBoardViews.size)return;
+  if(!host)return;
+  // Screen teardown can detach the shared canvas without destroying Phaser.
+  // Reattach it for every visual path, including projectile-only HTML battles.
+  if(!root){if(!host.isConnected)document.body.append(host);return;}
   if(host.parentElement!==root)root.append(host);
   const r=root.getBoundingClientRect(),sx=r.width/(root.offsetWidth||1),sy=r.height/(root.offsetHeight||1);
+  const {width,height}=viewport();
   host.classList.add('phaser-combat-surface');
-  Object.assign(host.style,{width:`${innerWidth}px`,height:`${innerHeight}px`,transformOrigin:'0 0',transform:`matrix(${1/(sx||1)},0,0,${1/(sy||1)},${-r.left/(sx||1)},${-r.top/(sy||1)})`});
+  const style={width:`${width}px`,height:`${height}px`,transformOrigin:'0 0',transform:`matrix(${1/(sx||1)},0,0,${1/(sy||1)},${-r.left/(sx||1)},${-r.top/(sy||1)})`};
+  for(const [key,value] of Object.entries(style))if(host.style[key]!==value)host.style[key]=value;
+  phaserLayer.game?.scale?.updateBounds();
 }
 window.addEventListener('combatPauseRestored',positionPhaserLayer);
 async function ensurePhaserLayer() {
-  if (phaserReady) return phaserReady;
+  if (phaserReady) { const layer=await phaserReady; positionPhaserLayer(); return layer; }
   phaserReady = (async () => {
     // Local, pinned dependency; neither menus nor simulation download or boot it.
     const Phaser = await import('../../vendor/phaser-3.90.0.esm.min.js');
@@ -2756,6 +2762,7 @@ async function ensurePhaserLayer() {
         });
       } catch (error) { globalThis.clearTimeout(timeout); reject(error); }
     });
+    positionPhaserLayer();
     return layer;
   })().catch(error => {
     if (phaserLayer) {
