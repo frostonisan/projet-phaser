@@ -42,7 +42,8 @@ for (const name of comparedModules) {
   if (baselineDirectory) baselineFiles.set(resolve(root, 'js', name), await readFile(resolve(baselineDirectory, 'js', name)));
 }
 let checksOn = true;
-const sides = baselineDirectory || process.env.LOAD_RECOVERY_COMPARISON === '1' ? [false, true] : [true];
+const sides = baselineDirectory && process.env.LOAD_BASELINE_ONLY === '1' ? [false]
+  : baselineDirectory || process.env.LOAD_RECOVERY_COMPARISON === '1' ? [false, true] : [true];
 const fingerprints = {};
 const baselineFingerprints = Object.fromEntries([...baselineFiles].map(([file, data]) =>
   [relative(resolve(root, 'js'), file).split(sep).join('/'), createHash('sha256').update(data).digest('hex')]));
@@ -166,6 +167,7 @@ function installProbe(options) {
     if(probe.active && node instanceof HTMLElement)probe.htmlPanelConversions++;
     return result;
   };
+  if (options?.profile || options?.nativeMonsters) {
   const recordRead = name => {if(globalThis.__monsterFrame&&probe.active)probe.monsterDOMReads[name]=(probe.monsterDOMReads[name]||0)+1;};
   for(const [owner,name] of [[globalThis,'getComputedStyle'],[Element.prototype,'getBoundingClientRect'],
     [Element.prototype,'getAnimations'],[Element.prototype,'querySelector'],[Element.prototype,'querySelectorAll'],
@@ -183,6 +185,7 @@ function installProbe(options) {
   };
   Element.prototype.remove = function (...args) { if (probe.active) probe.removes++; return remove.apply(this, args); };
   Element.prototype.animate = function (...args) { if (probe.active) probe.animations++; return animate.apply(this, args); };
+  }
   let depth = 0;
   window.__loadMeasure = (kind, work) => {
     if (!probe.active) return work();
@@ -231,10 +234,10 @@ function installProbe(options) {
 }
 async function fixture(count) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  await page.addInitScript(installProbe, { profile });
+  await page.addInitScript(installProbe, { profile, nativeMonsters: process.env.LOAD_MONSTERS === "webgl" });
   page.on('pageerror', error => errors.push(error.stack || error.message));
   await page.goto(`${origin}/index.html${process.env.LOAD_MONSTERS === "webgl" && (checksOn || process.env.LOAD_BASELINE_MONSTERS === "webgl") ? "?monsters=webgl" : ""}`);
-  await page.addStyleTag({ url: `${origin}/css/combat.css` });
+  // index.html already loads the combat stylesheet in its intended order.
   // Cost isolation only, never a proposed production visual change.
   if (diagnosticFiltersOff && checksOn) await page.addStyleTag({ content: '* { filter:none !important; backdrop-filter:none !important; }' });
   await page.evaluate(async ({ count, scenario, biome }) => {
@@ -250,8 +253,18 @@ async function fixture(count) {
     S.saveToLocalStorage('selectedArmyA', []); S.saveToLocalStorage('ArmyB', { armies: {} }); S.saveToLocalStorage('equippedItems', []);
     document.body.innerHTML = '<div id="game-container"><div class="Game-UI"><div id="score"></div></div><div class="AllEntitiesHud"></div><div id="hexGrid" class="hex-grid"></div></div>';
     const grid = document.getElementById('hexGrid');
-    if(biome){const root=document.createElement('div');root.id='game-windows';root.style.cssText='width:1920px;height:1080px;position:relative;transform:none';const container=document.getElementById('game-container');container.replaceWith(root);root.append(container);const board=document.createElement('div');board.className='board';container.append(board);board.append(grid);}
-    grid.style.cssText = 'position:absolute;top:80px;left:35px;width:2600px;height:1400px;transform:scale(.68);transform-origin:top left';
+    if(biome){const root=document.createElement('div');root.id='game-windows';root.style.cssText='width:1920px;height:1080px;position:relative;transform:none;opacity:1';const container=document.getElementById('game-container');container.replaceWith(root);root.append(container);const board=document.createElement('div');board.className='board';container.append(board);board.append(grid);}
+    // This synthetic stress board fills its viewport on both comparison sides.
+    // The application's normal 1536x676 root must not hide part of the trial.
+    for(const node of [document.documentElement,document.body,document.getElementById('game-container')])
+      Object.assign(node.style,{width:'1920px',height:'1080px',opacity:'1',margin:'0'});
+    // Keep the game's perspective/counter-rotation; fitting the stress grid
+    // must not flatten the board and leave every sprite/HUD tilted backwards.
+    grid.style.cssText = 'position:absolute;top:80px;left:35px;width:2600px;height:1400px';
+    const boardFit = document.createElement('div');
+    boardFit.id = 'load-board-fit';
+    boardFit.style.cssText = 'position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0';
+    grid.replaceWith(boardFit); boardFit.append(grid);
     const columnsPerSide = count / 10, columns = columnsPerSide * 2 + 2;
     for (let row = 0; row < 6; row++) for (let col = 0; col < columns; col++) {
       const hex = document.createElement('div'); hex.id = `hex_${row * columns + col + 1}`; hex.className = 'hex Neutral';
@@ -304,6 +317,12 @@ async function fixture(count) {
     (await import("/js/board/controller.js")).syncEntityFootprints(grid);
     if(biome)(await import("/js/board/controller.js")).applyBiomeRealtime(biome);
     (await import("/js/app/stages.js")).configureBattleSystemsOnce();
+    // Fit all actors using a parent transform, retaining their actual CSS.
+    const bounds = [...grid.querySelectorAll('.entite-box, .entite-box canvas[id^="spriteCanvas_"]')].map(node => node.getBoundingClientRect());
+    const left = Math.min(...bounds.map(r => r.left)), top = Math.min(...bounds.map(r => r.top));
+    const width = Math.max(...bounds.map(r => r.right)) - left, height = Math.max(...bounds.map(r => r.bottom)) - top;
+    const fit = Math.min(1, (innerWidth - 160) / width, (innerHeight - 160) / height);
+    boardFit.style.transform = `matrix(${fit},0,0,${fit},${80 - left * fit},${80 - top * fit})`;
     window.snapshot = Sim.captureSimulationBoard();
     window.captureFrames = () => {
       window.frameGaps = []; window.longTasks = []; let previous = performance.now(); window.sampling = true;
@@ -329,6 +348,16 @@ async function fixture(count) {
     }), 0, 'Painting text and effects must not consume gameplay randomness');
   }
   await page.waitForTimeout(1000);
+  if(process.env.LOAD_MONSTERS!=='webgl'){
+    assert.equal(new URL(page.url()).search,'','Measure the ordinary game URL');
+    assert.equal(await page.locator('[data-monster-webgl]').count(),0,'No native monster renderer');
+    const bodies=await page.locator('.entite-box canvas[id^="spriteCanvas_"]').evaluateAll(nodes=>nodes.map(node=>{
+      const r=node.getBoundingClientRect();return {visible:node.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}),
+        inside:r.width>0&&r.height>0&&r.left+r.width/2>=0&&r.left+r.width/2<=innerWidth&&r.top+r.height/2>=0&&r.top+r.height/2<=innerHeight};
+    }));
+    assert.equal(bodies.length,count);assert.ok(bodies.every(r=>r.visible&&r.inside),'All HTML actors must be visible in the measured viewport');
+  }
+
   if(process.env.LOAD_MONSTERS==='webgl'&&checksOn){
     const result=await page.evaluate(()=>{
       const entity=E.entites[0],box=document.getElementById(`Box_Entite_${entity.id}`),view=box._monsterView;
@@ -377,7 +406,7 @@ function validateLive(entry) {
   }
 }
 async function save() { await writeFile(resolve(output, 'results.json'), JSON.stringify({ passed, failure, workspaceChanges, scenario, poolPrototype, diagnosticFiltersOff,
-  profiled: profile, tracing, panelConversionProbe: 'serialized-html-elements', browser: browser.version(), gpu, baselineFingerprints, biome, comparison: baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
+  profiled: profile, tracing, monsterMode: process.env.LOAD_MONSTERS === "webgl" ? "webgl" : "html", domInstrumentation: profile || process.env.LOAD_MONSTERS === "webgl", panelConversionProbe: 'serialized-html-elements', browser: browser.version(), gpu, baselineFingerprints, biome, comparison: baselineDirectory && sides.length === 1 ? 'baseline-only' : baselineDirectory ? 'source-before-after' : sides.length === 2 ? 'recovery-off-on' : 'current', baselineDirectory, counts, liveMs, simMs, fingerprints, live, simulations, errors }, null, 2)); }
 try {
   if (process.env.LOAD_RESUME === '1') {
     const previous = JSON.parse(await readFile(resolve(output, 'results.json'), 'utf8'));
@@ -464,6 +493,7 @@ try {
         trials[enabled ? 'on' : 'off'] = trial;
         assert.deepEqual(trial.loadProbe.recoveries, [], 'No healthy entity may be restarted in the real virtual-time engine');
       }
+      trials.on ||= trials.off;
       trials.off ||= trials.on;
       await writeFile(resolve(output, `simulation-${count}-${seed}.json`), JSON.stringify({ before: comparable(trials.off), after: comparable(trials.on) }));
       await writeFile(resolve(output, `probes-${count}-${seed}.json`), JSON.stringify({ before: trials.off.loadProbe, after: trials.on.loadProbe }));

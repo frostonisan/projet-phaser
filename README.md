@@ -27,6 +27,37 @@ sol/fond/brouillard après leur projection Phaser : les disparitions pendant
 les mouvements de caméra et le clignotement du brouillard restent à corriger.
 Le retour n'est donc pas une garantie de fluidité ou de disparition du clipping.
 
+## Mesures HTML du 21 novembre 2026 — aucun correctif de fluidité validé
+
+Le jeu reste en **v0.98.0-dev**, sans `?monsters=webgl`. Seul le banc de
+mesure a été corrigé : plateau visible et cadré, perspective CSS conservée,
+feuille de combat chargée une seule fois, instrumentation DOM coûteuse réservée
+au profilage. Le mode référence seule sélectionne maintenant les bons fichiers.
+
+Conditions : Chrome 157 sans fenêtre, GPU AMD Radeon / ANGLE D3D11,
+1920 × 1080, scénario synthétique prison avec 40 puis 80 Grouille-doigts,
+attaques et effets de contrôle mélangés. Ce stress test ne représente pas les
+FPS d'une partie ordinaire ni ceux du téléphone du joueur.
+
+Deux mesures de référence de 20 secondes donnent un P95 de 366–416 ms à
+40 entités et de 816–900 ms à 80. D'autres répétitions donnent des valeurs
+plus basses : la variabilité interdit de valider un correctif sur un seul essai.
+Les rapports complets restent dans `outputs/perf-html-098/` (ignoré par Git).
+
+La réduction des lectures de statistiques a passé les contrôles de valeurs
+et les quatre comparaisons déterministes 40/80, mais les mesures répétées
+n'ont pas établi de gain global. Elle a été retirée. Les essais de confinement
+CSS et de lecture native des GIF n'ont pas démontré d'amélioration nette non plus.
+Un cache de positions volontairement figées n'a servi qu'à mesurer une borne :
+il n'est pas utilisable en jeu, car les cibles bougent et s'animent.
+
+La suppression temporaire de l'affichage dans un diagnostic améliore fortement
+les intervalles entre images : le rendu et les échanges avec le DOM restent une
+piste majeure. Cela ne prouve pas qu'un changement isolé de CSS ou de moteur
+résoudrait le problème. Des relances de tours sous charge existent également
+dans la référence ; le contrôle strict du banc reste actif. Aucun changement
+expérimental de rendu, de règles, de timings ou de sauvegarde n'est publié.
+
 ## Point de retour — avant optimisation des calculs
 
 Repère demandé par le joueur : **The Dark Pit v0.98.0-dev**, avant le lot
