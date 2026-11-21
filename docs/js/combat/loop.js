@@ -12,7 +12,7 @@ import {
   setTimeout, clearTimeout, clockNow, registerCombatState, waitForCombatResume, isCombatPaused,
   combatTarget,
 } from "./clock.js";
-import { combatNow, combatDelay, atCombatStart, scheduleCombatTask, cancelCombatTask } from "./timeline.js";
+import { combatNow, combatDelay, atCombatStart, scheduleCombatTask, cancelCombatTask, isCombatTimelineBehind } from "./timeline.js";
 import { gameStarted, checkGameOver, stopAllIntervals, OrderEntity, getOrderSide, isBattleFinished } from "../app/state.js";
 import { createOrderButton, createQuitButton } from "../app/stages.js";
 import { entites } from "../entities/runtime.js";
@@ -132,6 +132,12 @@ function combatProgressSignature(entity) {
         cooldownWaits.get(entity)?.lastTick, getAttackTransportDeadline(entity), turnOwners.get(entity)?.startedAt].join('|');
 }
 
+function lastCombatProgress(entity) {
+    return Math.max(turnOwners.get(entity)?.startedAt ?? -Infinity,
+        entity._phaseTimer?.lastTick ?? -Infinity, entity._combatAction?.preparation?.lastTick ?? -Infinity,
+        cooldownWaits.get(entity)?.lastTick ?? -Infinity);
+}
+
 // A risky mutation or an interrupted loop schedules ONE check for its entity.
 // No interval, army scan or rearming after a successful check.
 function requestCombatContinuityCheck(entity, trigger) {
@@ -147,7 +153,7 @@ function requestCombatContinuityCheck(entity, trigger) {
         // A browser callback can overtake a healthy, delayed combat batch.
         // Only in that case defer this one check into logical combat time.
         // Ordinary checks keep their original deadline and event ordering.
-        if (!deferredForBacklog && clockNow() - combatNow() > 50) {
+        if (!deferredForBacklog && isCombatTimelineBehind()) {
             deferredForBacklog = true;
             timer = scheduleCombatTask(verifyContinuity, STALLED_TURN_DELAY);
             continuityChecks.set(entity, timer);
@@ -163,8 +169,13 @@ function requestCombatContinuityCheck(entity, trigger) {
         if (!entites.some(other => getOriginalCombatSide(other) !== getOriginalCombatSide(entity)
             && isAttackEntityAlive(other) && !other.hasFled)) return;
         try {
+            // A delayed logical batch may be older than the latest browser-side
+            // continuation. An unchanged signature alone does not mean it stalled:
+            // allow the same inactivity window used when an interaction requests a check.
+            const now = combatNow();
             if (activeTurns.has(entity) && (signature !== combatProgressSignature(entity)
-                || getAttackTransportDeadline(entity) > combatNow())) {
+                || now - lastCombatProgress(entity) < STALLED_TURN_DELAY
+                || getAttackTransportDeadline(entity) > now)) {
                 recoveryAttempts.delete(entity);
                 return;
             }
@@ -197,11 +208,8 @@ window.addEventListener('entityCombatInteraction', ({ detail }) => {
     if (activeTurns.has(entity)) {
         // Hits and movements are frequent. Healthy timers only require these
         // timestamp reads; they do not allocate a recovery timer or scan targets.
-        const lastProgress = Math.max(turnOwners.get(entity)?.startedAt ?? -Infinity,
-            entity._phaseTimer?.lastTick ?? -Infinity, entity._combatAction?.preparation?.lastTick ?? -Infinity,
-            cooldownWaits.get(entity)?.lastTick ?? -Infinity);
         const now = combatNow();
-        if (now - lastProgress < STALLED_TURN_DELAY || getAttackTransportDeadline(entity) > now
+        if (now - lastCombatProgress(entity) < STALLED_TURN_DELAY || getAttackTransportDeadline(entity) > now
             || Math.min(entity._targetSearch?.nextProbe ?? 0, entity._targetSearch?.deadline ?? 0) > now) return;
     }
     requestCombatContinuityCheck(entity, detail.kind || 'interaction');

@@ -7,7 +7,35 @@ Depot independant pour rationaliser DarkPit puis integrer Phaser progressivement
 - Branche de travail et de publication : `version-2`.
 - Sources du jeu : `docs/` ; outils de verification : `scripts/`.
 
-## Version actuellement publiée — retour à v0.98.0-dev
+## Version actuellement publiée — v0.98.3-dev
+
+Cette correction conserve la base v0.98 avec les monstres HTML, sans
+`?monsters=webgl`. Sous charge, le contrôle des tours pouvait annuler une
+préparation valide et relancer son tour : il confondait le retard du navigateur
+avec un blocage. Il tient désormais compte des tâches logiques encore en attente
+entre deux traitements, ainsi que de la dernière progression de l'entité.
+Les durées d'attaque, formules, tirages, rendu et format de sauvegarde sont inchangés.
+
+Les deux cas de retard sont reproduits dans le test de continuité existant :
+l'action, le numéro de tour et le cooldown restent les mêmes, puis l'attaque
+se termine. Sur deux essais de 20 secondes par version à 40 et 80 monstres HTML,
+aucune relance injustifiée n'est observée avec la correction ; la référence en
+produit deux dans une répétition à 80. Les quatre comparaisons déterministes
+(graines 1701 et 1702 à 40 et 80) conservent les journaux complets : ordre,
+échéances et ressources intermédiaires, ainsi que les résultats finaux.
+
+Les contrôles statiques et les 35 scénarios de continuité passent, dont la
+récupération des vrais blocages, les changements de contrôle, déplacements et
+pauses. La suite de pause/restauration passe pour les projectiles et la mêlée :
+F5 après sauvegarde en pause, reprise sans double dégât, fuite, poison et
+redimensionnement mobile. Ces tests ne démontrent pas une protection complète
+contre une fermeture brutale ou tous les chemins de rechargement navigateur.
+
+Les diagnostics sont conservés dans `outputs/continuity-098/`, ignoré par Git.
+Ce lot corrige l'intégrité des tours. Il ne démontre pas un gain de FPS : d'autres
+suites navigateur tournaient sur la même machine pendant les validations.
+
+## Base conservée — retour à v0.98.0-dev
 
 Le retour demandé le 20 novembre 2026 rétablit intégralement `docs/` et
 `scripts/` au commit `c685f9f8ef5fd4547b217098c9928286ef9d0736`. L'historique
@@ -29,8 +57,8 @@ Le retour n'est donc pas une garantie de fluidité ou de disparition du clipping
 
 ## Mesures HTML du 21 novembre 2026 — aucun correctif de fluidité validé
 
-Le jeu reste en **v0.98.0-dev**, sans `?monsters=webgl`. Seul le banc de
-mesure a été corrigé : plateau visible et cadré, perspective CSS conservée,
+Cet audit a porté sur **v0.98.0-dev**, sans `?monsters=webgl`. Seul le banc de
+mesure avait alors été corrigé : plateau visible et cadré, perspective CSS conservée,
 feuille de combat chargée une seule fois, instrumentation DOM coûteuse réservée
 au profilage. Le mode référence seule sélectionne maintenant les bons fichiers.
 
@@ -56,7 +84,7 @@ les intervalles entre images : le rendu et les échanges avec le DOM restent une
 piste majeure. Cela ne prouve pas qu'un changement isolé de CSS ou de moteur
 résoudrait le problème. Des relances de tours sous charge existent également
 dans la référence ; le contrôle strict du banc reste actif. Aucun changement
-expérimental de rendu, de règles, de timings ou de sauvegarde n'est publié.
+expérimental de rendu, de règles, de timings ou de sauvegarde n'a été retenu lors de cet audit.
 
 ## Point de retour — avant optimisation des calculs
 
@@ -86,7 +114,7 @@ les diagnostics locaux ignorés dans `outputs/` ne font pas partie du snapshot G
 
 ## Version affichée
 
-Le jeu affiche **The Dark Pit v0.98.0-dev** en blanc, juste avant « ID de la partie »,
+Le jeu affiche **The Dark Pit v0.98.3-dev** en blanc, juste avant « ID de la partie »,
 dans le même bloc de l’interface.
 Les archives locales vont de `version - 1` (février 2024) à `version - 85`
 (novembre 2026), avec des étapes intermédiaires. `0.86.0-dev` était le premier repère choisi

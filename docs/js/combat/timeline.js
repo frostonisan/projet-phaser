@@ -5,6 +5,12 @@ let pending = [], wake = null, draining = null, currentTime = null, sequence = 0
 let impactBatch = null;
 
 export const combatNow = () => currentTime ?? clockNow();
+// Between batches combatNow() returns browser time even if an older task is
+// still queued. Recovery checks must account for both forms of scheduler lag.
+export function isCombatTimelineBehind() {
+  const cutoff = clockNow() - 50;
+  return (currentTime !== null && currentTime < cutoff) || pending.some(task => task.at < cutoff);
+}
 export const isResolvingCombatImpacts = () => impactBatch !== null;
 export const hasPendingCombatDeath = entity => Boolean(impactBatch
   && impactBatch.stage !== 'death' && impactBatch.deaths.has(entity));

@@ -20,24 +20,32 @@ const server = createServer(async (req, res) => {
     let data = await readFile(file);
     if (extname(file) !== '.js') return res.end(data);
     data = data.toString();
-    const name = file.split(sep).at(-1);
+    const name = file.split(sep).at(-1), modulePath = file.split(sep).join('/');
     if (baseline && baselineFiles.has(name)) {
       data = await readFile(resolve(baselineDirectory, name), 'utf8');
     }
-    if (file.endsWith("combat/minionTurn.js")) data = data.replace('    clearForcedInvisibleTargetAccuracy(attacker);', `
+    if (modulePath.endsWith("combat/timeline.js")) data = data.replace('function checkpoint() {',
+      'function checkpoint() { if (window.__holdTimelineCheckpoint) return window.__holdTimelineCheckpoint;') + '\nwindow.__timelineInspect = () => ({ pending: pending.map(t => ({at:t.at,kind:t.kind})), wake, draining:!!draining, currentTime, now:clockNow() });';
+    if (modulePath.endsWith("combat/timeline.js")) data = data.replace('function arm() {', `function arm() {
+      if (window.__holdTimelineWake && !draining) {
+        clearTimeout(wake); wake = null;
+        window.__releaseTimelineWake = () => { delete window.__holdTimelineWake; arm(); };
+        return;
+      }`);
+    if (modulePath.endsWith("combat/minionTurn.js")) data = data.replace('    clearForcedInvisibleTargetAccuracy(attacker);', `
       if (attacker.__lostTargetOnce) { delete attacker.__lostTargetOnce; attacker.__lateTarget = () => resolve(defendingEntites[0]); return; }
       if (attacker.__throwTargetOnce) { delete attacker.__throwTargetOnce; throw Error('Injected target failure'); }
       clearForcedInvisibleTargetAccuracy(attacker);`);
-    if (file.endsWith("combat/vitals.js")) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
+    if (modulePath.endsWith("combat/vitals.js")) data = data.replace('    await combatDelay(Math.max(0, state.nextAt - combatNow()));', `
       if (attacker.__stallPhaseOnce) { delete attacker.__stallPhaseOnce; await new Promise(resolve => { attacker.__releasePhase = resolve; }); }
       else await combatDelay(Math.max(0, state.nextAt - combatNow()));`);
-    if (file.endsWith('attackExecution.js')) data = data.replace('    if (!canPrepare()) return false;', `
+    if (modulePath.endsWith('attackExecution.js')) data = data.replace('    if (!canPrepare()) return false;', `
       if (attacker.__throwPreparationOnce) { delete attacker.__throwPreparationOnce; throw Error('Injected preparation failure'); }
       if (!canPrepare()) return false;`);
-    if (file.endsWith("combat/loop.js")) data = data.replace('wait.lastTick = now;', `
+    if (modulePath.endsWith("combat/loop.js")) data = data.replace('wait.lastTick = now;', `
       if (attacker.__throwCooldownOnce) { delete attacker.__throwCooldownOnce; throw Error('Injected cooldown failure'); }
       wait.lastTick = now;`);
-    if (!baseline && file.endsWith("combat/loop.js")) data = data
+    if (!baseline && modulePath.endsWith("combat/loop.js")) data = data
       .replace('continuityChecks.set(entity, timer);', 'continuityChecks.set(entity, timer); (window.__checksArmed ||= []).push(entity.id);')
       .replace('continuityChecks.delete(entity);', 'continuityChecks.delete(entity); (window.__checksRun ||= []).push(entity.id);')
       .replace('try { verifyCombatTurnStarts(); }', 'try { window.__startupChecks = (window.__startupChecks || 0) + 1; verifyCombatTurnStarts(); }');
@@ -90,6 +98,8 @@ async function fixture(count = 3) {
       entity.isDEAD = false; entity.statut = ['alive']; E.entites.push(entity);
       const created = C.createEntiteInDOM(entity); hex.append(created.element); await created.spriteReady;
     }
+    const board = await import('/js/board/controller.js');
+    board.invalidateFootprintGeometry(grid); board.syncEntityFootprints(grid);
     window.actor = E.entites[0]; window.enemy = E.entites[1];
     window.R = await import("/js/combat/attackResolution.js"); window.F = await import("/js/combat/loop.js");
     window.T = await import("/js/combat/timeline.js"); window.recoveries = [];
@@ -118,6 +128,71 @@ async function advanceAttack(page, before = null) {
   await page.waitForFunction(before => attacksDone > before, before, { timeout: 12000 });
 }
 try {
+  // A queued old impact can run after a browser-side continuation has already
+  // advanced preparation. Hold only a scheduler checkpoint, never the entity's
+  // action, so the browser watchdog genuinely fires while logical time lags.
+  const backlog = await fixture();
+  await backlog.evaluate(() => { editAttack({ preparationTime: 8000, cooldown: 40000 }); G.startGame(); });
+  await backlog.waitForFunction(() => actor._combatAction?.stage === 'preparation'
+    && actor._combatAction.preparation?.nextAt != null, null, { timeout: 12000 });
+  await backlog.evaluate(() => {
+    window.backlogAction = actor._combatAction;
+    window.backlogTurn = actor.turnCount;
+    window.backlogReadyAt = R.describeAttackChoices(actor, actor.attackDetails, attack => attack.cooldown)[0].readyAt;
+    T.scheduleCombatImpactTask(backlogAction.preparation.lastTick - 5000, () => () => {
+      R.notifyAttackSelection(actor);
+      window.__holdTimelineCheckpoint = new Promise(resolve => {
+        window.__releaseTimelineCheckpoint = () => { delete window.__holdTimelineCheckpoint; resolve(); };
+      });
+    });
+  });
+  await backlog.waitForFunction(() => !!window.__holdTimelineCheckpoint);
+  await backlog.waitForTimeout(2300);
+  assert.ok(await backlog.evaluate(() => recoveries.length === 0 && actor._combatAction === backlogAction));
+  await backlog.evaluate(() => __releaseTimelineCheckpoint());
+  await backlog.waitForFunction(() => window.__checksRun?.includes(actor.id));
+  assert.deepEqual(await backlog.evaluate(() => ({
+    recoveries: recoveries.length, sameAction: actor._combatAction === backlogAction,
+    sameTurn: actor.turnCount === backlogTurn,
+    sameCooldown: R.describeAttackChoices(actor, actor.attackDetails, attack => attack.cooldown)[0].readyAt === backlogReadyAt,
+  })), { recoveries: 0, sameAction: true, sameTurn: true, sameCooldown: true });
+  await advanceAttack(backlog, 0);
+  checks.push('An overdue logical check preserves a preparation that already advanced, its turn and cooldown; the same action completes');
+  await backlog.evaluate(() => G.StopGame({ preserveScene: true }));
+  await backlog.close();
+
+  // The browser can also run the watchdog between two logical batches,
+  // while an overdue continuation is queued but no batch is currently draining.
+  const queued = await fixture();
+  await queued.evaluate(() => { editAttack({ preparationTime: 8000, cooldown: 40000 }); G.startGame(); });
+  await queued.waitForFunction(() => actor._combatAction?.stage === 'preparation'
+    && actor._combatAction.preparation?.nextAt != null);
+  await queued.evaluate(() => {
+    window.queuedAction = actor._combatAction; window.queuedTurn = actor.turnCount;
+    window.queuedReadyAt = R.describeAttackChoices(actor, actor.attackDetails, attack => attack.cooldown)[0].readyAt;
+    window.__holdTimelineWake = true;
+    T.scheduleCombatTask(() => true, 5000);
+    R.notifyAttackSelection(actor);
+  });
+  await queued.waitForFunction(() => !!window.__releaseTimelineWake && !__timelineInspect().draining);
+  await queued.waitForTimeout(2300);
+  assert.deepEqual(await queued.evaluate(() => ({ recoveries: recoveries.length,
+    sameAction: actor._combatAction === queuedAction })), { recoveries: 0, sameAction: true });
+  await queued.evaluate(() => __releaseTimelineWake());
+  await queued.waitForFunction(() => window.__checksRun?.includes(actor.id));
+  assert.deepEqual(await queued.evaluate(() => ({ recoveries: recoveries.length,
+    sameAction: actor._combatAction === queuedAction, sameTurn: actor.turnCount === queuedTurn,
+    sameCooldown: R.describeAttackChoices(actor, actor.attackDetails, attack => attack.cooldown)[0].readyAt === queuedReadyAt,
+  })), { recoveries: 0, sameAction: true, sameTurn: true, sameCooldown: true });
+  await advanceAttack(queued, 0);
+  checks.push('A delayed scheduler wake preserves the queued preparation, turn and cooldown between logical batches');
+  await queued.evaluate(() => G.StopGame({ preserveScene: true }));
+  await queued.close();
+
+  if (process.env.CONTINUITY_BACKLOG_ONLY === '1') {
+    assert.deepEqual(errors, []);
+    console.log(JSON.stringify({ checks }));
+  } else {
   const preserved = await fixture();
   await preserved.evaluate(async () => {
     window.Control = await import("/js/combat/control.js");
@@ -479,4 +554,14 @@ try {
   assert.deepEqual(errors.filter(error => !expected.includes(error)), []);
   await writeFile(resolve(output, 'validation.json'), JSON.stringify({ checks, recoveries, simulations, expectedErrors: expected }, null, 2));
   console.log(JSON.stringify({ checks, recoveries, expectedErrors: expected.length }, null, 2));
+  }
+} catch (error) {
+  await writeFile(resolve(output, 'failure.json'), JSON.stringify({ error: error.stack, errors,
+    pages: await Promise.all(browser.contexts().flatMap(context => context.pages()).map(page => page.evaluate(() => ({
+      phase: window.actor?.currentPhase, stage: window.actor?._combatAction?.stage, speed: window.actor?.speedTimer,
+      hp: window.actor?.stats?.HP, started: window.G?.gameStarted, paused: window.Clock?.isCombatPaused(),
+      preparation: window.actor?._combatAction?.preparation, recoveries: window.recoveries,
+      pauseEvents: window.pauseEvents, timeline: window.__timelineInspect?.(),
+    })).catch(() => null))) }, null, 2));
+  throw error;
 } finally { await browser.close(); await new Promise(done => server.close(done)); }
